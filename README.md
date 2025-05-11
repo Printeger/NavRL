@@ -227,6 +227,11 @@ An Isaac Sim window will display the environment while an RViz window presents t
 
 https://github.com/user-attachments/assets/4787f503-d8a3-4d7b-9d17-7057b2cff1eb
 
+Note that if you would like to deploy in a real robot with ```ros2 foxy```, please switch to ```ros2-foxy``` branch.
+```
+git checkout ros2-foxy
+```
+
 
 ## V. Citation and Reference
 If our work is useful to your research, please consider citing our paper.
