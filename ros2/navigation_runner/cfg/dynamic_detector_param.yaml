@@ -8,7 +8,7 @@ dynamic_detector_node:
 
     # camera parameters
     depth_intrinsics: [458.1245542807029, 458.1245542807029, 320.0, 240.0] # fx,  fy, cx, cy
-    depth_intrinsics: [458.1245542807029, 458.1245542807029, 320.0, 240.0] # fx,  fy, cx, cy
+    color_intrinsics: [458.1245542807029, 458.1245542807029, 320.0, 240.0] # fx,  fy, cx, cy
     depth_scale_factor: 1000.0 # 1000 for Intel Realsense Camera
     depth_min_value: 0.5
     depth_max_value: 5.0
