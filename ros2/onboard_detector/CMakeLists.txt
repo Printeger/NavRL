@@ -48,8 +48,9 @@ set(dependencies "ament_cmake" "rclcpp" "visualization_msgs" "sensor_msgs"
                  "cv_bridge" "tf2" "tf2_ros" "tf2_geometry_msgs" "geometry_msgs" "message_filters"
                  "nav_msgs" "vision_msgs" "PCL" "pcl_conversions")
 ament_target_dependencies(${PROJECT_NAME}_lib ${dependencies})
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
-target_link_libraries(${PROJECT_NAME}_lib "${cpp_typesupport_target}")
+# rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+rosidl_target_interfaces(${PROJECT_NAME}_lib  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# target_link_libraries(${PROJECT_NAME}_lib "${cpp_typesupport_target}")
 
 
 # Nodes

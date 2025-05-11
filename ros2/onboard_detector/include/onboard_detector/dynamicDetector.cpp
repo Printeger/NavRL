@@ -472,12 +472,12 @@ namespace onboardDetector{
         this->orientationColor_ = camPoseColorMatrix.block<3, 3>(0, 0);
     }
 
-    void dynamicDetector::colorImgCB(const sensor_msgs::msg::Image::ConstSharedPtr& img){
+    void dynamicDetector::colorImgCB(const sensor_msgs::msg::Image::SharedPtr img){
         cv_bridge::CvImagePtr imgPtr = cv_bridge::toCvCopy(img, img->encoding);
         imgPtr->image.copyTo(this->detectedColorImage_);
     }
 
-    void dynamicDetector::yoloDetectionCB(const vision_msgs::msg::Detection2DArray::ConstSharedPtr& detections){
+    void dynamicDetector::yoloDetectionCB(const vision_msgs::msg::Detection2DArray::SharedPtr detections){
         this->yoloDetectionResults_ = *detections;
     }
 
@@ -812,8 +812,8 @@ namespace onboardDetector{
                 int brY = (this->fyC_ * bottomright(1) + this->cyC_ * bottomright(2)) / bottomright(2);
 
                 vision_msgs::msg::Detection2D result;
-                result.bbox.center.position.x = tlX;
-                result.bbox.center.position.y = tlY;
+                result.bbox.center.x = tlX;
+                result.bbox.center.y = tlY;
                 result.bbox.size_x = brX - tlX;
                 result.bbox.size_y = brY - tlY;
                 filteredDetectionResults.detections.push_back(result);
@@ -828,8 +828,8 @@ namespace onboardDetector{
 
 
             for (int i=0; i<int(this->yoloDetectionResults_.detections.size()); ++i){
-                int tlXTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.position.x);
-                int tlYTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.position.y);
+                int tlXTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.x);
+                int tlYTarget = int(this->yoloDetectionResults_.detections[i].bbox.center.y);
                 int brXTarget = tlXTarget + int(this->yoloDetectionResults_.detections[i].bbox.size_x);
                 int brYTarget = tlYTarget + int(this->yoloDetectionResults_.detections[i].bbox.size_y);
 
@@ -857,8 +857,8 @@ namespace onboardDetector{
                 double bestIOU = 0.0;
                 int bestIdx = -1;
                 for (int j=0; j<int(filteredBBoxesTemp.size()); ++j){
-                    int tlX = int(filteredDetectionResults.detections[j].bbox.center.position.x);
-                    int tlY = int(filteredDetectionResults.detections[j].bbox.center.position.y);
+                    int tlX = int(filteredDetectionResults.detections[j].bbox.center.x);
+                    int tlY = int(filteredDetectionResults.detections[j].bbox.center.y);
                     int brX = tlX + int(filteredDetectionResults.detections[j].bbox.size_x);
                     int brY = tlY + int(filteredDetectionResults.detections[j].bbox.size_y);
                     

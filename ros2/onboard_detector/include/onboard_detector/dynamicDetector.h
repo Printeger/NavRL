@@ -195,8 +195,8 @@ namespace onboardDetector{
         // callback
         void depthPoseCB(const sensor_msgs::msg::Image::ConstSharedPtr& img, const geometry_msgs::msg::PoseStamped::ConstSharedPtr& pose);
         void depthOdomCB(const sensor_msgs::msg::Image::ConstSharedPtr& img, const nav_msgs::msg::Odometry::ConstSharedPtr& odom);
-        void colorImgCB(const sensor_msgs::msg::Image::ConstSharedPtr& img);
-        void yoloDetectionCB(const vision_msgs::msg::Detection2DArray::ConstSharedPtr& detections);
+        void colorImgCB(const sensor_msgs::msg::Image::SharedPtr img);
+        void yoloDetectionCB(const vision_msgs::msg::Detection2DArray::SharedPtr detections);
         void detectionCB();
         void trackingCB();
         void classificationCB();

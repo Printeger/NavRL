@@ -48,8 +48,9 @@ target_include_directories(${PROJECT_NAME}_lib
 set(dependencies "ament_cmake" "rclcpp" "message_filters" "sensor_msgs" "geometry_msgs"
     "cv_bridge" "Eigen3" "PCL" "pcl_conversions" "nav_msgs" "visualization_msgs" "onboard_detector")
 ament_target_dependencies(${PROJECT_NAME}_lib ${dependencies})
-rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
-target_link_libraries(${PROJECT_NAME}_lib "${cpp_typesupport_target}")
+# rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
+rosidl_target_interfaces(${PROJECT_NAME}_lib  ${PROJECT_NAME} "rosidl_typesupport_cpp")
+# target_link_libraries(${PROJECT_NAME}_lib "${cpp_typesupport_target}")
 
 # Nodes
 add_executable(occupancy_map_node src/occupancy_map_node.cpp)
