@@ -13,7 +13,7 @@ eval "$(conda shell.bash hook)"
 # Step 1: Create conda env with python3.10
 echo "Setting up conda env..."
 conda create -n $ENV_NAME python=3.8
-conda create -n $ENV_NAME
+# conda create -n $ENV_NAME
 conda activate $ENV_NAME
 # pip install numpy==1.26.4
 # pip3 install torch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2
