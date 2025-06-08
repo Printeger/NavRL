@@ -8,7 +8,7 @@ ENV_NAME="NavRL"
 
 # Load Conda environment handling
 eval "$(conda shell.bash hook)"
-conda create -n $ENV_NAME python=3.10
+conda create -n $ENV_NAME python=3.10 -c conda-forge
 
 # Step 1: Setup Orbit
 echo "Setting up Orbit..."
