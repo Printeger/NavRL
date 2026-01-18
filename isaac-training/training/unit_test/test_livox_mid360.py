@@ -31,10 +31,12 @@ from omegaconf import DictConfig, OmegaConf
 # Isaac Sim 应用
 from omni.isaac.kit import SimulationApp
 
-# 添加脚本路径到 sys.path
+# 添加路径到 sys.path
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 SCRIPTS_PATH = os.path.join(os.path.dirname(SCRIPT_DIR), "scripts")
+ENVS_PATH = os.path.join(os.path.dirname(SCRIPT_DIR), "envs")
 sys.path.insert(0, SCRIPTS_PATH)
+sys.path.insert(0, ENVS_PATH)  # livox_mid360.py 在 envs 目录下
 
 # 配置文件路径
 CFG_PATH = os.path.join(os.path.dirname(SCRIPT_DIR), "cfg")
@@ -60,6 +62,7 @@ def main(cfg: DictConfig):
     print(f"[INFO] 垂直 FOV: {cfg.sensor.lidar_vfov}")
     print(f"[INFO] 垂直线数: {cfg.sensor.lidar_vbeams}")
     print(f"[INFO] 水平分辨率: {cfg.sensor.lidar_hres}°")
+    print(f"[INFO] 安装俯仰角: {cfg.sensor.lidar_mount_pitch}°")
     print("-" * 60)
 
     print("[STEP 1] 启动 Isaac Sim...")
@@ -113,19 +116,20 @@ def main(cfg: DictConfig):
         print(f"  ├── 垂直线数: {lidar_vbeams}")
         print(f"  └── 总射线数: {lidar_hbeams * lidar_vbeams}")
 
-        # 测试 LivoxMid360Config
-        livox_cfg = LivoxMid360Config(
-            horizontal_res=lidar_hres,
-            num_vertical_lines=lidar_vbeams,
-            max_range=lidar_range,
-            vertical_fov_min=lidar_vfov[0],
-            vertical_fov_max=lidar_vfov[1],
-        )
+        # 测试从 Hydra 配置创建 (推荐方式)
+        from livox_mid360 import create_livox_from_hydra_cfg
+
+        livox_pattern = create_livox_from_hydra_cfg(cfg, device="cpu")
+        livox_cfg = livox_pattern.cfg
 
         print(f"\n  Livox Mid-360 Config 验证:")
         print(f"  ├── 水平射线数: {livox_cfg.num_horizontal_rays}")
         print(f"  ├── 垂直线数: {livox_cfg.num_vertical_lines}")
-        print(f"  └── 总射线数: {livox_cfg.total_rays}")
+        print(f"  ├── 总射线数: {livox_cfg.total_rays_nominal}")
+        print(f"  ├── 安装俯仰角: {livox_cfg.mount_pitch}°")
+        print(f"  ├── 安装横滚角: {livox_cfg.mount_roll}°")
+        print(f"  ├── 安装偏航角: {livox_cfg.mount_yaw}°")
+        print(f"  └── 安装位置: {livox_cfg.mount_position}")
 
         assert livox_cfg.num_horizontal_rays == lidar_hbeams
         print("[TEST 1] ✓ 配置参数测试通过")
@@ -254,17 +258,56 @@ def main(cfg: DictConfig):
         sim_context.reset()
         drone.initialize()
 
+        # 查找实际的无人机 prim 路径
+        print("  ├── 验证无人机 prim 路径...")
+        stage = prim_utils.get_current_stage()
+        drone_prim_path = None
+
+        # 尝试几种可能的路径
+        possible_paths = [
+            "/World/envs/env_0/Hummingbird_0",
+            "/World/envs/env_0/Hummingbird",
+            f"/World/envs/env_0/{model_name}_0",
+            f"/World/envs/env_0/{model_name}",
+        ]
+
+        for path in possible_paths:
+            if prim_utils.is_prim_path_valid(path):
+                drone_prim_path = path
+                print(f"  │   找到无人机: {path}")
+
+                # 列出子节点
+                drone_prim = prim_utils.get_prim_at_path(path)
+                children = prim_utils.get_prim_children(drone_prim)
+                print(f"  │   子节点数量: {len(children)}")
+                for child in children[:10]:  # 只显示前10个
+                    print(f"  │     - {child.GetPath()}")
+                break
+
+        if drone_prim_path is None:
+            print("  │   错误: 未找到无人机 prim!")
+            # 列出 /World/envs/env_0 下的所有内容
+            env_prim = prim_utils.get_prim_at_path("/World/envs/env_0")
+            if env_prim.IsValid():
+                children = prim_utils.get_prim_children(env_prim)
+                print(f"  │   /World/envs/env_0 下的节点:")
+                for child in children:
+                    print(f"  │     - {child.GetPath()}")
+
         print("[TEST 3] ✓ 测试场景创建成功")
-        return drone, sim_context
+        return drone, sim_context, drone_prim_path
 
     # ============================================
     # TEST 4: 创建 Livox Mid-360 LiDAR
     # ============================================
-    def create_livox_lidar():
+    def create_livox_lidar(drone_prim_path):
         """创建 Livox Mid-360 LiDAR"""
         print("\n" + "=" * 60)
         print("[TEST 4] 创建 Livox Mid-360 LiDAR")
         print("=" * 60)
+
+        if drone_prim_path is None:
+            raise RuntimeError("无人机 prim 路径未找到，无法创建 LiDAR")
 
         # 使用配置文件中的参数
         lidar_range = cfg.sensor.lidar_range
@@ -298,8 +341,33 @@ def main(cfg: DictConfig):
         else:
             print(f"  ├── 警告: 地形路径 /World/ground 无效!")
 
+        # 查找 base_link 或类似的刚体 prim
+        print(f"  ├── 查找 LiDAR 附着点...")
+        drone_prim = prim_utils.get_prim_at_path(drone_prim_path)
+        base_link_path = None
+
+        # 尝试几种可能的子节点名称
+        possible_links = ["base_link", "body", "base", "chassis"]
+        for link_name in possible_links:
+            test_path = f"{drone_prim_path}/{link_name}"
+            if prim_utils.is_prim_path_valid(test_path):
+                base_link_path = test_path
+                print(f"  │   找到附着点: {base_link_path}")
+                break
+
+        if base_link_path is None:
+            # 如果没找到特定名称，使用第一个刚体子节点
+            children = prim_utils.get_prim_children(drone_prim)
+            if children:
+                base_link_path = str(children[0].GetPath())
+                print(f"  │   使用第一个子节点: {base_link_path}")
+            else:
+                # 最后选择：直接使用无人机根节点
+                base_link_path = drone_prim_path
+                print(f"  │   使用无人机根节点: {base_link_path}")
+
         ray_caster_cfg = RayCasterCfg(
-            prim_path="/World/envs/env_0/Hummingbird_0/base_link",
+            prim_path=base_link_path,
             offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
             attach_yaw_only=False,  # Livox Mid-360 是固态雷达
             pattern_cfg=patterns.BpearlPatternCfg(
@@ -595,10 +663,10 @@ def main(cfg: DictConfig):
         ray_dirs = test_ray_pattern(livox_cfg)
 
         # TEST 3: 创建场景
-        drone, sim_context = create_test_scene()
+        drone, sim_context, drone_prim_path = create_test_scene()
 
         # TEST 4: 创建 LiDAR
-        lidar = create_livox_lidar()
+        lidar = create_livox_lidar(drone_prim_path)
 
         # TEST 5: 运行仿真验证
         sim_passed = run_simulation_test(drone, lidar, sim_context, steps=200)

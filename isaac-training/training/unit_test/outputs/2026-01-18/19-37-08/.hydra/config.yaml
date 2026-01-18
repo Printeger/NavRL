@@ -1,0 +1,16 @@
+drone:
+  model_name: TaslabUAV
+sensor:
+  lidar_range: 40.0
+  lidar_vfov:
+  - -7.0
+  - 52.0
+  lidar_vbeams: 59
+  lidar_hres: 1.0
+  lidar_mount_pitch: 45.0
+  lidar_mount_roll: 0.0
+  lidar_mount_yaw: 0.0
+  lidar_mount_position:
+  - 0.05
+  - 0.0
+  - 0.05

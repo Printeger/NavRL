@@ -18,3 +18,12 @@ sensor:
   # 水平角分辨率 (度)
   # 高精度: 1.0, 中精度: 2.0, 低精度: 5.0, RL训练: 10.0
   lidar_hres: 1.0            # 水平分辨率 → 36 条水平线
+
+  # === LiDAR 安装姿态 ===
+  lidar_mount_pitch: 30.0     # 俯仰角 (度) - 正值=向前下方倾斜
+  lidar_mount_roll: 0.0       # 横滚角 (度)
+  lidar_mount_yaw: 0.0        # 偏航角 (度)
+  
+  # === LiDAR 安装位置 ===
+  lidar_mount_position: [0.0, 0.0, 0.05]  # [x, y, z] 相对于机体中心 (米)
+                                            # x: 向前正, y: 向左正, z: 向上正

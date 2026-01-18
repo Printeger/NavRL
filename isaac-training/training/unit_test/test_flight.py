@@ -94,6 +94,7 @@ def main(cfg: DictConfig):
     print(f"[INFO] Vertical FOV: {cfg.sensor.lidar_vfov}")
     print(f"[INFO] Vertical beams: {cfg.sensor.lidar_vbeams}")
     print(f"[INFO] Horizontal resolution: {cfg.sensor.lidar_hres}°")
+    print(f"[INFO] LiDAR mount pitch: {cfg.sensor.lidar_mount_pitch}°")
     print(f"[INFO] Drone model: {cfg.drone.model_name}")
     print("-" * 70)
     print("[INFO] Launching Isaac Sim...")
