@@ -1,3 +1,18 @@
+"""
+导航环境定义 (NavigationEnv)
+==============================
+这是强化学习训练的核心环境，定义了：
+1. 场景设计：地形、障碍物、无人机
+2. 传感器：LiDAR（激光雷达）
+3. 观测空间：LiDAR 数据、无人机状态、动态障碍物信息
+4. 动作空间：速度指令 [vx, vy, vz]
+5. 奖励函数：安全性、速度、平滑性
+6. 终止条件：碰撞、超出边界、到达目标
+
+继承关系：
+NavigationEnv -> IsaacEnv (OmniDrones) -> EnvBase (TorchRL)
+"""
+
 import torch
 import einops
 import numpy as np
@@ -19,124 +34,217 @@ from omni.isaac.orbit.assets import RigidObject, RigidObjectCfg
 import time
 
 class NavigationEnv(IsaacEnv):
-
-    # In one step:
-    # 1. _pre_sim_step (apply action) -> step isaac sim
-    # 2. _post_sim_step (update lidar)
-    # 3. increment progress_buf
-    # 4. _compute_state_and_obs (get observation and states, update stats)
-    # 5. _compute_reward_and_done (update reward and calculate returns)
+    """
+    导航环境类
+    
+    任务：无人机从起点飞到终点，避开静态和动态障碍物
+    
+    每一步的执行顺序：
+    1. _pre_sim_step: 应用动作（设置电机推力）
+    2. step isaac sim: 物理仿真更新（PhysX）
+    3. _post_sim_step: 更新传感器（LiDAR）和动态障碍物
+    4. increment progress_buf: 步数 +1
+    5. _compute_state_and_obs: 计算观测和状态
+    6. _compute_reward_and_done: 计算奖励和终止条件
+    
+    观测空间（输入给策略网络）：
+    - LiDAR: [1, 36, 4] 点云数据
+    - 无人机状态: [8] (距离、方向、速度)
+    - 动态障碍物: [1, N, 10] N个最近障碍物的信息
+    
+    动作空间（策略网络输出）：
+    - 速度指令: [3] (vx, vy, vz)
+    """
 
     def __init__(self, cfg):
+        """
+        初始化环境
+        
+        参数:
+            cfg: 配置对象（来自 train.yaml + drone.yaml 等）
+                - cfg.sensor: LiDAR 配置
+                - cfg.env: 环境配置（地图大小、障碍物数量）
+                - cfg.env_dyn: 动态障碍物配置
+        """
         print("[Navigation Environment]: Initializing Env...")
-        # LiDAR params:
-        self.lidar_range = cfg.sensor.lidar_range
-        self.lidar_vfov = (max(-89., cfg.sensor.lidar_vfov[0]), min(89., cfg.sensor.lidar_vfov[1]))
-        self.lidar_vbeams = cfg.sensor.lidar_vbeams
-        self.lidar_hres = cfg.sensor.lidar_hres
-        self.lidar_hbeams = int(360/self.lidar_hres)
+        
+        # ============================================
+        # 第 1 步：配置 LiDAR 参数
+        # ============================================
+        # LiDAR（激光雷达）参数
+        self.lidar_range = cfg.sensor.lidar_range  # 最大探测距离（米）
+        self.lidar_vfov = (  # 垂直视场角（度）
+            max(-89., cfg.sensor.lidar_vfov[0]), 
+            min(89., cfg.sensor.lidar_vfov[1])
+        )
+        self.lidar_vbeams = cfg.sensor.lidar_vbeams  # 垂直线束数（例如4条）
+        self.lidar_hres = cfg.sensor.lidar_hres  # 水平角分辨率（度，例如10°）
+        self.lidar_hbeams = int(360/self.lidar_hres)  # 水平线束数（360°/10° = 36条）
 
+        # ============================================
+        # 第 2 步：调用父类初始化（创建仿真场景）
+        # ============================================
+        # IsaacEnv.__init__() 会：
+        # 1. 初始化 Isaac Sim 上下文
+        # 2. 调用 _design_scene() 创建场景
+        # 3. 调用 _set_specs() 定义空间规范
         super().__init__(cfg, cfg.headless)
         
-        # Drone Initialization
-        self.drone.initialize()
-        self.init_vels = torch.zeros_like(self.drone.get_velocities())
+        # ============================================
+        # 第 3 步：初始化无人机
+        # ============================================
+        self.drone.initialize()  # 初始化无人机物理属性
+        self.init_vels = torch.zeros_like(self.drone.get_velocities())  # 初始速度为 0
 
-
-        # LiDAR Intialization
+        # ============================================
+        # 第 4 步：初始化 LiDAR 传感器 ⭐ 重要
+        # ============================================
         ray_caster_cfg = RayCasterCfg(
+            # 绑定到无人机的 base_link（所有环境的所有无人机）
             prim_path="/World/envs/env_.*/Hummingbird_0/base_link",
+            
+            # 传感器相对于 base_link 的偏移（这里是原点）
             offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+            
+            # 只跟随偏航角（yaw），不跟随俯仰和滚转
+            # 原因：让 LiDAR 保持水平，更稳定
             attach_yaw_only=True,
-            # attach_yaw_only=False,
+            
+            # 使用 Bpearl 激光雷达的扫描模式
             pattern_cfg=patterns.BpearlPatternCfg(
-                horizontal_res=self.lidar_hres, # horizontal default is set to 10
+                horizontal_res=self.lidar_hres,  # 水平分辨率：10°
+                # 垂直角度：从 -10° 到 20°，均匀分布 4 条射线
                 vertical_ray_angles=torch.linspace(*self.lidar_vfov, self.lidar_vbeams) 
             ),
-            debug_vis=False,
+            
+            debug_vis=False,  # 不可视化射线（提高性能）
+            
+            # 检测的对象：只检测地面（静态障碍物在地面上）
             mesh_prim_paths=["/World/ground"],
-            # mesh_prim_paths=["/World"],
         )
         self.lidar = RayCaster(ray_caster_cfg)
-        self.lidar._initialize_impl()
-        self.lidar_resolution = (self.lidar_hbeams, self.lidar_vbeams) 
+        self.lidar._initialize_impl()  # 初始化射线投射器
+        self.lidar_resolution = (self.lidar_hbeams, self.lidar_vbeams)  # (36, 4)
         
-        # start and target 
+        # ============================================
+        # 第 5 步：初始化目标和状态变量
+        # ============================================
         with torch.device(self.device):
-            # self.start_pos = torch.zeros(self.num_envs, 1, 3)
+            # 目标位置（每个环境一个目标）
             self.target_pos = torch.zeros(self.num_envs, 1, 3)
             
-            # Coordinate change: add target direction variable
+            # 目标方向（用于坐标变换）
             self.target_dir = torch.zeros(self.num_envs, 1, 3)
+            
+            # 高度范围（用于惩罚过高/过低飞行）
+            # [0]: 最小高度, [1]: 最大高度
             self.height_range = torch.zeros(self.num_envs, 1, 2)
-            self.prev_drone_vel_w = torch.zeros(self.num_envs, 1 , 3)
-            # self.target_pos[:, 0, 0] = torch.linspace(-0.5, 0.5, self.num_envs) * 32.
-            # self.target_pos[:, 0, 1] = 24.
-            # self.target_pos[:, 0, 2] = 2.     
+            
+            # 前一步的速度（用于计算平滑性奖励）
+            self.prev_drone_vel_w = torch.zeros(self.num_envs, 1 , 3)     
 
 
     def _design_scene(self):
-        # Initialize a drone in prim /World/envs/envs_0
-        drone_model = MultirotorBase.REGISTRY[self.cfg.drone.model_name] # drone model class
-        cfg = drone_model.cfg_cls(force_sensor=False)
+        """
+        设计仿真场景
+        
+        场景包含：
+        1. 无人机模型（Hummingbird）
+        2. 光照（太阳光 + 天空光）
+        3. 地面
+        4. 静态障碍物（地形）
+        5. 动态障碍物（移动的立方体和圆柱）
+        
+        这个方法会在环境初始化时被调用一次。
+        """
+        # ============================================
+        # 1. 创建无人机模型
+        # ============================================
+        # 从注册表中获取无人机模型类（例如 "Hummingbird"）
+        drone_model = MultirotorBase.REGISTRY[self.cfg.drone.model_name]
+        cfg = drone_model.cfg_cls(force_sensor=False)  # 不使用力传感器
         self.drone = drone_model(cfg=cfg)
-        # drone_prim = self.drone.spawn(translations=[(0.0, 0.0, 1.0)])[0]
+        # 生成无人机，初始位置在 z=2.0 米处
         drone_prim = self.drone.spawn(translations=[(0.0, 0.0, 2.0)])[0]
 
-        # lighting
+        # ============================================
+        # 2. 添加光照（让场景可见）
+        # ============================================
+        # 定向光（模拟太阳光）
         light = AssetBaseCfg(
             prim_path="/World/light",
-            spawn=sim_utils.DistantLightCfg(color=(0.75, 0.75, 0.75), intensity=3000.0),
+            spawn=sim_utils.DistantLightCfg(
+                color=(0.75, 0.75, 0.75), 
+                intensity=3000.0
+            ),
         )
+        # 天空光（环境光）
         sky_light = AssetBaseCfg(
             prim_path="/World/skyLight",
-            spawn=sim_utils.DomeLightCfg(color=(0.2, 0.2, 0.3), intensity=2000.0),
+            spawn=sim_utils.DomeLightCfg(
+                color=(0.2, 0.2, 0.3), 
+                intensity=2000.0
+            ),
         )
         light.spawn.func(light.prim_path, light.spawn, light.init_state.pos)
         sky_light.spawn.func(sky_light.prim_path, sky_light.spawn)
         
-        # Ground Plane
-        cfg_ground = sim_utils.GroundPlaneCfg(color=(0.1, 0.1, 0.1), size=(300., 300.))
+        # ============================================
+        # 3. 创建地面
+        # ============================================
+        cfg_ground = sim_utils.GroundPlaneCfg(
+            color=(0.1, 0.1, 0.1),  # 深灰色
+            size=(300., 300.)  # 300m × 300m
+        )
         cfg_ground.func("/World/defaultGroundPlane", cfg_ground, translation=(0, 0, 0.01))
 
+        # ============================================
+        # 4. 生成静态障碍物地形
+        # ============================================
+        # 地图范围：40m × 40m × 4.5m（x, y, z）
         self.map_range = [20.0, 20.0, 4.5]
 
         terrain_cfg = TerrainImporterCfg(
-            num_envs=self.num_envs,
-            env_spacing=0.0,
+            num_envs=self.num_envs,  # 多少个并行环境
+            env_spacing=0.0,  # 环境之间的间距（0表示共享地形）
             prim_path="/World/ground",
-            terrain_type="generator",
+            terrain_type="generator",  # 使用生成器创建地形
+            
             terrain_generator=TerrainGeneratorCfg(
-                seed=0,
-                size=(self.map_range[0]*2, self.map_range[1]*2), 
-                border_width=5.0,
-                num_rows=1, 
-                num_cols=1, 
-                horizontal_scale=0.1,
-                vertical_scale=0.1,
-                slope_threshold=0.75,
-                use_cache=False,
-                color_scheme="height",
+                seed=0,  # 随机种子（保证可复现）
+                size=(self.map_range[0]*2, self.map_range[1]*2),  # 40m × 40m
+                border_width=5.0,  # 边界宽度
+                num_rows=1,  # 地形块行数
+                num_cols=1,  # 地形块列数
+                horizontal_scale=0.1,  # 水平分辨率（10cm）
+                vertical_scale=0.1,  # 垂直分辨率（10cm）
+                slope_threshold=0.75,  # 坡度阈值
+                use_cache=False,  # 不使用缓存（每次重新生成）
+                color_scheme="height",  # 按高度着色
+                
+                # 子地形：离散障碍物
                 sub_terrains={
                     "obstacles": HfDiscreteObstaclesTerrainCfg(
                         horizontal_scale=0.1,
                         vertical_scale=0.1,
                         border_width=0.0,
-                        num_obstacles=self.cfg.env.num_obstacles,
-                        obstacle_height_mode="range",
-                        obstacle_width_range=(0.4, 1.1),
+                        num_obstacles=self.cfg.env.num_obstacles,  # 障碍物数量
+                        obstacle_height_mode="range",  # 高度模式：范围
+                        obstacle_width_range=(0.4, 1.1),  # 宽度范围：0.4-1.1m
+                        # 高度范围（米）：[1.0, 1.5, 2.0, 4.0, 6.0]
                         obstacle_height_range=[1.0, 1.5, 2.0, 4.0, 6.0],
+                        # 每个高度的概率：[10%, 15%, 20%, 55%]
                         obstacle_height_probability=[0.1, 0.15, 0.20, 0.55],
-                        platform_width=0.0,
+                        platform_width=0.0,  # 平台宽度
                     ),
                 },
             ),
             visual_material = None,
             max_init_terrain_level=None,
-            collision_group=-1,
-            debug_vis=True,
+            collision_group=-1,  # 碰撞组（-1表示与所有物体碰撞）
+            debug_vis=True,  # 显示调试可视化
         )
-        terrain_importer = TerrainImporter(terrain_cfg)
+        terrain_importer = TerrainImporter(terrain_cfg)  # 导入地形
 
         if (self.cfg.env_dyn.num_obstacles == 0):
             return
@@ -427,19 +535,40 @@ class NavigationEnv(IsaacEnv):
             self.move_dynamic_obstacle()
         self.lidar.update(self.dt)
     
-    # get current states/observation
+    # ============================================
+    # 计算观测和奖励（每步调用）
+    # ============================================
     def _compute_state_and_obs(self):
-        self.root_state = self.drone.get_state(env_frame=False) # (world_pos, orientation (quat), world_vel_and_angular, heading, up, 4motorsthrust)
-        self.info["drone_state"][:] = self.root_state[..., :13] # info is for controller
+        """
+        计算当前状态、观测和奖励
+        
+        返回:
+            TensorDict: 包含观测、统计信息、信息的字典
+                - ("agents", "observation"): 策略网络的输入
+                    - "lidar": [num_envs, 1, 36, 4] LiDAR 数据
+                    - "state": [num_envs, 8] 无人机状态
+                    - "dynamic_obstacle": [num_envs, 1, N, 10] 动态障碍物信息
+                - "stats": 统计信息（return, collision, etc.）
+                - "info": 额外信息（用于控制器）
+        """
+        # 获取无人机状态（世界坐标系）
+        # 包含：位置、姿态（四元数）、速度、角速度、朝向、上方向、电机推力
+        self.root_state = self.drone.get_state(env_frame=False)
+        self.info["drone_state"][:] = self.root_state[..., :13]  # 保存状态信息
 
-        # >>>>>>>>>>>>The relevant code starts from here<<<<<<<<<<<<
-        # -----------Network Input I: LiDAR range data--------------
+        # ============================================
+        # 网络输入 I：LiDAR 数据 ⭐ 关键传感器
+        # ============================================
+        # LiDAR 原始数据：射线击中点的世界坐标
+        # 我们需要计算：距离 = ||ray_hits - lidar_pos||
+        # 然后转换为："剩余距离" = lidar_range - 实际距离
+        # 作用：越近的障碍物值越大（便于网络学习）
         self.lidar_scan = self.lidar_range - (
             (self.lidar.data.ray_hits_w - self.lidar.data.pos_w.unsqueeze(1))
-            .norm(dim=-1)
-            .clamp_max(self.lidar_range)
-            .reshape(self.num_envs, 1, *self.lidar_resolution)
-        ) # lidar scan store the data that is range - distance and it is in lidar's local frame
+            .norm(dim=-1)  # 计算距离
+            .clamp_max(self.lidar_range)  # 限制在最大范围内
+            .reshape(self.num_envs, 1, *self.lidar_resolution)  # [num_envs, 1, 36, 4]
+        )
 
         # Optional render for LiDAR
         if self._should_render(0):
@@ -454,26 +583,32 @@ class NavigationEnv(IsaacEnv):
             # self.debug_draw.vector(x.expand_as(v[:, -1]), v[:, -1])
             self.debug_draw.vector(x.expand_as(v[:, 0])[0], v[0, 0])
 
-        # ---------Network Input II: Drone's internal states---------
-        # a. distance info in horizontal and vertical plane
-        rpos = self.target_pos - self.root_state[..., :3]        
-        distance = rpos.norm(dim=-1, keepdim=True) # start to goal distance
-        distance_2d = rpos[..., :2].norm(dim=-1, keepdim=True)
-        distance_z = rpos[..., 2].unsqueeze(-1)
+        # ============================================
+        # 网络输入 II：无人机内部状态
+        # ============================================
+        # 这些状态描述无人机与目标的关系
         
+        # a. 距离信息（水平和垂直分离）
+        rpos = self.target_pos - self.root_state[..., :3]  # 相对位置向量
+        distance = rpos.norm(dim=-1, keepdim=True)  # 3D 距离
+        distance_2d = rpos[..., :2].norm(dim=-1, keepdim=True)  # 水平距离
+        distance_z = rpos[..., 2].unsqueeze(-1)  # 垂直距离（高度差）
         
-        # b. unit direction vector to goal
+        # b. 指向目标的单位方向向量（在目标坐标系下）
+        # 为什么要坐标变换？
+        # - 在目标坐标系下，"向前"总是朝向目标
+        # - 策略网络更容易学习：只需学"向前飞"，而非"向北飞"或"向南飞"
         target_dir_2d = self.target_dir.clone()
-        target_dir_2d[..., 2] = 0
+        target_dir_2d[..., 2] = 0  # 只保留水平方向
 
-        rpos_clipped = rpos / distance.clamp(1e-6) # unit vector: start to goal direction
-        rpos_clipped_g = vec_to_new_frame(rpos_clipped, target_dir_2d) # express in the goal coodinate
+        rpos_clipped = rpos / distance.clamp(1e-6)  # 单位方向向量（归一化）
+        rpos_clipped_g = vec_to_new_frame(rpos_clipped, target_dir_2d)  # 转到目标坐标系
         
-        # c. velocity in the goal frame
-        vel_w = self.root_state[..., 7:10] # world vel
-        vel_g = vec_to_new_frame(vel_w, target_dir_2d)   # coordinate change for velocity
+        # c. 速度（在目标坐标系下）
+        vel_w = self.root_state[..., 7:10]  # 世界坐标系速度
+        vel_g = vec_to_new_frame(vel_w, target_dir_2d)  # 转到目标坐标系
 
-        # final drone's internal states
+        # 拼接为无人机状态：[方向(3) + 水平距离(1) + 垂直距离(1) + 速度(3)] = 8维
         drone_state = torch.cat([rpos_clipped_g, distance_2d, distance_z, vel_g], dim=-1).squeeze(1)
 
         if (self.cfg.env_dyn.num_obstacles != 0):
@@ -544,49 +679,79 @@ class NavigationEnv(IsaacEnv):
         }
 
 
-        # -----------------Reward Calculation-----------------
-        # a. safety reward for static obstacles
-        reward_safety_static = torch.log((self.lidar_range-self.lidar_scan).clamp(min=1e-6, max=self.lidar_range)).mean(dim=(2, 3))
+        # ============================================
+        # 奖励函数设计 ⭐ 非常重要
+        # ============================================
+        # 奖励 = 速度奖励 + 安全奖励 - 平滑性惩罚 - 高度惩罚
         
+        # a. 静态障碍物安全奖励
+        # 原理：距离越远，奖励越高（使用对数，避免奖励过大）
+        # log(distance) 保证：很近时惩罚大，较远时惩罚小
+        reward_safety_static = torch.log(
+            (self.lidar_range - self.lidar_scan).clamp(min=1e-6, max=self.lidar_range)
+        ).mean(dim=(2, 3))
 
-        # b. safety reward for dynamic obstacles
+        # b. 动态障碍物安全奖励
         if (self.cfg.env_dyn.num_obstacles != 0):
-            reward_safety_dynamic = torch.log((closest_dyn_obs_distance_reward).clamp(min=1e-6, max=self.lidar_range)).mean(dim=-1, keepdim=True)
+            reward_safety_dynamic = torch.log(
+                (closest_dyn_obs_distance_reward).clamp(min=1e-6, max=self.lidar_range)
+            ).mean(dim=-1, keepdim=True)
 
-        # c. velocity reward for goal direction
-        vel_direction = rpos / distance.clamp_min(1e-6)
-        reward_vel = (self.drone.vel_w[..., :3] * vel_direction).sum(-1)#.clip(max=2.0)
+        # c. 速度奖励（朝向目标方向的速度越快，奖励越高）
+        # 计算：速度 · 目标方向（点积）
+        # 效果：鼓励无人机快速飞向目标
+        vel_direction = rpos / distance.clamp_min(1e-6)  # 目标方向（单位向量）
+        reward_vel = (self.drone.vel_w[..., :3] * vel_direction).sum(-1)
         
-        # d. smoothness reward for action smoothness
+        # d. 平滑性惩罚（避免剧烈加速/减速）
+        # 计算：||v_t - v_{t-1}||
+        # 效果：鼓励平滑飞行，提高真实性
         penalty_smooth = (self.drone.vel_w[..., :3] - self.prev_drone_vel_w).norm(dim=-1)
         
-        # e. height penalty reward for flying unnessarily high or low
+        # e. 高度惩罚（避免飞得过高或过低）
+        # 原因：效率低、浪费能量
+        # 计算：如果超出合理高度范围，惩罚 = (超出距离)²
         penalty_height = torch.zeros(self.num_envs, 1, device=self.cfg.device)
-        penalty_height[self.drone.pos[..., 2] > (self.height_range[..., 1] + 0.2)] = ( (self.drone.pos[..., 2] - self.height_range[..., 1] - 0.2)**2 )[self.drone.pos[..., 2] > (self.height_range[..., 1] + 0.2)]
-        penalty_height[self.drone.pos[..., 2] < (self.height_range[..., 0] - 0.2)] = ( (self.height_range[..., 0] - 0.2 - self.drone.pos[..., 2])**2 )[self.drone.pos[..., 2] < (self.height_range[..., 0] - 0.2)]
+        # 飞得太高
+        too_high = self.drone.pos[..., 2] > (self.height_range[..., 1] + 0.2)
+        penalty_height[too_high] = ((self.drone.pos[..., 2] - self.height_range[..., 1] - 0.2)**2)[too_high]
+        # 飞得太低
+        too_low = self.drone.pos[..., 2] < (self.height_range[..., 0] - 0.2)
+        penalty_height[too_low] = ((self.height_range[..., 0] - 0.2 - self.drone.pos[..., 2])**2)[too_low]
 
-
-        # f. Collision condition with its penalty
-        static_collision = einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") >  (self.lidar_range - 0.3) # 0.3 collision radius
+        # f. 碰撞检测
+        # 静态碰撞：LiDAR 检测到距离 < 0.3m
+        static_collision = einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") > (self.lidar_range - 0.3)
         collision = static_collision | dynamic_collision
         
-        # Final reward calculation
+        # ============================================
+        # 最终奖励计算（权重调优）
+        # ============================================
+        # reward = vel_reward + 1.0 (基础奖励)
+        #          + safety_static * 1.0
+        #          + safety_dynamic * 1.0
+        #          - smoothness * 0.1
+        #          - height_penalty * 8.0
         if (self.cfg.env_dyn.num_obstacles != 0):
             self.reward = reward_vel + 1. + reward_safety_static * 1.0 + reward_safety_dynamic * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
         else:
             self.reward = reward_vel + 1. + reward_safety_static * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
 
-        # Terminal reward
-        # self.reward[collision] -= 50. # collision
-
-        # Terminate Conditions
+        # ============================================
+        # 终止条件
+        # ============================================
+        # 成功：到达目标（距离 < 0.5m）
         reach_goal = (distance.squeeze(-1) < 0.5)
-        below_bound = self.drone.pos[..., 2] < 0.2
-        above_bound = self.drone.pos[..., 2] > 4.
+        
+        # 失败：飞出边界或碰撞
+        below_bound = self.drone.pos[..., 2] < 0.2  # 低于 0.2m
+        above_bound = self.drone.pos[..., 2] > 4.  # 高于 4m
         self.terminated = below_bound | above_bound | collision
-        self.truncated = (self.progress_buf >= self.max_episode_length).unsqueeze(-1) # progress buf is to track the step number
+        
+        # 截断：达到最大步数（500 步）
+        self.truncated = (self.progress_buf >= self.max_episode_length).unsqueeze(-1)
 
-        # update previous velocity for smoothness calculation in the next ieteration
+        # 更新前一步速度（用于下一步的平滑性计算）
         self.prev_drone_vel_w = self.drone.vel_w[..., :3].clone()
 
         # # -----------------Training Stats-----------------

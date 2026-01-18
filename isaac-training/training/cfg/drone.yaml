@@ -1,9 +1,20 @@
-drone:  
-  model_name: "hummingbird"
+drone:
+  model_name: "TaslabUAV" # 无人机型号 - 可选: "Hummingbird", "Firefly", "TaslabUAV" 等
 
 sensor:
-  lidar_range: 4.
-  lidar_vfov: [-10, 20.] # degree
-  lidar_vbeams: 4 # number of vertical beams
-  lidar_hres: 10. # degree
-  
+  # # === hammingbird 参数 ===
+  # lidar_range: 4. # LiDAR 探测距离（米）⭐ 根据环境大小调整
+  # lidar_vfov: [-10, 20.] # 垂直视场角 [下限, 上限]（度）
+  # lidar_vbeams: 4 # 垂直线束数 - 影响传感器分辨率
+  # lidar_hres: 10. # 水平角分辨率（度）- 影响传感器分辨率
+
+  # === Livox Mid-360 参数 ===
+  lidar_range: 40.0           # 最大探测距离 (m) - Mid-360: 40m@10%反射率
+  # 垂直视场角: Mid-360 为 -7° ~ 52°
+  lidar_vfov: [-7.0, 52.0]    # [下限, 上限] (度)
+  # 垂直线束数
+  # 高精度: 59, 中精度: 30, 低精度: 15, RL训练: 12
+  lidar_vbeams: 59            # 垂直线束数
+  # 水平角分辨率 (度)
+  # 高精度: 1.0, 中精度: 2.0, 低精度: 5.0, RL训练: 10.0
+  lidar_hres: 1.0            # 水平分辨率 → 36 条水平线

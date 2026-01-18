@@ -1,0 +1,8 @@
+# Lee position controller parameters
+# TaslabUAV: 1.2kg (比 Hummingbird 重67%), X型布局
+# 需要更强的角速度阻尼来抑制摇摆
+
+position_gain: [4, 4, 4]
+velocity_gain: [2.2, 2.2, 2.2]
+attitude_gain: [0.8, 0.8, 0.035]      # 微调：补偿X型布局的效率损失
+angular_rate_gain: [0.25, 0.25, 0.03] # 关键：增加阻尼抑制摇摆

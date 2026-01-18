@@ -34,6 +34,7 @@ pip install moviepy==1.0.3
 pip install pyyaml
 pip install rospkg
 pip install matplotlib
+pip install toml
 
 # Step 2: Install dependencies
 echo "Installing system dependencies..."
@@ -60,13 +61,13 @@ python -c "from omni.isaac.kit import SimulationApp"
 # Step 4: Setup OmniDrones package
 echo "Setting up OmniDrones package..."
 cd ../OmniDrones
-pip install -e .
+pip install --timeout 1000 -e .
 
 # Step 5: Install TensorDict and dependencies
 echo "Installing TensorDict dependencies..."
 pip uninstall -y tensordict
 pip uninstall -y tensordict
-pip install tomli  # If missing 'tomli'
+pip install --timeout 1000 tomli  # If missing 'tomli'
 cd ../tensordict
 python setup.py develop
 
