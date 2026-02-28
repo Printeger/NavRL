@@ -1,8 +1,32 @@
 # Lee position controller parameters
 # TaslabUAV: 1.2kg (比 Hummingbird 重67%), X型布局
-# 需要更强的角速度阻尼来抑制摇摆
-
 position_gain: [4, 4, 4]
 velocity_gain: [2.2, 2.2, 2.2]
-attitude_gain: [0.8, 0.8, 0.035]      # 微调：补偿X型布局的效率损失
-angular_rate_gain: [0.25, 0.25, 0.03] # 关键：增加阻尼抑制摇摆
+attitude_gain: [0.7, 0.7, 0.035]
+angular_rate_gain: [0.1, 0.1, 0.025]
+# ==================== 调参指南 ====================
+# 症状 → 调整方法:
+#
+# 1. 高频振荡（抖动） → 增加 angular_rate_gain
+#    angular_rate_gain: [0.4, 0.4, 0.06]
+#
+# 2. 低频晃动（缓慢摇摆） → 降低 attitude_gain
+#    attitude_gain: [0.6, 0.6, 0.025]
+#
+# 3. 响应太慢 → 增加 position_gain / velocity_gain
+#    position_gain: [4, 4, 4]
+#    velocity_gain: [2.5, 2.5, 2.5]
+#
+# 4. 超调严重 → 降低 position_gain，增加 velocity_gain
+#    position_gain: [2.5, 2.5, 2.5]
+#    velocity_gain: [2.5, 2.5, 2.5]
+#
+# 5. 转圈（偏航不稳） → 增加 yaw 轴阻尼 (第3个值)
+#    angular_rate_gain: [0.35, 0.35, 0.08]
+
+# ==================== 调参顺序 ====================
+# 步骤1: 从很低的增益开始（保证悬停）
+# 步骤2: 逐步增加 position_gain 直到响应满意
+# 步骤3: 调整 velocity_gain 消除超调
+# 步骤4: 微调 angular_rate_gain 消除振荡
+# 步骤5: 分别调整 z 轴参数（垂直控制）

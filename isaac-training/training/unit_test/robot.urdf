@@ -1,0 +1,700 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<robot name="onshape_robot">
+    <!-- Link 3000mah -->
+    <link name="3000mah">
+        <inertial>
+            <origin xyz="0 0 0" rpy="0 0 0"/>
+            <mass value="0"/>
+            <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/>
+        </inertial>
+        <!-- Part mid-360 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 30mm_pillar_1 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar_1.stl"/>
+            </geometry>
+            <material name="30mm_pillar_1_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar_1.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part leg_l_3 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l_3.stl"/>
+            </geometry>
+            <material name="leg_l_3_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l_3.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part motor_f60pro_1 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro_1.stl"/>
+            </geometry>
+            <material name="motor_f60pro_1_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro_1.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_3 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_3_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_4 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_4_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part motor_f60pro_2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro_2.stl"/>
+            </geometry>
+            <material name="motor_f60pro_2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro_2.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part px4 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://px4.stl"/>
+            </geometry>
+            <material name="px4_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://px4.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_5 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_5_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 30mm_pillar_3 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar_3.stl"/>
+            </geometry>
+            <material name="30mm_pillar_3_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar_3.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part static_(1) -->
+        <visual>
+            <origin xyz="0.118236 -0.135682 0.0163668" rpy="1.5629 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static__1.stl"/>
+            </geometry>
+            <material name="static_(1)_material">
+                <color rgba="0.0392157 0.0392157 0.0392157 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.118236 -0.135682 0.0163668" rpy="1.5629 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static__1.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_6 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_6_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part static -->
+        <visual>
+            <origin xyz="-0.0848063 -0.0850917 0.0089352" rpy="-1.57869 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static.stl"/>
+            </geometry>
+            <material name="static_material">
+                <color rgba="0.0392157 0.0392157 0.0392157 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="-0.0848063 -0.0850917 0.0089352" rpy="-1.57869 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_7 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_7_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part leg_l_2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l_2.stl"/>
+            </geometry>
+            <material name="leg_l_2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l_2.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 45_upper -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://45_upper.stl"/>
+            </geometry>
+            <material name="45_upper_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://45_upper.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 45_upper_2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://45_upper.stl"/>
+            </geometry>
+            <material name="45_upper_2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://45_upper.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 38mm_pillar_3 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar_3.stl"/>
+            </geometry>
+            <material name="38mm_pillar_3_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar_3.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_8 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_8_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part motor_f60pro_3 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro_3.stl"/>
+            </geometry>
+            <material name="motor_f60pro_3_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro_3.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part leg_l_1 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l_1.stl"/>
+            </geometry>
+            <material name="leg_l_1_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l_1.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_9 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_9_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 30mm_pillar -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar.stl"/>
+            </geometry>
+            <material name="30mm_pillar_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 30mm_pillar_2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar_2.stl"/>
+            </geometry>
+            <material name="30mm_pillar_2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://30mm_pillar_2.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part leg_l -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l.stl"/>
+            </geometry>
+            <material name="leg_l_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://leg_l.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part bottom_board_v2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://bottom_board_v2.stl"/>
+            </geometry>
+            <material name="bottom_board_v2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://bottom_board_v2.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 38mm_pillar -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar.stl"/>
+            </geometry>
+            <material name="38mm_pillar_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_10 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_10_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_11 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_11_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 3000mah -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://3000mah.stl"/>
+            </geometry>
+            <material name="3000mah_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://3000mah.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_12 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_12_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part static_(1)_2 -->
+        <visual>
+            <origin xyz="-0.0520622 0.0340141 0.0150424" rpy="1.5629 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static__1.stl"/>
+            </geometry>
+            <material name="static_(1)_2_material">
+                <color rgba="0.0392157 0.0392157 0.0392157 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="-0.0520622 0.0340141 0.0150424" rpy="1.5629 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static__1.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 38mm_pillar_1 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar_1.stl"/>
+            </geometry>
+            <material name="38mm_pillar_1_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar_1.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part 38mm_pillar_2 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar_2.stl"/>
+            </geometry>
+            <material name="38mm_pillar_2_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://38mm_pillar_2.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part static_2 -->
+        <visual>
+            <origin xyz="0.0848949 0.0851932 0.00657613" rpy="-1.57869 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static.stl"/>
+            </geometry>
+            <material name="static_2_material">
+                <color rgba="0.0392157 0.0392157 0.0392157 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.0848949 0.0851932 0.00657613" rpy="-1.57869 8.8301e-05 -6.96954e-07"/>
+            <geometry>
+                <mesh filename="package://static.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part board -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://board.stl"/>
+            </geometry>
+            <material name="board_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://board.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part motor_f60pro -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro.stl"/>
+            </geometry>
+            <material name="motor_f60pro_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://motor_f60pro.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_13 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_13_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part lubancat4 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://lubancat4.stl"/>
+            </geometry>
+            <material name="lubancat4_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://lubancat4.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_14 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_14_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_15 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_15_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+        <!-- Part mid-360_16 -->
+        <visual>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+            <material name="mid-360_16_material">
+                <color rgba="0.792157 0.819608 0.933333 1.0"/>
+            </material>
+        </visual>
+        <collision>
+            <origin xyz="0.000144218 4.00566e-05 0.0063807" rpy="0 -0 0"/>
+            <geometry>
+                <mesh filename="package://mid_360.stl"/>
+            </geometry>
+        </collision>
+    </link>
+</robot>

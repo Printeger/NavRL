@@ -24,10 +24,12 @@ class TaslabUAV(MultirotorBase):
 
     # USD 3D模型文件路径
     # 选项1: 使用现有的 hummingbird 模型 (快速测试)
-    usd_path: str = ASSET_PATH + "/usd/hummingbird.usd"
+    # usd_path: str = ASSET_PATH + "/usd/hummingbird.usd"
 
     # 选项2: 使用自定义模型 (需要创建 taslab_uav.usd)
-    # usd_path: str = ASSET_PATH + "/usd/taslab_uav.usd"
+    # usd_path: str = ASSET_PATH + "/usd/taslab_uav_normalized.usd"
+    usd_path: str = ASSET_PATH + "/usd/taslab_uav.usd"
+
 
     # YAML 参数配置文件路径
     param_path: str = ASSET_PATH + "/usd/taslab_uav.yaml"

@@ -42,7 +42,7 @@ UAV Flight Test in Universal Arena
     python training/unit_test/test_flight.py
     
     # 带可视化
-    python training/unit_test/test_flight.py headless=False
+    python3 training/unit_test/test_flight.py headless=False
     
     # 自定义 LiDAR 参数
     python training/unit_test/test_flight.py headless=False sensor.lidar_range=30
