@@ -125,7 +125,7 @@ def main(cfg: DictConfig):
     from omni.isaac.orbit.sensors import RayCaster, RayCasterCfg, patterns
     from omni_drones.robots.drone import MultirotorBase
     from omni_drones.controllers import LeePositionController
-    from pxr import UsdGeom, Gf, UsdLux
+    from pxr import Usd, UsdGeom, Gf, UsdLux
 
     # Import the generator module
     spec = importlib.util.spec_from_file_location(
@@ -266,9 +266,9 @@ def main(cfg: DictConfig):
     spawner = ArenaSpawner(stage, base_path="/World/Arena")
 
     # =========================================================================
-    # Step 9: Create LiDAR Sensor
+    # Step 9: Prepare LiDAR parameters (sensor will be built after arena spawn)
     # =========================================================================
-    print("[INFO] Creating Livox Mid-360 LiDAR...")
+    print("[INFO] Preparing Livox Mid-360 LiDAR...")
 
     # LiDAR parameters from config
     lidar_range = cfg.sensor.lidar_range
@@ -283,31 +283,12 @@ def main(cfg: DictConfig):
     # Get drone base_link path
     drone_base_link = f"/World/envs/env_0/{model_name}_0/base_link"
 
-    ray_caster_cfg = RayCasterCfg(
-        prim_path=drone_base_link,
-        offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
-        attach_yaw_only=False,
-        pattern_cfg=patterns.BpearlPatternCfg(
-            horizontal_fov=360.0,
-            horizontal_res=lidar_hres,
-            vertical_ray_angles=vertical_angles,
-        ),
-        max_distance=lidar_range,
-        # Use ground plane (RayCaster limitation: supports only 1 mesh prim)
-        # Arena obstacles are Xform with children, not a single mesh
-        mesh_prim_paths=["/World/GroundPlane"],
-        debug_vis=False,  # We'll do custom visualization
-    )
+    lidar = None
+    lidar_initialized = False
+    lidar_scan_mesh_path = "/World/LidarScanMesh"
+    dynamic_lidar_refresh_interval = 10
 
-    lidar = RayCaster(ray_caster_cfg)
-    lidar._initialize_impl()
-    lidar_initialized = True
-
-    print(
-        f"[INFO] LiDAR initialized: {int(360/lidar_hres)} x {lidar_vbeams} = {int(360/lidar_hres) * lidar_vbeams} rays")
-    print(f"[INFO] Note: LiDAR scans ground plane only (arena obstacles visible via physics)")
-
-    print(f"[INFO] LiDAR configured (will initialize after arena spawn)")
+    print(f"[INFO] LiDAR parameters ready (will initialize after arena spawn)")
 
     # =========================================================================
     # Step 10: Create Position Controller
@@ -416,6 +397,174 @@ def main(cfg: DictConfig):
 
         return start_pos, goal_pos
 
+    def _append_triangles(points_out, counts_out, indices_out, verts, tri_faces):
+        base = len(points_out)
+        points_out.extend(verts)
+        for a, b, c in tri_faces:
+            counts_out.append(3)
+            indices_out.extend([base + a, base + b, base + c])
+
+    def _transform_vertices(world_mat, verts):
+        out = []
+        for vx, vy, vz in verts:
+            p = world_mat.Transform(Gf.Vec3d(float(vx), float(vy), float(vz)))
+            out.append((float(p[0]), float(p[1]), float(p[2])))
+        return out
+
+    def _cube_mesh_local():
+        verts = [
+            (-1, -1, -1), (1, -1, -1), (1, 1, -1), (-1, 1, -1),
+            (-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1),
+        ]
+        tris = [
+            (0, 1, 2), (0, 2, 3),
+            (4, 6, 5), (4, 7, 6),
+            (0, 4, 5), (0, 5, 1),
+            (1, 5, 6), (1, 6, 2),
+            (2, 6, 7), (2, 7, 3),
+            (3, 7, 4), (3, 4, 0),
+        ]
+        return verts, tris
+
+    def _cylinder_mesh_local(segments: int = 16):
+        verts = [(0.0, 0.0, 1.0), (0.0, 0.0, -1.0)]
+        tris = []
+        for i in range(segments):
+            a = 2.0 * math.pi * i / segments
+            x = math.cos(a)
+            y = math.sin(a)
+            verts.append((x, y, 1.0))
+            verts.append((x, y, -1.0))
+
+        for i in range(segments):
+            i2 = (i + 1) % segments
+            top_i = 2 + 2 * i
+            bot_i = top_i + 1
+            top_n = 2 + 2 * i2
+            bot_n = top_n + 1
+
+            tris.append((top_i, bot_i, bot_n))
+            tris.append((top_i, bot_n, top_n))
+            tris.append((0, top_n, top_i))
+            tris.append((1, bot_i, bot_n))
+        return verts, tris
+
+    def _sphere_mesh_local(lat: int = 8, lon: int = 16):
+        verts = []
+        tris = []
+        for i in range(lat + 1):
+            phi = math.pi * i / lat
+            z = math.cos(phi)
+            r = math.sin(phi)
+            for j in range(lon):
+                th = 2.0 * math.pi * j / lon
+                x = r * math.cos(th)
+                y = r * math.sin(th)
+                verts.append((x, y, z))
+
+        def vid(i, j):
+            return i * lon + (j % lon)
+
+        for i in range(lat):
+            for j in range(lon):
+                a = vid(i, j)
+                b = vid(i + 1, j)
+                c = vid(i + 1, j + 1)
+                d = vid(i, j + 1)
+                if i > 0:
+                    tris.append((a, b, d))
+                if i < lat - 1:
+                    tris.append((b, c, d))
+        return verts, tris
+
+    def _build_lidar_scan_mesh():
+        nonlocal lidar_scan_mesh_path
+
+        if stage.GetPrimAtPath(lidar_scan_mesh_path).IsValid():
+            stage.RemovePrim(lidar_scan_mesh_path)
+
+        mesh = UsdGeom.Mesh.Define(stage, lidar_scan_mesh_path)
+        points = []
+        counts = []
+        indices = []
+
+        # Include ground mesh triangles
+        ground_prim = stage.GetPrimAtPath(ground_path)
+        if ground_prim.IsValid() and ground_prim.GetTypeName() == "Mesh":
+            gmesh = UsdGeom.Mesh(ground_prim)
+            g_points = gmesh.GetPointsAttr().Get() or []
+            g_counts = gmesh.GetFaceVertexCountsAttr().Get() or []
+            g_indices = gmesh.GetFaceVertexIndicesAttr().Get() or []
+            base = len(points)
+            points.extend([(float(p[0]), float(p[1]), float(p[2])) for p in g_points])
+            cursor = 0
+            for fc in g_counts:
+                face = [base + int(i) for i in g_indices[cursor: cursor + fc]]
+                cursor += fc
+                if len(face) < 3:
+                    continue
+                for k in range(1, len(face) - 1):
+                    counts.append(3)
+                    indices.extend([face[0], face[k], face[k + 1]])
+
+        # Include all arena obstacles as triangulated proxy geometry
+        xform_cache = UsdGeom.XformCache(Usd.TimeCode.Default())
+        for prim_path in spawner.spawned_prims:
+            prim = stage.GetPrimAtPath(prim_path)
+            if not prim.IsValid():
+                continue
+
+            prim_type = prim.GetTypeName()
+            if prim_type == "Cube":
+                verts, tris = _cube_mesh_local()
+            elif prim_type == "Cylinder":
+                verts, tris = _cylinder_mesh_local(segments=16)
+            elif prim_type == "Sphere":
+                verts, tris = _sphere_mesh_local(lat=8, lon=16)
+            else:
+                continue
+
+            world_mat = xform_cache.GetLocalToWorldTransform(prim)
+            verts_world = _transform_vertices(world_mat, verts)
+            _append_triangles(points, counts, indices, verts_world, tris)
+
+        mesh.CreatePointsAttr(points)
+        mesh.CreateFaceVertexCountsAttr(counts)
+        mesh.CreateFaceVertexIndicesAttr(indices)
+
+        return lidar_scan_mesh_path, len(counts)
+
+    def _rebuild_lidar_sensor():
+        nonlocal lidar, lidar_initialized
+
+        mesh_path, tri_count = _build_lidar_scan_mesh()
+
+        # RayCaster caches warp mesh by path; clear cache to reload updated mesh geometry.
+        if mesh_path in RayCaster.meshes:
+            RayCaster.meshes.pop(mesh_path, None)
+
+        ray_caster_cfg = RayCasterCfg(
+            prim_path=drone_base_link,
+            offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+            attach_yaw_only=False,
+            pattern_cfg=patterns.BpearlPatternCfg(
+                horizontal_fov=360.0,
+                horizontal_res=lidar_hres,
+                vertical_ray_angles=vertical_angles,
+            ),
+            max_distance=lidar_range,
+            mesh_prim_paths=[mesh_path],
+            debug_vis=False,
+        )
+
+        lidar = RayCaster(ray_caster_cfg)
+        lidar._initialize_impl()
+        lidar_initialized = True
+        print(
+            f"[INFO] LiDAR rebuilt on merged scene mesh: {mesh_path} | "
+            f"triangles={tri_count} | obstacles={len(spawner.spawned_prims)}"
+        )
+
     def regenerate_arena():
         nonlocal current_result, sim_time, target_pos
 
@@ -461,6 +610,8 @@ def main(cfg: DictConfig):
         print(
             f"Tilt: roll={result.gravity_tilt_euler[0]:.1f}°, pitch={result.gravity_tilt_euler[1]:.1f}°")
         print(f"Start: {start_pos}, Goal: {goal_pos}")
+
+        _rebuild_lidar_sensor()
 
         sim_time = 0.0
 
@@ -835,6 +986,8 @@ def main(cfg: DictConfig):
                 new_positions = generator.update_dynamic_obstacles(dt)
                 if new_positions:
                     spawner.update_positions(new_positions)
+                    if step % dynamic_lidar_refresh_interval == 0:
+                        _rebuild_lidar_sensor()
 
             # =================================================================
             # Flight Control
@@ -866,7 +1019,8 @@ def main(cfg: DictConfig):
             # =================================================================
             # Update LiDAR
             # =================================================================
-            lidar.update(dt)
+            if lidar_initialized and lidar is not None:
+                lidar.update(dt)
 
             # =================================================================
             # Visualization
@@ -875,8 +1029,8 @@ def main(cfg: DictConfig):
             debug_draw.clear_lines()
 
             # Draw point cloud
-            ray_hits = lidar.data.ray_hits_w
-            lidar_pos = lidar.data.pos_w
+            ray_hits = lidar.data.ray_hits_w if (lidar_initialized and lidar is not None) else None
+            lidar_pos = lidar.data.pos_w if (lidar_initialized and lidar is not None) else None
             draw_pointcloud(ray_hits, lidar_pos)
 
             # Draw gravity vector
