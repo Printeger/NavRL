@@ -43,7 +43,11 @@ def _mid360_pattern(cfg: "LivoxMid360RayPatternCfg", device: str) -> tuple[torch
         mount_yaw=0.0,
         mount_position=(0.0, 0.0, 0.0),
     )
-    return create_livox_mid360_pattern(livox_cfg, device=device)
+    ray_starts, ray_directions = create_livox_mid360_pattern(livox_cfg, device=device)
+    # Orbit RayCaster applies sensor offsets in-place during initialization.
+    # The Livox helper returns origins via expand(), so clone before handing
+    # tensors to RayCaster to avoid overlapping-memory writes.
+    return ray_starts.clone().contiguous(), ray_directions.clone().contiguous()
 
 
 @dataclass

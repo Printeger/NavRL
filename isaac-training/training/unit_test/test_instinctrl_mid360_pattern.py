@@ -28,6 +28,14 @@ def test_mid360_ray_count_shape_and_unit_directions():
     assert torch.allclose(dirs.norm(dim=-1), torch.ones(36 * 12), atol=1e-5)
 
 
+def test_mid360_ray_starts_support_orbit_inplace_offset():
+    mod = _load_module()
+    cfg = mod.LivoxMid360RayPatternCfg(horizontal_res=10.0, num_vertical_lines=12)
+    starts, _ = cfg.func(cfg, "cpu")
+    starts += torch.tensor([0.0, 0.0, 0.05])
+    assert torch.allclose(starts[:, 2], torch.full((36 * 12,), 0.05))
+
+
 def test_mid360_ray_order_is_deterministic():
     mod = _load_module()
     cfg = mod.LivoxMid360RayPatternCfg(horizontal_res=5.0, num_vertical_lines=15)

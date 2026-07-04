@@ -39,7 +39,7 @@
 | B-FIX-003 | `instinctRL.enabled=true` returned after B0 smoke only | `instinctRL.mode` now separates `smoke` and `train`; PPO hybrid forward is covered by NavRL pytest. | Run `instinctRL.mode=smoke` runtime smoke in a GPU-visible Isaac environment. |
 | B-FIX-004 | `prev_action` was not fed from issued governor output | `env.set_prev_issued_action_body()` stores the previous issued body-frame command; `observation.py` now requires `prev_action` and unit tests verify feedback. | Confirm in runtime smoke across reset/step boundaries. |
 | B-FIX-005 | Actor audit scanned key names only | `audit.py` now includes `check_actor_schema()` for the hybrid actor input shape/key contract; pure actor schema tests pass. | Runtime actor audit must pass on real `TensorDict` from `NavigationEnv`. |
-| B-FIX-006 | B tests were missing | NavRL pytest now passes all added B tests, including PPO hybrid forward and actor/critic separation. | Run the Isaac runtime smoke once GPU/driver visibility is restored. |
+| B-FIX-006 | B tests were missing | NavRL pytest now passes all added B tests, including PPO hybrid forward, actor/critic separation, and RayCaster in-place offset regression coverage. | Run the Isaac runtime smoke once GPU/driver visibility is restored. |
 
 ---
 
@@ -47,7 +47,7 @@
 
 | Command | Result |
 |---------|--------|
-| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `13 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `14 passed, 2 warnings`. |
 | `conda activate NavRL` dependency probe | Passed: `torch 2.0.1+cu118`, `tensordict 0.4.0+3725bcc`, `torchrl 0.4.0+3725bcc`, `click 8.1.3`, `wandb 0.23.1`, `hydra 1.3.2`; `ForkingPickler=True`. |
 | `python3 -m py_compile ...` for changed code/tests | Passed. |
 | `rg -n "BpearlPatternCfg|patterns\\." ...` | No matches in the inspected active instinctRL env/cfg paths. |

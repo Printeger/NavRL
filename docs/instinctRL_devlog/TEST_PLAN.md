@@ -91,7 +91,7 @@
 
 | Command | Result |
 |---------|--------|
-| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `13 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `14 passed, 2 warnings`. Includes regression test for Orbit RayCaster in-place offset on MID360 ray starts. |
 | `python3 -m py_compile isaac-training/training/scripts/train.py isaac-training/training/scripts/env.py isaac-training/training/scripts/ppo.py isaac-training/training/scripts/instinctRL/audit.py isaac-training/training/scripts/instinctRL/command_adapter.py isaac-training/training/scripts/instinctRL/observation.py isaac-training/training/scripts/instinctRL/mid360_pattern.py isaac-training/training/unit_test/test_instinctrl_*.py` | Passed. |
 | `rg -n "BpearlPatternCfg|patterns\\." isaac-training/training/scripts/env.py isaac-training/training/scripts/instinctRL isaac-training/training/cfg -S` | No matches. |
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && python - <<'PY' ... dependency probe ... PY` | Passed: activated NavRL resolves Isaac torch 2.0.1, TorchRL/TensorDict, Hydra, WandB, and Click; `ForkingPickler=True`. |
@@ -103,6 +103,7 @@
 
 - Run `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` in the Isaac runtime environment and confirm reset, step, multi-step history rollover, actor audit, no NaN, and MID360 valid returns.
 - Run the same smoke after NVIDIA driver/GPU visibility is restored; Python dependencies are no longer the blocker when `conda activate NavRL` is used.
+- When running the smoke command manually, keep `env_dyn.num_obstacles=0` on the same command line, or use shell line continuations (`\`) so Hydra receives it as an override.
 
 ### instinctRL-C: Measurement-Space Anchor
 - Null-command hysteresis (ε₀ < ε₁)

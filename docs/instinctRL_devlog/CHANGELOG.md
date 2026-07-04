@@ -4,6 +4,23 @@
 
 ---
 
+## 2026-07-04 (MID360 RayCaster runtime fix)
+
+### instinctRL-B: Fixed RayCaster in-place offset failure
+
+**Status**: Code fix and regression test complete. Full runtime smoke still requires a GPU-visible environment to rerun end-to-end.
+
+- User-side smoke reached `NavigationEnv` and active MID360 RayCaster initialization, proving the prior Python dependency blockers were resolved.
+- Runtime failed in Orbit `RayCaster._initialize_rays_impl()` at `self.ray_starts += offset_pos`.
+- Root cause: the Livox MID360 helper returns ray origins via `expand()`, which creates an overlapping-memory view. Orbit mutates ray starts in-place when applying the sensor offset, and PyTorch rejects in-place writes to overlapping expanded views.
+- Fix: `instinctRL.mid360_pattern._mid360_pattern()` now returns cloned contiguous `ray_starts` and `ray_directions`.
+- Added regression coverage: `test_mid360_ray_starts_support_orbit_inplace_offset()` simulates Orbit's in-place offset operation.
+- NavRL B pytest now passes: `14 passed, 2 warnings`.
+
+**Command note**: The smoke command must pass `env_dyn.num_obstacles=0` as a Hydra override on the same command, or on a continued line with `\`. If entered as a separate shell line, it becomes `env_dyn.num_obstacles=0: command not found` and is not applied.
+
+---
+
 ## 2026-07-04 (NavRL environment validation)
 
 ### instinctRL-B: NavRL pytest/PPO validation passed; runtime smoke GPU-blocked

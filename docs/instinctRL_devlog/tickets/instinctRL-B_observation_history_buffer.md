@@ -68,6 +68,7 @@ Handbook-aligned B acceptance requires:
 ## Code Evidence
 
 - `env.py` no longer imports `patterns` from Orbit sensors and no longer configures `patterns.BpearlPatternCfg` in the inspected active instinctRL path.
+- `mid360_pattern.py` returns cloned contiguous ray starts/directions so Orbit RayCaster can apply sensor offsets in-place without hitting overlapping-memory writes from Livox helper `expand()` outputs.
 - `MID360ObservationBuilder.build()` raises if `prev_action` is not supplied, preventing silent zero/default history.
 - `env.set_prev_issued_action_body()` stores the governor/controller command that was issued before the current environment step.
 - `reset_history(env_ids)` clears only selected env history rows while preserving global frame-time continuity.
@@ -82,7 +83,7 @@ Handbook-aligned B acceptance requires:
 
 | Command | Result |
 |---------|--------|
-| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `13 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `14 passed, 2 warnings`. |
 | `conda activate NavRL` dependency probe | Passed: `torch 2.0.1+cu118`, `tensordict 0.4.0+3725bcc`, `torchrl 0.4.0+3725bcc`, `click 8.1.3`, `wandb 0.23.1`, `hydra 1.3.2`; `ForkingPickler=True`. |
 | `python3 -m py_compile ...` for changed code/tests | Passed. |
 | `rg -n "BpearlPatternCfg|patterns\\." isaac-training/training/scripts/env.py isaac-training/training/scripts/instinctRL isaac-training/training/cfg -S` | No matches. |
@@ -97,6 +98,11 @@ Handbook-aligned B acceptance requires:
 | ID | Blocker | Required result |
 |----|---------|-----------------|
 | B-VAL-001 | Isaac runtime smoke has not run because this environment cannot see a CUDA-capable GPU/driver. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` passes reset, step, multi-step history rollover, actor/schema audit, no NaN, and MID360 valid returns in a GPU-visible Isaac environment. |
+
+Runtime smoke note:
+
+- A user-side GPU smoke exposed and this branch fixed the Orbit RayCaster in-place offset failure on expanded MID360 ray starts.
+- If the smoke command is split across shell lines, `env_dyn.num_obstacles=0` must be continued with `\`; otherwise the shell reports `env_dyn.num_obstacles=0: command not found` and Hydra never receives that override.
 
 ---
 
