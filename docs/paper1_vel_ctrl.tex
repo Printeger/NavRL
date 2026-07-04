@@ -1,0 +1,1349 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage[margin=1in]{geometry}
+
+\newtheorem{definition}{Definition}
+\newtheorem{assumption}{Assumption}
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+\DeclareMathOperator{\diag}{diag}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\SO}{\mathrm{SO}(3)}
+\providecommand{\IEEEPARstart}[2]{#1#2}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\setlength{\emergencystretch}{3em}
+\hbadness=10000
+\hfuzz=50pt
+
+\title{Estimation-Free Station-Keeping and Safe Command-Tracking\\
+from Raw Range and Inertial Measurements:\\
+A Unified Constrained POMDP Formulation}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+%============================================================
+% ABSTRACT
+%============================================================
+\begin{abstract}
+Safe quadrotor operation in GNSS-denied and perception-degraded environments
+is commonly treated as collision avoidance layered onto a nominal navigation
+controller, which in turn depends on an onboard pose or odometry estimate.
+Such estimates are locally consistent but drift without bound in unvisited
+areas and can fail outright under latency, noise, or degeneracy---precisely
+the regime in which safety matters most. This paper studies a complementary
+and more primitive problem: how a quadrotor can hold its local position and
+safely respond to operator velocity commands without a world-frame position
+setpoint, a reconstructed obstacle map, or explicit pose, odometry, or
+velocity inputs to the learned policy. We formulate station-keeping as
+regulation in LiDAR \emph{measurement space}: under a null command, the
+vehicle anchors its current range observation as an implicit reference and
+regulates subsequent measurements toward it, and the same command-conditioned
+policy extends naturally to nonzero commands, tracking operator intent within
+physically feasible margins. The deployed governor consumes only raw range
+measurements, inertial cues, the command, and a short observation history;
+its translational regulation is pose- and odometry-free, while attitude
+stabilization is delegated to a conventional low-level controller. We analyze
+when measurement-space station-keeping is attainable through the local range
+Jacobian, showing that drift-free regulation is fundamentally limited by
+geometric observability and degrades in flat-wall, tunnel, and open-field
+configurations. For safety under nonzero commands, we couple the policy with
+an inevitable-collision-state-inspired intervention criterion based on
+clearance, approach speed, and braking feasibility. Experiments in simulated
+quadrotor environments show that the method reduces station-keeping drift in
+observable geometries, exposes predictable failure modes in degenerate ones,
+and attenuates unsafe velocity commands while preserving tracking performance
+when sensing and braking authority are sufficient.
+\end{abstract}
+
+%============================================================
+% INTRODUCTION
+%============================================================
+\section{Introduction}
+
+\IEEEPARstart{A}{utonomous} quadrotors are increasingly deployed in
+GNSS-denied and perception-degraded environments---subterranean voids,
+collapsed structures, and cluttered indoor spaces---where a human operator
+issues coarse velocity intent and expects the vehicle to remain safe and
+stationary between commands. The dominant design pattern treats this as a
+two-stage problem: an onboard visual--inertial or LiDAR odometry front end
+produces a pose estimate, a position controller closes a loop around it, and a
+reactive safety filter prevents collisions. This decomposition is effective
+when the estimator is healthy, but it inherits the estimator's failure modes.
+Visual--inertial and LiDAR odometry are locally consistent yet accumulate
+unbounded drift in previously unvisited areas\cite{sprind2025}, and onboard
+localization and mapping are prone to latency, noise, and drift that can
+result in estimation failure and, consequently, collision\cite{neuralcbf2024}.
+In the very conditions that make these environments dangerous---featureless
+walls, dust, symmetric corridors---the pose estimate is least trustworthy,
+yet the safety behavior is built on top of it.
+
+This coupling motivates a question that is seldom posed directly:
+\emph{when the estimator degrades or diverges, can the vehicle still hold its
+local position and safely respond to velocity commands without relying on that
+estimate at all?} We argue that a useful safety layer should not fail in the
+same way, and at the same time, as the localization stack it is meant to
+protect. What is missing is a holding-and-response behavior that is
+structurally independent of pose---one that regulates directly on what the
+sensor measures rather than on a reconstructed state.
+
+We take this independence literally. Instead of asking where the vehicle is,
+we ask what it should \emph{see}. We formulate station-keeping as regulation
+in LiDAR \emph{measurement space} rather than position space. Under a null
+command, the vehicle freezes its current range observation as an implicit
+reference and learns to maintain that range pattern; nonzero operator commands
+are treated not as a separate navigation problem but as a natural extension of
+the same command-conditioned policy, which induces local motion under the same
+observation constraints. The deployed governor consumes only raw range
+measurements, inertial cues, the command input, and a short observation
+history. Its \emph{translational} regulation is pose-free and odometry-free;
+we deliberately restrict this claim to translation and delegate attitude
+stabilization to a conventional low-level controller, since attitude
+estimation remains necessary and is not part of the learned policy's state.
+
+Formulating holding in measurement space, however, raises a question that
+position-space formulations never confront: measurement-space regulation is
+only as good as the geometry that the sensor observes. Two distinct vehicle
+positions can produce nearly identical range patterns, in which case no policy,
+however well trained, can distinguish them or resist drift between them. We
+make this precise through the local range Jacobian, which links small
+translational motions to changes in LiDAR range measurements. Its conditioning
+determines when station-keeping is physically attainable and predicts the
+directions along which drift is unavoidable in flat-wall, tunnel, and
+open-field geometries. This turns station-keeping failure from an empirical
+nuisance into a predictable geometric phenomenon and, we argue, is a necessary
+companion to any observation-space holding behavior.
+
+Finally, holding is not enough: once the operator issues a nonzero command,
+the governor must decide whether obeying it is safe. Because it has no map and
+no global pose, this decision must also be made from local sensing. We couple
+the measurement-space policy with an intervention criterion inspired by the
+notion of an inevitable collision state, which evaluates whether the current
+command would drive the vehicle toward an obstacle faster than it can brake
+within the available clearance, accounting for both distance and approach
+speed rather than distance alone. We do not claim novelty for command
+filtering as such; the point is that both the holding behavior and the command
+attenuation are produced from raw range and inertial sensing, without a
+world-frame position estimate anywhere in the loop.
+
+In summary, this paper makes the following contributions.
+
+\begin{itemize}
+  \item \textbf{Measurement-space station-keeping without a world-frame
+  setpoint.} We cast quadrotor station-keeping and command tracking as a
+  single command-conditioned regulation problem in LiDAR measurement space. A
+  zero command freezes the current range pattern as an implicit reference and
+  the policy maintains it from range--inertial history alone, while a nonzero
+  command induces local motion under the same observation constraints---
+  unifying local holding and velocity tracking without a global goal, map, or
+  pose setpoint, and without any external pose, odometry, or velocity estimate
+  for translational regulation.
+
+  \item \textbf{Range-Jacobian observability analysis for pose-free holding,
+  with a quantitative drift study.} We provide a local observability analysis
+  based on the range Jacobian, characterizing when range-only station-keeping
+  is physically attainable and exposing a fundamental limitation: in
+  flat-wall, tunnel, and open-field geometries, some translational directions
+  are weakly observable or unobservable, causing unavoidable drift even for an
+  ideally trained policy. We validate this by relating station-keeping drift
+  to the conditioning of the range Jacobian across corners, flat walls,
+  corridors, and open scenes.
+
+  \item \textbf{An ICS-inspired command-intervention layer coupled to the
+  measurement-space policy.} We introduce an inevitable-collision-state-
+  inspired criterion that decides, from local sensing alone, whether a
+  commanded velocity remains brakeable within the available clearance,
+  accounting for both obstacle distance and approach speed. Our contribution
+  is not the filter in isolation but its integration with a pose-free
+  measurement-space governor, so that unsafe commands are attenuated, slowed,
+  or rejected before collision becomes imminent while tracking is preserved
+  when sensing and braking authority are sufficient.
+\end{itemize}
+
+The remainder of this paper is organized as follows.
+Section~\ref{sec:related} positions our work against learned barrier
+functions, observation-space control synthesis, and safe velocity filtering.
+Section~\ref{sec:formulation} formalizes measurement-space station-keeping and
+the command-conditioned policy. Section~\ref{sec:observability} develops the
+range-Jacobian observability analysis. Section~\ref{sec:safety} presents the
+ICS-inspired intervention layer. Section~\ref{sec:experiments} reports
+experiments across observable and degenerate geometries, and
+Section~\ref{sec:conclusion} concludes.
+
+%============================================================
+% RELATED WORK
+%============================================================
+\section{Related Work}
+\label{sec:related}
+
+We organize prior work into four themes: (i) localization and position
+holding in GNSS-denied environments, (ii) learned barrier functions defined
+on raw perception, (iii) control synthesis directly in observation space, and
+(iv) safe velocity filtering against nominal or adversarial commands. For each,
+we clarify how our formulation differs, with particular care around the three
+lines of work closest to ours.
+
+\subsection{Position Holding under GNSS Denial}
+The conventional route to station-keeping without GNSS is to run a
+visual--inertial or LiDAR odometry front end and to close a position loop
+around its estimate. These estimators are locally consistent but accumulate
+unbounded drift in previously unvisited areas\cite{sprind2025}, and onboard
+localization and mapping are prone to latency, noise, and drift that can lead
+to estimation failure and, in turn, collision\cite{neuralcbf2024}. A large
+body of work therefore focuses on improving the estimator---through sensor
+fusion, cooperative localization, or terrain-relative
+methods\cite{sprind2025}---so that a downstream position controller can hold
+its setpoint reliably. Our work is orthogonal to this effort. Rather than
+making the pose estimate more robust so that holding can depend on it, we
+remove holding's dependence on pose altogether, providing a behavior that
+remains valid precisely when the estimator is least trustworthy. In this sense
+our method is complementary to, not competitive with, improved GNSS-denied
+localization: it is intended as an independent, redundant layer that does not
+share the estimator's failure modes.
+
+\subsection{Learned Barrier Functions on Raw Perception}
+A growing line of work synthesizes control barrier functions (CBFs) directly
+from onboard sensing to avoid maintaining an explicit map. The neural CBF
+safety filter of \cite{neuralcbf2024} operates in a local frame and does not
+utilize a reconstructed map, relying instead on the instantaneous LiDAR scan.
+This is close to our sensing philosophy, and we adopt a similar map-free
+stance. The distinction is one of scope. In \cite{neuralcbf2024} the safety
+guarantee is confined to the filter, while the underlying nominal controller
+is driven by LiDAR-estimated odometry; the closed loop therefore remains
+odometry-dependent, and yaw is regulated against an inertial frame. Our
+pose-free property instead covers the entire translational governor, including
+the behavior that plays the role of the nominal controller. Furthermore,
+prior learned-CBF work targets collision avoidance around a functioning
+navigation stack, whereas we study the more primitive problem of holding and
+command response when that stack may be unavailable, and we contribute an
+explicit account of when such measurement-space regulation is geometrically
+feasible.
+
+\subsection{Control Synthesis in Observation Space}
+Closest to our sensing assumption is work that learns control certificates
+directly in the robot's observation space. LOCUS learns barrier and Lyapunov
+functions in observation space without assuming a separate perception-based
+state estimator\cite{locus2023}, which aligns with our premise of regulating
+on what the sensor measures rather than on a reconstructed state. We differ in
+both problem and analysis. LOCUS is goal-driven and formulates navigation
+toward a target, whereas we address the more primitive station-keeping regime
+in which a null command is a first-class behavior rather than a degenerate
+case of goal reaching. More importantly, observation-space synthesis has not,
+to our knowledge, characterized \emph{when} such regulation is attainable: two
+distinct positions may induce nearly identical observations, in which case no
+policy can resist drift between them. Our range-Jacobian observability analysis
+fills this gap by predicting the directions along which observation-space
+holding must fail, turning a latent limitation of the observation-space
+approach into an explicit, testable condition.
+
+\subsection{Safe Velocity Filtering}
+A final theme enforces safety by filtering a commanded velocity onto a safe
+set. Composite CBF approaches combine multiple constraints and have been
+validated against demanding inputs; notably, \cite{compositecbf2025}
+demonstrates safety against a reference velocity issued by an adversarial
+operator that intentionally attempts to collide the quadrotor. Reactive,
+robot-centric filters similarly take a nominal velocity from a position
+controller and output a filtered, safety-constrained velocity tracked by a
+low-level controller\cite{reactive2026}. These methods are effective but are
+position- or odometry-dependent and treat command filtering as the central
+contribution. We deliberately do not position our command-intervention layer
+as a novel filter. Our inevitable-collision-state-inspired criterion is
+standard in spirit---it reasons about clearance, approach speed, and braking
+feasibility---and its role in this paper is integrative: it operates on the
+same raw range and inertial signals as the holding policy, so that both the
+holding behavior and the command attenuation are produced without a
+world-frame position estimate anywhere in the loop. To our knowledge, no prior
+work provides a single command-conditioned, pose-free governor that unifies
+measurement-space station-keeping, an observability account of its feasibility,
+and local-sensing command intervention.
+
+%============================================================
+% COMPARISON TABLE + TRANSITION  (place at end of Sec. Related Work)
+%============================================================
+\subsection{Positioning Summary}
+Table~\ref{tab:comparison} summarizes the preceding discussion along five axes
+that jointly characterize a pose-free holding-and-response layer: whether the
+method avoids an explicit map (\emph{map-free}); whether the actor that
+produces motion---not merely a downstream filter---is free of pose and
+odometry inputs (\emph{pose-free actor}); whether station-keeping under a null
+command is treated as a first-class behavior (\emph{station-keeping}); whether
+the feasibility of the approach is analyzed rather than assumed
+(\emph{observability analysis}); and whether unsafe commands are rejected from
+local sensing (\emph{command safety}). As the table shows, prior methods
+satisfy subsets of these axes, but none combines a pose-free actor with an
+explicit observability account of station-keeping---the gap this paper
+addresses.
+
+\begin{table}[t]
+\centering
+\caption{Positioning against representative prior work. A checkmark
+(\checkmark) denotes full support, a tilde ($\sim$) partial support, and a
+dash (--) no support. ``Pose-free actor'' requires the motion-generating
+policy itself---not only a safety filter---to be free of pose/odometry inputs.}
+\label{tab:comparison}
+\renewcommand{\arraystretch}{1.3}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+\textbf{Method} &
+\rotatebox{90}{Map-free} &
+\rotatebox{90}{Pose-free actor} &
+\rotatebox{90}{Station-keeping} &
+\rotatebox{90}{Observability analysis} &
+\rotatebox{90}{Command safety} \\
+\midrule
+GNSS-denied odometry + hold \cite{sprind2025} & -- & -- & \checkmark & -- & -- \\
+Neural CBF filter \cite{neuralcbf2024}         & \checkmark & $\sim$ & -- & -- & \checkmark \\
+LOCUS (obs.-space CBF/CLF) \cite{locus2023}    & \checkmark & \checkmark & -- & -- & \checkmark \\
+Composite CBF \cite{compositecbf2025}          & -- & -- & -- & -- & \checkmark \\
+Reactive robot-centric \cite{reactive2026}     & $\sim$ & -- & -- & -- & \checkmark \\
+\midrule
+\textbf{Ours}                                  & \checkmark & \checkmark & \checkmark & \checkmark & \checkmark \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\clearpage
+
+%============================================================
+% METHOD: Paper 1 velocity-command governor (final)
+% Required packages: amsmath, amssymb, amsthm, bm, mathtools.
+% Theorem envs required: definition, assumption, proposition, remark.
+%============================================================
+
+\section{Method}
+\label{sec:formulation}
+\label{sec:method}
+
+We now describe the proposed measurement-space governor. The goal is not to
+replace the entire flight stack. Instead, the learned module sits above a
+conventional low-level velocity/attitude controller and produces a corrected
+body-frame velocity command. The key restriction is imposed at the learned
+module: the deployed governor is not given global pose, local odometry, a
+reconstructed map, or an explicit velocity estimate. It must infer the
+motion-relevant information needed for local holding and command response from
+range--inertial history.
+
+The resulting loop buffers raw LiDAR ranges and inertial cues over a short
+horizon; a learned governor
+maps this history and the operator command to a corrected velocity command, an
+ICS-inspired intervention layer attenuates commands that are not locally
+brakeable, and a conventional low-level controller tracks the final command.
+We deliberately restrict the pose-free claim to the learned translational
+governor. Attitude stabilization and low-level command execution are handled
+by the flight controller and are not the object of this paper.
+
+%============================================================
+\subsection{System, Frames, and Information Constraint}
+\label{sec:method_system}
+
+Let the quadrotor state be
+\begin{equation}
+    x_t = (p_t, R_t, v_t, \omega_t),
+    \label{eq:state}
+\end{equation}
+where $p_t \in \mathbb{R}^3$ is the position in an inertial world frame
+$\mathcal{W}$, $R_t \in \mathrm{SO}(3)$ is the body-to-world rotation,
+$v_t \in \mathbb{R}^3$ is the world-frame linear velocity, and
+$\omega_t \in \mathbb{R}^3$ is the body angular velocity. This state is used
+only for analysis, simulation reward construction, and evaluation. It is not
+provided to the deployed learned governor.
+
+We denote the body frame by $\mathcal{B}$. The operator velocity command is
+expressed in a gravity-aligned body-yaw frame $\mathcal{Y}$ whose yaw follows
+the vehicle heading while roll and pitch are removed. This convention avoids
+requiring a global position frame and keeps commands intuitive for
+teleoperation: forward, lateral, and vertical components correspond to the
+current local vehicle heading. Let
+\begin{equation}
+    v^{\mathrm{cmd}}_t \in \mathcal{V} \subset \mathbb{R}^3
+    \label{eq:cmd}
+\end{equation}
+be the operator command in $\mathcal{Y}$, with
+$\|v^{\mathrm{cmd}}_t\| \leq v_{\max}$.
+
+The learned governor receives only the following observation at time $t$:
+\begin{equation}
+    o_t = \bigl(r_t,\; y^{\mathrm{imu}}_t,\; v^{\mathrm{cmd}}_t,\;
+    \tilde v_{t-1}\bigr),
+    \label{eq:obs}
+\end{equation}
+where $r_t$ is the LiDAR range vector, $y^{\mathrm{imu}}_t$ denotes inertial
+cues, and $\tilde v_{t-1}$ is the previously issued corrected velocity command.
+The observation explicitly excludes
+\begin{equation}
+    p_t, \quad v_t, \quad \hat p_t, \quad \hat v_t, \quad
+    \text{local odometry}, \quad \text{and reconstructed maps}.
+    \label{eq:excluded_inputs}
+\end{equation}
+Because instantaneous translational velocity is not contained in a single
+observation, the policy operates on a finite history window
+\begin{equation}
+    h_t = \{o_{t-H+1}, o_{t-H+2}, \ldots, o_t\},
+    \label{eq:history}
+\end{equation}
+with window length $H$. This history can be realized by frame stacking, a
+temporal convolutional encoder, or a recurrent encoder. In this paper we use a
+fixed-window implementation as the default because it is stateless at
+deployment and is less sensitive to hidden-state corruption under sensor
+dropout or timing jitter.
+
+%============================================================
+\subsection{Range and Inertial Observation Model}
+\label{sec:method_observation}
+
+Consider a LiDAR with $N$ rays. The $i$-th ray has a known unit direction
+$d_i \in \mathbb{S}^2$ expressed in the body frame, and its direction in the
+world frame is $s_i = R_t d_i$. Let $\mathcal{O}$ denote the obstacle set. The
+range return is
+\begin{equation}
+    r_{t,i} = \min\!\left(\rho(p_t, s_i, \mathcal{O}),\; r_{\max}\right)
+    + \eta_{t,i},
+    \qquad i=1,\ldots,N,
+    \label{eq:range_model}
+\end{equation}
+where $\rho(p,s,\mathcal{O})$ is the distance from $p$ to the first intersection
+with $\mathcal{O}$ along direction $s$, $r_{\max}$ is the maximum sensing range,
+and $\eta_{t,i}$ models measurement noise. No-return rays are assigned the
+saturated value $r_{\max}$ and are recorded by a validity mask
+\begin{equation}
+    m_{t,i} = \mathbb{1}[r_{t,i}<r_{\max}-\epsilon_r].
+    \label{eq:valid_mask}
+\end{equation}
+We further associate to each beam a scalar reliability weight
+$w_{t,i}\in[0,1]$, computed at deployment from return validity, range-noise
+level, and neighbor consistency of the scan. This weight does \emph{not} require
+surface normals and is used by the station-keeping loss and the
+command-intervention layer to discount unreliable beams.
+
+The inertial observation is
+\begin{equation}
+    y^{\mathrm{imu}}_t = \bigl(f^{\mathcal{B}}_t,\; \omega^{\mathcal{B}}_t,
+    \; g^{\mathcal{B}}_t\bigr),
+    \label{eq:imu_obs}
+\end{equation}
+where $f^{\mathcal{B}}_t$ is the specific force, $\omega^{\mathcal{B}}_t$ is the
+body angular rate, and $g^{\mathcal{B}}_t$ is the gravity direction expressed in
+$\mathcal{B}$. The gravity direction can be obtained from the attitude estimate
+or a complementary filter; it provides roll/pitch stabilization information and
+the rotation needed to express ray directions in the command frame
+$\mathcal{Y}$, but it does not provide absolute position or translational
+velocity.
+
+%============================================================
+\subsection{Measurement-Space Station-Keeping}
+\label{sec:method_anchor}
+
+Standard position holding requires a world-frame setpoint. We instead define
+station-keeping directly in the sensor space. We use a hysteresis rule to enter
+and exit the null-command (holding) regime, with an entry threshold $\epsilon_0$
+and an exit threshold $\epsilon_1>\epsilon_0$:
+\begin{equation}
+    \chi_t =
+    \begin{cases}
+        1, & \chi_{t-1}=0 \ \text{and}\ \|v^{\mathrm{cmd}}_t\|\leq \epsilon_0,\\
+        0, & \chi_{t-1}=1 \ \text{and}\ \|v^{\mathrm{cmd}}_t\|> \epsilon_1,\\
+        \chi_{t-1}, & \text{otherwise},
+    \end{cases}
+    \label{eq:anchor_hysteresis}
+\end{equation}
+where $\chi_t\in\{0,1\}$ indicates that the holding anchor is active. On the
+rising edge of $\chi_t$ we freeze the current range observation as an implicit
+reference,
+\begin{equation}
+    r^\star = r_{t},\qquad m^\star = m_{t},
+    \label{eq:range_anchor}
+\end{equation}
+and we retain $(r^\star,m^\star)$ until the anchor is cleared. The hysteresis
+band $(\epsilon_0,\epsilon_1)$ prevents re-anchoring chatter near the command
+threshold. The station-keeping objective is then to regulate subsequent
+measurements toward this reference. We define the masked range-anchor error
+\begin{equation}
+    e^r_t = M_t \bigl(r_t-r^\star\bigr),
+    \qquad
+    M_t = \mathrm{diag}(m_t \odot m^\star \odot w_t),
+    \label{eq:anchor_error}
+\end{equation}
+where $w_t=(w_{t,1},\ldots,w_{t,N})^\top$ are the beam reliability weights. In
+practice we use a robust penalty
+\begin{equation}
+    \ell_{\mathrm{anch}}(t)
+    = \sum_{i=1}^{N} M_{t,ii}\, \varphi_\delta(r_{t,i}-r^\star_i),
+    \label{eq:anchor_loss}
+\end{equation}
+where $\varphi_\delta(\cdot)$ is the Huber loss. The robust form prevents a few
+dynamic obstacles, dropouts, or range outliers from dominating the
+station-keeping signal.
+
+This definition is intentionally local. It does not claim that the vehicle
+recovers an absolute position; it asks whether the vehicle can hold the same
+exteroceptive view. If different translations produce nearly identical range
+measurements, then no measurement-only controller can correct those
+translations. This limitation is formalized next.
+
+%============================================================
+\subsection{Range-Jacobian Observability of Holding}
+\label{sec:observability}
+
+We analyze holding observability at a fixed attitude $R$; attitude motion is
+delegated to the low-level controller and its first-order coupling into the
+range map is neglected in this translational analysis. Let $g(p;R,\mathcal{O})$
+denote the range measurement map,
+\begin{equation}
+    r = g(p;R,\mathcal{O}).
+    \label{eq:measurement_map}
+\end{equation}
+For a small translation $\delta p$, the first-order range variation is
+\begin{equation}
+    \delta r \approx J(p)\,\delta p, \qquad
+    J(p)=\frac{\partial g}{\partial p}(p;R,\mathcal{O}) \in \mathbb{R}^{N\times 3}.
+    \label{eq:range_jacobian}
+\end{equation}
+For a ray that intersects a locally planar surface with outward normal $n_i$
+and world-frame direction $s_i=R d_i$, the plane-intersection distance is
+$r_i = n_i^\top(q_0-p)/(n_i^\top s_i)$ for a surface point $q_0$, and since the
+denominator is independent of $p$,
+\begin{equation}
+    J_{i,:}(p)
+    = -\frac{n_i^\top}{n_i^\top s_i},
+    \qquad |n_i^\top s_i|>\epsilon_{\mathrm{grazing}}.
+    \label{eq:range_jacobian_row}
+\end{equation}
+Thus, up to nonzero scalar factors induced by the incidence angle, the row
+space of $J$ is spanned by the observed surface normals. Near-grazing rays are
+excluded from this numerical analysis because the denominator in
+\eqref{eq:range_jacobian_row} becomes ill-conditioned. We emphasize that surface
+normals are used only for this offline observability analysis; the deployed
+safety layer in Sec.~\ref{sec:safety} does not require them.
+
+\begin{definition}[Translational measurement observability]
+A unit translational direction $\xi \in \mathbb{R}^3$ is locally observable from
+range measurements at $(p,R,\mathcal{O})$ if $\|J(p)\xi\|>0$. The configuration
+is fully station-keepable in translation if $\mathrm{rank}\,J(p)=3$.
+\end{definition}
+
+\begin{proposition}[Aperture degeneracy]
+If the normals of all valid range returns span a $k$-dimensional subspace of
+$\mathbb{R}^3$ with $k<3$, then the unobservable translational subspace has
+dimension at least $3-k$. Motions in this null space produce no first-order
+change in range, and therefore cannot be corrected by any policy that only
+observes range and inertial history.
+\label{prop:aperture}
+\end{proposition}
+
+\begin{proof}
+By \eqref{eq:range_jacobian_row}, every valid row of $J$ lies in the span of
+the observed surface normals, up to nonzero scalar factors. Hence
+$\mathrm{rank}\,J \leq k$. The rank--nullity theorem gives
+$\dim\ker J = 3-\mathrm{rank}\,J \geq 3-k$. For any $\xi \in \ker J$, the
+first-order measurement variation satisfies $\delta r \approx J\xi =0$, so range
+measurements cannot distinguish motion along $\xi$ locally.
+\end{proof}
+
+This proposition explains common failure modes. Near a single flat wall,
+translation tangent to the wall is weakly observable or unobservable. In a long
+corridor, translation along the corridor axis produces little range change. In
+open space, most rays return $r_{\max}$, $J\approx 0$, and station-keeping
+degrades to inertial dead reckoning. We quantify this effect by reporting
+station-keeping drift as a function of the conditioning of
+\begin{equation}
+    \mathcal{I}(p) = J(p)^\top W_t J(p),
+    \qquad
+    \sigma_{\min}(p) = \sqrt{\lambda_{\min}(\mathcal{I}(p))},
+    \label{eq:information_matrix}
+\end{equation}
+where $W_t=\mathrm{diag}(m_t\odot w_t)$ contains the same validity and
+reliability weights used in \eqref{eq:anchor_error}. In simulation, $J$ can be
+computed from known hit normals or by finite differences of the ray-casting
+function. In real-robot experiments, where surface normals are not always
+reliable, we report a proxy conditioning score from local scan geometry and
+interpret it as an empirical observability indicator rather than as an exact
+Jacobian.
+
+%============================================================
+\subsection{Range--Inertial History Governor}
+\label{sec:governor}
+
+The learned governor maps the history $h_t$ and the active anchor state to a
+corrected velocity command. Its output is not an unconstrained velocity vector.
+We parameterize the command as an attenuation of the operator input plus a
+bounded corrective component:
+\begin{equation}
+    v^{g}_t
+    = \alpha_t v^{\mathrm{cmd}}_t + v^{\mathrm{corr}}_t,
+    \qquad
+    \alpha_t \in [0,1], \quad
+    \|v^{\mathrm{corr}}_t\| \leq v_{\mathrm{corr,max}}.
+    \label{eq:governor_output}
+\end{equation}
+The scalar $\alpha_t$ represents how much of the operator command is preserved:
+close to one when the scene is safe and observable, and smaller when the command
+is unsafe or incompatible with holding. The corrective component
+$v^{\mathrm{corr}}_t$ lets the policy counteract local drift under a null command
+and bias the vehicle away from local hazards under a nonzero command.
+
+A typical implementation is
+\begin{align}
+    z^r_t &= E_r(r_{t-H+1:t}, m_{t-H+1:t}, w_{t-H+1:t}), \\
+    z^i_t &= E_i(y^{\mathrm{imu}}_{t-H+1:t}), \\
+    z^c_t &= E_c(v^{\mathrm{cmd}}_{t-H+1:t}, \tilde v_{t-H:t-1}), \\
+    z_t   &= \mathrm{Fuse}(z^r_t,z^i_t,z^c_t,e^r_t,\chi_t), \\
+    (\alpha_t,v^{\mathrm{corr}}_t) &= \Pi_\theta(z_t),
+    \label{eq:network_architecture}
+\end{align}
+where $E_r$ is a range encoder, $E_i$ is an inertial encoder, $E_c$ is a command
+history encoder, $\chi_t$ is the anchor flag from \eqref{eq:anchor_hysteresis},
+and $\Pi_\theta$ is an MLP policy head. The range encoder can be a small
+convolution over beam angle and time; the temporal encoder can be a
+stacked-window MLP or a temporal convolutional network. The governor command is
+clipped to the admissible velocity set:
+\begin{equation}
+    \bar v^g_t = \mathrm{clip}_{\mathcal{V}}(v^{g}_t).
+    \label{eq:clip_governor}
+\end{equation}
+This command is subsequently passed through the braking-feasibility intervention
+layer of Sec.~\ref{sec:safety}.
+
+\begin{remark}[Actor-level information restriction]
+The policy may be trained with privileged simulation rewards and an asymmetric
+critic, but its deployed input is exactly $h_t$ and the anchor state. No pose,
+odometry, explicit velocity estimate, or map feature is passed to $\Pi_\theta$.
+\end{remark}
+
+%============================================================
+\subsection{ICS-Inspired Command Intervention}
+\label{sec:safety}
+
+The learned governor should not obey a nonzero command if the resulting motion
+is not locally brakeable. We therefore add a deterministic intervention layer
+inspired by inevitable collision states (ICS). It is not an exact reachable-set
+computation but a conservative command-level surrogate based on a
+\emph{line-of-sight point-obstacle model}, observed range dynamics, and the
+maximum deceleration the low-level controller can realize. Importantly, the
+layer depends only on line-of-sight range and ray direction; it does not use
+surface normals, so it does not inherit the normal-estimation fragility of real
+LiDAR scans.
+
+\paragraph{Line-of-sight point model.}
+Each valid return defines a momentary point obstacle
+$q_{t,i} = p_t + r_{t,i}\,s_i$ at line-of-sight distance $r_{t,i}$. For a
+candidate velocity $u\in\mathcal{V}$, the rate at which the sensor approaches
+this fixed point is, exactly to first order, the line-of-sight component
+\begin{equation}
+    c_i(u) = \bigl[\,d_i^{\mathcal{Y}\top} u\,\bigr]_+ ,
+    \label{eq:commanded_closing_ray}
+\end{equation}
+where $d_i^{\mathcal{Y}}$ is the ray direction expressed in the command frame
+$\mathcal{Y}$ (obtained from $g^{\mathcal{B}}_t$ and the vehicle yaw). Unlike a
+radial \emph{approximation}, $c_i(u)$ is the \emph{exact} approach rate to the
+currently observed point at distance $r_{t,i}$, which is the quantity relevant
+to per-point collision. We evaluate $c_i$ only on valid, reliable rays
+($m_{t,i}=1$, $w_{t,i}>w_{\min}$).
+
+\paragraph{Observed closing indicator.}
+For each valid ray we estimate a range-rate from the history window by a
+recency-weighted least-squares line fit, jointly optimizing slope and intercept,
+\begin{equation}
+    (\hat a_{t,i},\,\hat b_{t,i})
+    = \arg\min_{a,b\in\mathbb{R}}
+    \sum_{k=0}^{H_r-1} \omega_k
+    \bigl(r_{t-k,i} - b - a(-k\Delta t)\bigr)^2,
+    \qquad
+    \dot r^{H}_{t,i} = \hat a_{t,i},
+    \label{eq:range_rate_fit}
+\end{equation}
+with recency weights $\omega_k$, and define the per-ray observed closing
+indicator
+\begin{equation}
+    \hat v^{\mathrm{obs}}_{i,t} = \bigl[-\dot r^{H}_{t,i}\bigr]_+ .
+    \label{eq:observed_closing_speed}
+\end{equation}
+For oblique surfaces the range-rate can exceed the true point-approach rate
+because the hit point slides along the surface; we therefore use
+$\hat v^{\mathrm{obs}}_{i,t}$ only as a \emph{conservative} closing indicator
+(for the latency margin and risk logging), never to relax the intervention. It
+requires no external velocity estimate.
+
+\paragraph{Braking-feasibility attenuation.}
+Given a deceleration bound $a_{\max}$ and safety margin $d_{\mathrm{safe}}$, the
+braking-distance speed limit for ray $i$ is
+\begin{equation}
+    v_{\mathrm{safe}}(r)
+    = \sqrt{2a_{\max}\,[r-d_{\mathrm{safe}}]_+}.
+    \label{eq:vsafe}
+\end{equation}
+To account for processing and actuation delay, we shrink the available clearance
+per ray by
+\begin{equation}
+    r^{\tau}_{t,i}
+    = r_{t,i} - \tau_{\mathrm{lat}}\,
+      \max\{\hat v^{\mathrm{obs}}_{i,t},\; c_i(\bar v^g_t)\},
+    \label{eq:latency_margin}
+\end{equation}
+where $\tau_{\mathrm{lat}}$ is a conservative latency bound. The command
+attenuation factor is
+\begin{equation}
+    \beta_t
+    = \min\!\left(1,
+    \min_{\substack{i:\,m_{t,i}=1,\ w_{t,i}>w_{\min}\\
+    c_i(\bar v^g_t)>\epsilon_c}}
+    \frac{v_{\mathrm{safe}}(r^{\tau}_{t,i})}
+         {c_i(\bar v^g_t)+\epsilon_c}
+    \right),
+    \label{eq:beta_attenuation}
+\end{equation}
+with a small $\epsilon_c>0$. The final velocity command issued to the low-level
+controller is
+\begin{equation}
+    \tilde v_t = \beta_t \bar v^g_t + (1-\beta_t)\,v^{\mathrm{brake}}_t,
+    \label{eq:final_command}
+\end{equation}
+where $v^{\mathrm{brake}}_t$ is a conservative fallback command satisfying
+$d_i^{\mathcal{Y}\top} v^{\mathrm{brake}}_t \le 0$ on every valid reliable ray,
+i.e., the fallback never increases the line-of-sight approach to any observed
+point. In the simplest case $v^{\mathrm{brake}}_t=0$; in cluttered scenes it may
+include a small reverse or vertical component selected from the most open
+sector, subject to the same non-approach condition. If
+$d_t=\min_i r_{t,i}<d_{\mathrm{emg}}$, the system bypasses the learned output and
+issues an emergency stop or pilot takeover.
+
+The risk indicator used for logging and training is
+\begin{equation}
+    \rho_t
+    = \max_{i:\,m_{t,i}=1,\ w_{t,i}>w_{\min}}
+    \bigl[\,\hat v^{\mathrm{obs}}_{i,t} - v_{\mathrm{safe}}(r_{t,i})\bigr]_+ ,
+    \label{eq:risk_indicator}
+\end{equation}
+which becomes positive when an observed closing indicator exceeds the local
+braking-feasibility bound. This is an ICS-inspired surrogate: it flags that the
+vehicle may be entering a region in which collision becomes unavoidable unless
+the command is attenuated.
+
+\begin{assumption}[Velocity-command execution]
+The low-level controller can reduce the component of vehicle velocity toward an
+observed obstacle with deceleration at least $a_{\max}$ after a delay bounded by
+$\tau_{\mathrm{lat}}$, within the command and attitude limits used in the
+experiments.
+\label{assumption:execution}
+\end{assumption}
+
+\begin{assumption}[Observation sufficiency and quasi-static obstacles]
+Over the braking horizon, collision-relevant obstacles are quasi-static, and
+every such obstacle produces at least one valid, reliable return
+($m_{t,i}=1$, $w_{t,i}>w_{\min}$), so that no collision-relevant surface lies
+entirely between adjacent beams or in an occluded region.
+\label{assumption:observation}
+\end{assumption}
+
+\begin{proposition}[Command-level braking feasibility]
+Under Assumptions~\ref{assumption:execution} and \ref{assumption:observation},
+and with $v^{\mathrm{brake}}_t$ satisfying the non-approach condition above, the
+final command \eqref{eq:final_command} obeys
+$c_i(\tilde v_t) \leq v_{\mathrm{safe}}(r^{\tau}_{t,i})$ for every valid,
+reliable ray. Consequently, the commanded motion does not ask the vehicle to
+approach any observed point obstacle faster than the speed at which the
+low-level controller can brake within the available clearance.
+\label{prop:command_feasibility}
+\end{proposition}
+
+\begin{proof}
+Fix a valid reliable ray $i$. By convexity and nonnegativity of $[\cdot]_+$ and
+$\beta_t\in[0,1]$,
+\begin{align*}
+    c_i(\tilde v_t)
+    &= \bigl[d_i^{\mathcal{Y}\top}(\beta_t \bar v^g_t
+       + (1-\beta_t)v^{\mathrm{brake}}_t)\bigr]_+ \\
+    &\leq \beta_t\bigl[d_i^{\mathcal{Y}\top}\bar v^g_t\bigr]_+
+       + (1-\beta_t)\bigl[d_i^{\mathcal{Y}\top}v^{\mathrm{brake}}_t\bigr]_+ \\
+    &= \beta_t\, c_i(\bar v^g_t),
+\end{align*}
+where the last equality uses the non-approach condition
+$d_i^{\mathcal{Y}\top}v^{\mathrm{brake}}_t\le 0$. If
+$c_i(\bar v^g_t)\le\epsilon_c$ the claim is immediate; otherwise, by
+\eqref{eq:beta_attenuation},
+$\beta_t \le v_{\mathrm{safe}}(r^{\tau}_{t,i})/(c_i(\bar v^g_t)+\epsilon_c)$,
+hence $\beta_t c_i(\bar v^g_t) \le v_{\mathrm{safe}}(r^{\tau}_{t,i})$. By
+\eqref{eq:vsafe}, $v_{\mathrm{safe}}(r^{\tau}_{t,i})$ is the largest closing
+speed brakeable within clearance $[r^{\tau}_{t,i}-d_{\mathrm{safe}}]_+$ under
+deceleration $a_{\max}$; Assumption~\ref{assumption:execution} makes this
+deceleration realizable, and Assumption~\ref{assumption:observation} ensures the
+checked rays cover all collision-relevant obstacles.
+\end{proof}
+
+\begin{remark}[Difference from CBF filtering]
+The intervention layer is not a new control barrier function. It does not solve
+a state-based QP and does not require a pose or velocity estimate as policy
+input. It is a command-level braking-feasibility check coupled to the
+measurement-space governor. CBF-style filters serve as related work and
+baselines, but the contribution here is the pose-free governor and its
+measurement-space holding behavior.
+\end{remark}
+
+%============================================================
+\subsection{Training Objective}
+\label{sec:training_objective}
+
+The policy is trained in simulation with privileged quantities used only for
+reward construction and critic learning; these are not part of the deployed
+governor input. The objective combines command tracking, measurement-space
+holding, smoothness, safety, and a light penalty on relying on the intervention
+layer:
+\begin{equation}
+    R_t
+    = w_{\mathrm{trk}} R^{\mathrm{trk}}_t
+    + w_{\mathrm{anch}} R^{\mathrm{anch}}_t
+    + w_{\mathrm{safe}} R^{\mathrm{safe}}_t
+    + w_{\mathrm{int}} R^{\mathrm{int}}_t
+    - w_{\mathrm{cmp}} R^{\mathrm{cmp}}_t
+    - w_{\mathrm{sm}} \|\tilde v_t-\tilde v_{t-1}\|^2.
+    \label{eq:reward_total}
+\end{equation}
+The tracking term is active under nonzero commands:
+\begin{equation}
+    R^{\mathrm{trk}}_t
+    = \mathbb{1}[\chi_t=0]\,
+    \exp\!\left(-\lambda_v \|v^{\mathcal{Y}}_t - v^{\mathrm{cmd}}_t\|^2\right),
+    \label{eq:tracking_reward}
+\end{equation}
+where $v^{\mathcal{Y}}_t$ is the true velocity in the command frame, available
+in simulation. The anchor term is active under a null command:
+\begin{equation}
+    R^{\mathrm{anch}}_t
+    = -\mathbb{1}[\chi_t=1]\,\ell_{\mathrm{anch}}(t).
+    \label{eq:anchor_reward}
+\end{equation}
+The command-compliance penalty is weighted by the braking-feasibility factor
+$\beta_t$ so that it never fights the intervention layer: the more the governor
+command is unsafe (small $\beta_t$), the less the policy is pushed to reproduce
+the operator command,
+\begin{equation}
+    R^{\mathrm{cmp}}_t
+    = \beta_t\,\|\bar v^g_t-v^{\mathrm{cmd}}_t\|^2 .
+    \label{eq:compliance_reward}
+\end{equation}
+Because $\beta_t$ is derived from the commanded closing speed rather than the
+observed one, this gate reflects the danger of the command itself and remains
+consistent with \eqref{eq:beta_attenuation}. The safety term penalizes margin
+violation and the ICS-inspired risk surrogate:
+\begin{equation}
+    R^{\mathrm{safe}}_t
+    = -\mathbb{1}[d_t<d_{\mathrm{safe}}]
+      -\kappa_{\rho}\rho_t
+      -C_{\mathrm{coll}}\mathbb{1}[\mathrm{collision}].
+    \label{eq:safety_reward}
+\end{equation}
+Finally, the intervention-usage penalty discourages the policy from emitting
+commands that must be repeatedly rescued by the deterministic layer:
+\begin{equation}
+    R^{\mathrm{int}}_t = -(1-\beta_t)^2 .
+    \label{eq:intervention_reward}
+\end{equation}
+
+\begin{remark}[Role of the intervention-usage penalty]
+The penalty \eqref{eq:intervention_reward} is a soft shaping term, not a safety
+mechanism: it pushes the required attenuation into the learned gain $\alpha_t$ so
+that $\bar v^g_t$ is already brake-feasible ($\beta_t\to1$), turning
+$\Pi_\theta$ into a genuine safety governor rather than an ``emit-and-filter''
+policy. The hard guarantee of
+Proposition~\ref{prop:command_feasibility} is provided by the deterministic layer
+regardless of this term. Its weight $w_{\mathrm{int}}$ is kept modest so that, in
+genuinely constrained situations (e.g., an operator commanding straight into a
+wall), the correct persistent attenuation $\beta_t<1$ is not over-penalized.
+\end{remark}
+
+We use a reward-penalty formulation for the main system rather than a Lagrangian
+constraint because the purpose of the paper is the measurement-space holding
+formulation and its observability limits, not a new constrained-RL algorithm. A
+Lagrangian or PID-Lagrangian variant can be reported as an ablation.
+
+The critic may use privileged simulator state
+\begin{equation}
+    s^{\mathrm{priv}}_t = (p_t,R_t,v_t,\omega_t,d_t,\rho_t,\beta_t,
+    \mathrm{collision})
+    \label{eq:privileged_state}
+\end{equation}
+for value estimation during training. At deployment, only the actor
+$\Pi_\theta$ and the deterministic intervention layer are retained.
+
+Optionally, we add an auxiliary head from the shared feature $z_t$ to estimate
+body-frame velocity or range-rate,
+\begin{equation}
+    \hat v^{\mathrm{aux}}_t = A_\psi(z_t),
+    \qquad
+    L_{\mathrm{aux}} = \|\hat v^{\mathrm{aux}}_t - v^{\mathcal{Y}}_t\|^2,
+    \label{eq:auxiliary_loss}
+\end{equation}
+using simulator ground truth. This loss shapes the history representation but
+its output is not fed back as a policy input; the auxiliary head can be removed
+at deployment and is evaluated as an ablation, not assumed by the safety
+mechanism.
+
+%============================================================
+\subsection{Deployment Loop}
+\label{sec:deployment_loop}
+
+At runtime, the module performs the following at the policy rate:
+\begin{enumerate}
+    \item read $r_t$, mask $m_t$, reliability weights $w_t$, IMU cues
+    $y^{\mathrm{imu}}_t$, and command $v^{\mathrm{cmd}}_t$;
+    \item update the fixed history buffer $h_t$;
+    \item update the anchor flag $\chi_t$ by the hysteresis rule
+    \eqref{eq:anchor_hysteresis}; on a rising edge, set $r^\star=r_t$,
+    $m^\star=m_t$;
+    \item compute the governor command $\bar v^g_t$ via
+    \eqref{eq:network_architecture}--\eqref{eq:clip_governor};
+    \item compute the attenuation $\beta_t$ from local range history via
+    \eqref{eq:range_rate_fit}--\eqref{eq:beta_attenuation};
+    \item issue the final command $\tilde v_t$ in \eqref{eq:final_command} to
+    the low-level velocity/attitude controller.
+\end{enumerate}
+The module logs $d_t$, $\rho_t$, $\beta_t$, $\ell_{\mathrm{anch}}$, and, in
+simulation, $\sigma_{\min}$ from \eqref{eq:information_matrix}. These signals
+separate policy failure from geometric unobservability: high anchor error under
+well-conditioned geometry indicates a policy or controller failure, whereas
+drift aligned with $\ker J$ under poor conditioning is an expected limitation of
+measurement-only holding.
+
+%============================================================
+\subsection{Guarantees and Limitations}
+\label{sec:guarantees}
+
+The method provides conditional, not absolute, guarantees.
+Measurement-space station-keeping can only regulate directions visible through
+the range map: if $\xi\in\ker J(p)$, range measurements carry no first-order
+information about motion along $\xi$, and any governor without additional
+position or velocity feedback must rely on inertial cues that drift. The
+observability analysis is first-order and fixed-attitude; large attitude
+excursions during holding are outside its scope. Command intervention is
+meaningful only for obstacles inside the sensing range and under
+Assumptions~\ref{assumption:execution}--\ref{assumption:observation}; in
+particular, thin obstacles that fall between adjacent beams or occluded surfaces
+are not covered by Proposition~\ref{prop:command_feasibility}, and the observed
+range-rate indicator can over-flag on oblique surfaces. These limitations are
+not treated as failures of the method; they define the physically attainable
+regime and are explicitly tested in the experiments.
+
+\clearpage
+
+%============================================================
+% EXPERIMENTAL PROTOCOL AND EVALUATION MATRIX
+% Paper 1: velocity-command governor version
+% Designed to be included as an IEEE-style experiment section.
+% Required packages in the main file: amsmath, amssymb, booktabs, array.
+% Optional but recommended: multirow, makecell, tabularx.
+%============================================================
+
+%============================================================
+\section{Experimental Protocol}
+\label{sec:experiments}
+%============================================================
+
+The experiments are designed to test the four claims of the proposed
+measurement-space governor: (i) the learned governor operates without pose,
+odometry, map, or explicit velocity inputs; (ii) station-keeping can be posed as
+regulation in LiDAR measurement space; (iii) the success and failure of such
+regulation are predicted by range observability; and (iv) nonzero operator
+commands can be attenuated when they violate local braking feasibility.  The
+same experimental protocol is used in simulation and, where feasible, on the
+real quadrotor.  External motion capture or localization is allowed only for
+logging and evaluation; it is never supplied to the deployed governor.
+
+For compactness, we refer to the paper's main contributions as follows.
+\begin{itemize}
+    \item \textbf{C1:} pose-, odometry-, map-, and explicit-velocity-free
+    learned-governor formulation;
+    \item \textbf{C2:} measurement-space station-keeping under a null command;
+    \item \textbf{C3:} range-Jacobian observability analysis and predictable
+    drift in degenerate geometries;
+    \item \textbf{C4:} ICS-inspired command intervention under nonzero
+    commands.
+\end{itemize}
+
+%============================================================
+\subsection{Scenarios}
+\label{sec:exp_scenarios}
+%============================================================
+
+We evaluate the governor in scenarios chosen to separate controller performance
+from measurement observability.  The first group contains controlled geometric
+scenes for station-keeping.  The second group contains command-tracking scenes
+with increasing safety pressure.  The third group transfers representative
+cases to the physical platform.
+
+\begin{table*}[t]
+\centering
+\caption{Evaluation scenarios.  The geometric scenarios are chosen to span the
+conditioning of the range Jacobian, from well-conditioned corners to open-field
+no-return observations.}
+\label{tab:scenario_matrix}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{0.08\textwidth}L{0.18\textwidth}L{0.28\textwidth}L{0.30\textwidth}L{0.08\textwidth}}
+\toprule
+\textbf{ID} & \textbf{Scenario} & \textbf{Purpose} & \textbf{Expected property} & \textbf{C} \\
+\midrule
+S1 & Corner / room corner & Test station-keeping in an observable local geometry. & Surface normals span multiple directions; range Jacobian is well conditioned for local translation. & C2, C3 \\
+S2 & Single flat wall & Test aperture degeneracy. & Motion normal to the wall is observable; motion tangent to the wall is weakly observable or unobservable. & C3 \\
+S3 & Corridor / tunnel & Test drift along a dominant axis. & Lateral motion is observable, but translation along the corridor axis changes ranges weakly. & C3 \\
+S4 & Open field / no-return space & Test the failure boundary. & Most beams return the maximum range; the range Jacobian is close to zero and station-keeping reduces to inertial dead reckoning. & C3 \\
+S5 & Cluttered indoor scene & Test normal command tracking and local obstacle interaction. & Multiple surfaces are visible; local range variation should provide sufficient motion cues. & C1, C2, C4 \\
+S6 & Wall-approach command & Test unsafe command attenuation. & The operator command points toward the nearest obstacle; braking feasibility should trigger attenuation before impact. & C4 \\
+S7 & Gap / doorway passage & Test non-overconservative behavior. & The governor should preserve command tracking when clearance and braking authority are sufficient. & C4 \\
+S8 & Dynamic obstacle crossing & Test robustness to changing local clearance. & The closest obstacle and approach direction change over time; intervention should be smooth and reactive. & C4 \\
+S9 & Real indoor corner / corridor & Validate station-keeping and observability trends on hardware. & Real LiDAR noise, latency, airflow, and controller dynamics are present. & C1--C3 \\
+S10 & Real unsafe-command approach & Validate command attenuation on hardware. & Operator commands the vehicle toward an obstacle; safety margin and manual override are enforced. & C4 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The controlled geometric scenes S1--S4 are not intended to make station-keeping
+easier.  They are designed to expose when the information available to a
+range-only governor is sufficient or insufficient.  In particular, poor
+performance in S4 is not counted as a method failure if it is consistent with
+low range observability; it is evidence for the claimed observability boundary.
+
+%============================================================
+\subsection{Baselines and Ablations}
+\label{sec:exp_baselines}
+%============================================================
+
+The baselines are selected to isolate the effect of each component rather than
+to maximize the number of comparisons.  All learned variants use the same
+low-level velocity/attitude controller.  The difference lies only in the inputs
+available to the learned governor, the use of the measurement-space anchor, the
+history encoder, and the intervention rule.
+
+\begin{table*}[t]
+\centering
+\caption{Baselines and ablations.  Variants B0--B4 test the information
+constraint and station-keeping mechanism; B5--B8 test command intervention and
+safety behavior.}
+\label{tab:baseline_matrix}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{0.08\textwidth}L{0.22\textwidth}L{0.37\textwidth}L{0.22\textwidth}}
+\toprule
+\textbf{ID} & \textbf{Method} & \textbf{Description} & \textbf{Question answered} \\
+\midrule
+B0 & Direct velocity execution & The operator command is sent directly to the low-level controller: $\tilde v_t=v^{\mathrm{cmd}}_t$.  No learned governor, anchor, or intervention is used. & What does the underlying velocity controller do by itself? \\
+B1 & State/velocity-aided governor & Same architecture as ours, but explicit velocity and/or local odometry are provided to the governor.  This is an upper-bound reference, not a deployable variant under our information constraint. & How much is lost by removing explicit state inputs? \\
+B2 & Ours without history & The governor receives only the current observation $o_t$ rather than the window $h_t$. & Is temporal information necessary for motion inference? \\
+B3 & Ours without range anchor & The learned governor is trained for command tracking but the station-keeping anchor loss is removed under a null command. & Does measurement-space anchoring reduce drift? \\
+B4 & Ours without IMU cues & The governor uses range history and commands but removes inertial cues. & Do inertial cues improve short-horizon motion inference and robustness? \\
+B5 & Ours without intervention & The learned governor is used, but the ICS-inspired attenuation layer is disabled. & Does the safety layer reduce unsafe-command failures? \\
+B6 & Distance-only filter & A deterministic filter attenuates commands only when $d_t<d_{\mathrm{warn}}$, without using approach speed or braking feasibility. & Is distance-only reactivity sufficient? \\
+B7 & Braking-distance heuristic & A non-learned command governor applies the same braking-feasibility attenuation using range-rate estimates, but without the learned correction term. & What is gained by learning beyond a hand-designed rule? \\
+B8 & Simplified CBF/VO-style filter & A model-based safety-filter baseline, if implemented, modifies the command according to a local distance or velocity-obstacle constraint. & How does the proposed governor compare with a standard safety-filter style baseline? \\
+Ours & Proposed governor & Range--inertial history, measurement-space anchor, learned command correction, and ICS-inspired intervention. & Full method. \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+B1 is used only as a diagnostic upper bound.  It is not treated as a fair
+competitor under the paper's information constraint, because it receives the
+explicit velocity or odometry signal that our deployed governor is designed to
+avoid.  B8 is optional because a faithful reproduction of recent neural or
+composite CBF systems would require different state assumptions and obstacle
+representations; the baseline is used only to show how a conventional local
+filter behaves under the same test scenes.
+
+%============================================================
+\subsection{Metrics}
+\label{sec:exp_metrics}
+%============================================================
+
+The metrics are grouped into station-keeping, observability, tracking, safety,
+and deployment categories.  Quantities involving ground-truth position or
+velocity are used only for evaluation and training diagnostics, not as policy
+inputs.
+
+\subsubsection{Station-keeping metrics}
+For a null-command interval beginning at $t_0$ and ending at $T$, the physical
+drift is measured by
+\begin{equation}
+    D_{\mathrm{pos}}(T) = \|p_T-p_{t_0}\|_2,
+    \label{eq:metric_position_drift}
+\end{equation}
+where $p_t$ is obtained from simulation ground truth or motion capture.  The
+measurement-space drift is
+\begin{equation}
+    D_{r}(T) =
+    \sqrt{\frac{1}{|\mathcal{T}|}\sum_{t\in\mathcal{T}}
+    \frac{\|M_t\odot(r_t-r^\star)\|_2^2}{\|M_t\|_1+\epsilon}},
+    \label{eq:metric_range_drift}
+\end{equation}
+where $M_t$ is the valid-hit mask and $r^\star$ is the anchor range pattern.
+The projection of the drift onto weakly observable directions is also reported
+when the right singular vectors of the range Jacobian are available:
+\begin{equation}
+    D_{\mathrm{null}}(T) = \|V_{\mathrm{weak}}^\top(p_T-p_{t_0})\|_2.
+    \label{eq:metric_null_drift}
+\end{equation}
+
+\subsubsection{Observability metrics}
+Let $J_t$ be the local range Jacobian computed from hit rays or from the known
+scene geometry in simulation.  We report
+\begin{equation}
+    \sigma_{\min}(J_t), \qquad
+    \kappa(J_t)=\frac{\sigma_{\max}(J_t)}{\sigma_{\min}(J_t)+\epsilon},
+    \label{eq:metric_observability}
+\end{equation}
+with rank estimated by thresholding singular values.  The main validation is a
+correlation between station-keeping drift and the conditioning of $J_t$ across
+scenes and initial poses.  We report both binned averages and a rank or
+Spearman correlation between $D_{\mathrm{pos}}$ and
+$1/(\overline{\sigma}_{\min}+\epsilon)$.
+
+\subsubsection{Command-tracking metrics}
+For nonzero commands, the tracking error is evaluated as
+\begin{equation}
+    E_{\mathrm{trk}} =
+    \sqrt{\frac{1}{T}\sum_{t=1}^{T}
+    \|v^{\mathcal{Y}}_t-v^{\mathrm{cmd}}_t\|_2^2},
+    \label{eq:metric_tracking_rmse}
+\end{equation}
+where $v^{\mathcal{Y}}_t$ is the measured or simulated vehicle velocity in the
+body-yaw frame.  We also report the error with respect to the corrected command
+$\tilde v_t$ to separate command attenuation from low-level tracking error.
+Command preservation is measured by
+\begin{equation}
+    P_{\mathrm{cmd}} =
+    \frac{1}{T}\sum_{t=1}^{T}
+    \frac{\tilde v_t^\top v^{\mathrm{cmd}}_t}
+    {\|\tilde v_t\|_2\|v^{\mathrm{cmd}}_t\|_2+\epsilon},
+    \label{eq:metric_command_preservation}
+\end{equation}
+and smoothness by
+\begin{equation}
+    S_{\mathrm{cmd}} = \frac{1}{T-1}\sum_{t=2}^{T}
+    \|\tilde v_t-\tilde v_{t-1}\|_2^2.
+    \label{eq:metric_smoothness}
+\end{equation}
+
+\subsubsection{Safety and intervention metrics}
+The minimum clearance is
+\begin{equation}
+    d_{\min}^{\mathrm{episode}} = \min_t d_t,
+    \label{eq:metric_min_clearance}
+\end{equation}
+and the collision rate is the fraction of trials in which the vehicle intersects
+an obstacle or violates a hardware safety boundary.  The ICS-inspired violation
+ratio is
+\begin{equation}
+    R_{\mathrm{ICS}} =
+    \frac{1}{T}\sum_{t=1}^{T}\mathbf{1}
+    \left[v_{\parallel,t}^{\mathrm{range}}>v_{\mathrm{safe}}(d_t)\right],
+    \label{eq:metric_ics_ratio}
+\end{equation}
+where $v_{\parallel,t}^{\mathrm{range}}$ is estimated from range history.  The
+intervention rate is
+\begin{equation}
+    R_{\mathrm{int}} =
+    \frac{1}{T}\sum_{t=1}^{T}\mathbf{1}
+    \left[\|\tilde v_t-v^{\mathrm{cmd}}_t\|_2>\epsilon_{\mathrm{int}}\right],
+    \label{eq:metric_intervention_rate}
+\end{equation}
+and the attenuation magnitude is
+\begin{equation}
+    A_{\mathrm{cmd}} =
+    \frac{1}{T}\sum_{t=1}^{T}
+    \frac{\|v^{\mathrm{cmd}}_t\|_2-\|\tilde v_t\|_2}
+    {\|v^{\mathrm{cmd}}_t\|_2+\epsilon}.
+    \label{eq:metric_attenuation}
+\end{equation}
+
+\subsubsection{Information-constraint audit}
+To support C1, each deployed policy is audited by logging its input tensor and
+verifying that no pose, odometry, explicit velocity, reconstructed map, or
+motion-capture signal is included.  We report this audit as a binary checklist
+for each method variant.  Baselines B1 and state-aided variants are explicitly
+marked as using privileged inputs.
+
+%============================================================
+\subsection{Experiment Matrix}
+\label{sec:exp_matrix}
+%============================================================
+
+Table~\ref{tab:experiment_matrix} maps each experiment to scenarios, baselines,
+metrics, expected outcomes, and the corresponding contributions.  The expected
+outcomes are stated as qualitative hypotheses; final numerical thresholds are
+set after simulator calibration and hardware safety tests.
+
+\begin{table*}[p]
+\centering
+\caption{Experiment matrix linking scenarios, baselines, metrics, expected
+outcomes, and contributions.}
+\label{tab:experiment_matrix}
+\scriptsize
+\renewcommand{\arraystretch}{0.82}
+\setlength{\tabcolsep}{2pt}
+\begin{tabular}{L{0.07\textwidth}L{0.15\textwidth}L{0.15\textwidth}L{0.20\textwidth}L{0.28\textwidth}L{0.06\textwidth}}
+\toprule
+\textbf{Exp.} & \textbf{Scenario(s)} & \textbf{Baselines} & \textbf{Metrics} & \textbf{Expected result} & \textbf{C} \\
+\midrule
+E1 & S1--S4: corner, wall, corridor, open field under $v^{\mathrm{cmd}}=0$ & B0, B2, B3, B4, Ours & $D_{\mathrm{pos}}$, $D_r$, $D_{\mathrm{null}}$, episode stability & Ours reduces drift in observable scenes relative to B0/B3/B4; it does not artificially hide failure in open field.  Explicit-state B1/B2 provides an upper bound. & C1--C3 \\
+E2 & S1--S4 with randomized pose, wall distance, corridor width, sensor range, and valid-beam density & Ours, B3, B4 & $\sigma_{\min}(J)$, rank estimate, $D_{\mathrm{pos}}$, drift direction, drift--observability correlation & Station-keeping drift increases as the range Jacobian becomes ill conditioned; weak-direction drift aligns with the approximate null space of $J$. & C3 \\
+E3 & S5 with step, sinusoidal, and piecewise-constant nonzero commands in observable geometry & B0, B1, B2, B4, Ours & $E_{\mathrm{trk}}$, $P_{\mathrm{cmd}}$, $S_{\mathrm{cmd}}$, intervention rate & Ours tracks feasible commands with moderate degradation relative to state-aided variants, while outperforming no-history variants. & C1, C2 \\
+E4 & S6: commanded motion toward a wall or obstacle at increasing speed & B0, B5, B6, B7, Ours & collision rate, $d_{\min}^{\mathrm{episode}}$, $R_{\mathrm{ICS}}$, $R_{\mathrm{int}}$, $A_{\mathrm{cmd}}$ & Ours attenuates before the braking-feasibility boundary is violated, reducing collisions relative to B0/B5 and intervening earlier than distance-only filtering. & C4 \\
+E5 & S7: command through a gap / doorway with sufficient clearance & B5, B6, B7, Ours & $E_{\mathrm{trk}}$, $P_{\mathrm{cmd}}$, $R_{\mathrm{int}}$, minimum clearance & Ours preserves feasible commands and is less conservative than distance-only filtering while maintaining clearance. & C4 \\
+E6 & S8: moving obstacle crossing and changing nearest-obstacle identity & B5, B6, B7, Ours & collision rate, $R_{\mathrm{ICS}}$, command smoothness, minimum clearance & Ours reacts smoothly to changing local risk; intervention does not produce oscillatory command switching. & C4 \\
+E7 & Information ablation across S1--S6 & B1, B2, B3, B4, Ours & performance gap to state-aided upper bound, input-audit checklist, tracking and drift metrics & Explicit velocity/odometry improves the upper bound, but the proposed governor remains functional under the strict actor-input constraint; no-history and no-anchor variants identify what is lost. & C1--C3 \\
+E8 & S9--S10: real indoor station-keeping and unsafe-command tests & B0, B3, B5, Ours & mocap/evaluation-only drift, range-anchor error, min clearance, intervention rate, repeated-trial success & Hardware trends match simulation: observable geometries allow lower drift; degenerate scenes drift predictably; unsafe commands are attenuated before violating the safety boundary. & C1--C4 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+%============================================================
+\subsection{Expected Results by Contribution}
+\label{sec:exp_expected_by_contribution}
+%============================================================
+
+\subsubsection{C1: Pose-, odometry-, and velocity-free learned governor}
+The main evidence for C1 is not that the method outperforms an odometry-fed
+upper bound.  Rather, the evidence is that it remains functional without those
+inputs.  E3 and E7 should show that the proposed governor achieves stable
+command tracking and station-keeping under the audited input constraint, while
+B1/B2 quantify the performance gap when explicit state information is allowed.
+A small gap indicates that range--inertial history captures much of the
+short-horizon motion information needed for local regulation; a larger gap is
+acceptable if the method still satisfies the station-keeping and safety trends
+claimed in C2--C4.
+
+\subsubsection{C2: Measurement-space station-keeping}
+E1 should show that the range anchor reduces both physical drift and range-anchor
+error in scenes where the local geometry provides observable range variation.
+B3 is the critical ablation: if removing the anchor does not increase drift or
+range error, then the proposed station-keeping mechanism is not supported.  B0
+separates the effect of the low-level velocity controller from the learned
+measurement-space governor.
+
+\subsubsection{C3: Observability-limited holding}
+E2 should show that station-keeping performance follows the conditioning of the
+range Jacobian.  The desired outcome is not perfect holding in every scene, but
+a consistent ordering: corners should produce the smallest drift, flat walls and
+corridors should exhibit drift in weakly observable directions, and open-field
+no-return scenes should show the largest drift.  This experiment is the key
+evidence that station-keeping failure is a predictable geometric limitation
+rather than merely poor training.
+
+\subsubsection{C4: ICS-inspired command intervention}
+E4--E6 evaluate whether intervention occurs when a command exceeds local
+braking feasibility and remains inactive when the command is feasible.  Compared
+with B5, the full method should reduce collisions and ICS-violation time.
+Compared with B6, it should avoid late distance-only reactions.  Compared with
+B7, it should preserve tracking better by using learned context rather than a
+fixed attenuation rule alone.
+
+%============================================================
+\subsection{Real-Robot Validation Protocol}
+\label{sec:exp_real_robot}
+%============================================================
+
+The real-robot experiments are deliberately limited to cases that directly
+support the paper's claims.  Each trial is repeated with the same initial
+command script and with randomized initial yaw and lateral offset within a safe
+range.  Motion capture, external tracking, or a safety pilot may be used for
+logging and emergency supervision, but the deployed governor receives only the
+same range--inertial history and command inputs used in simulation.
+
+The minimum real-robot protocol consists of three tests.
+\begin{enumerate}
+    \item \textbf{Observable station-keeping:} the vehicle is initialized near a
+    corner or inside a short corridor, receives a null command for $30$--$60$ s,
+    and the drift of Ours is compared with B0 and B3.
+    \item \textbf{Degenerate station-keeping:} the vehicle is placed near a flat
+    wall or in a corridor-aligned configuration.  The expected result is not zero
+    drift, but drift concentrated along the weakly observable direction.
+    \item \textbf{Unsafe command attenuation:} the operator command points toward
+    a wall at increasing commanded speeds.  The test reports command attenuation,
+    minimum clearance, and intervention timing.  The trial is terminated by a
+    safety supervisor if the vehicle reaches a predefined hard safety boundary.
+\end{enumerate}
+
+A real-robot result is considered consistent with the paper if the qualitative
+ordering observed in simulation is reproduced: measurement-space anchoring
+improves holding in observable geometries; degeneracy produces predictable
+rather than random drift; and the ICS-inspired layer attenuates commands before
+minimum-clearance violation.  The physical experiments are not used to claim
+formal safety guarantees, since the deployed system still relies on the
+low-level controller, sensing latency, and hardware-specific emergency stops.
+
+%============================================================
+\subsection{Reporting and Statistical Treatment}
+\label{sec:exp_reporting}
+%============================================================
+
+For each simulated setting we report the mean, standard deviation, and
+interquartile range over at least $N_{\mathrm{sim}}$ randomized episodes.  For
+hardware experiments we report all trials, including failures and emergency
+stops, and use median and range when the number of trials is small.  Collision
+rates are reported with binomial confidence intervals.  Drift and tracking
+metrics are computed over identical command scripts for all compared methods.
+
+To avoid overstating the pose-free claim, every table includes an input column
+indicating whether the method receives pose, odometry, explicit velocity,
+reconstructed maps, or only range--inertial history.  Evaluation-only ground
+truth is reported separately and is never counted as a policy input.
+
+
+%============================================================
+\section{Conclusion}
+\label{sec:conclusion}
+%============================================================
+
+This paper presented a pose-free command governor for quadrotor
+station-keeping and safe velocity tracking from range--inertial history.  The
+formulation treats null-command holding and nonzero-command tracking as a
+single measurement-space regulation problem, clarifies when such regulation is
+geometrically observable, and attenuates commands that violate local braking
+feasibility.  The resulting protocol separates what the deployed actor may use
+from what the simulator or evaluator may measure, making drift, degeneracy, and
+safety interventions explicit rather than hidden behind a pose estimator.
+
+%============================================================
+% BIBLIOGRAPHY  (thebibliography with \bibitem)
+%============================================================
+\begin{thebibliography}{1}
+
+\bibitem{sprind2025}
+Authors,
+``Kilometer-scale GNSS-denied UAV navigation via heightmap gradients:
+a winning system from the SPRIN-D challenge,''
+\emph{arXiv preprint arXiv:2510.01348}, 2025.
+
+\bibitem{neuralcbf2024}
+Authors,
+``Neural control barrier functions for safe navigation,''
+\emph{arXiv preprint arXiv:2407.19907}, 2024.
+
+\bibitem{locus2023}
+Authors,
+``LiDAR-based online control barrier function synthesis for safe navigation
+in unknown environments,''
+in \emph{Proc. IEEE/RSJ Int. Conf. Intelligent Robots and Systems (IROS)},
+2023.
+
+\bibitem{compositecbf2025}
+Authors,
+``Safe quadrotor navigation using composite control barrier functions,''
+\emph{arXiv preprint arXiv:2502.04101}, 2025.
+
+\bibitem{reactive2026}
+Authors,
+``Reactive robot-centric safety for autonomous navigation in constrained and
+dynamic environments,''
+\emph{arXiv preprint arXiv:2605.15782}, 2026.
+
+\end{thebibliography}
+
+\end{document}

@@ -99,16 +99,25 @@ class NavigationEnv(IsaacEnv):
         # ============================================
         # 第 4 步：初始化 LiDAR 传感器 ⭐ 重要
         # ============================================
+        # instinctRL-0: Dynamically resolve LiDAR prim path from spawned drone.
+        # Uses discovered base_link name (not hardcoded Hummingbird).
+        base_link = self._base_link_name
+        if base_link:
+            drone_prim_pattern = f"/World/envs/env_.*/{self.cfg.drone.model_name}_0/{base_link}"
+        else:
+            drone_prim_pattern = f"/World/envs/env_.*/{self.cfg.drone.model_name}_0"
+        print(f"[instinctRL-0] LiDAR prim path pattern: {drone_prim_pattern}")
         ray_caster_cfg = RayCasterCfg(
             # 绑定到无人机的 base_link（所有环境的所有无人机）
-            prim_path="/World/envs/env_.*/Hummingbird_0/base_link",
+            prim_path=drone_prim_pattern,
             
             # 传感器相对于 base_link 的偏移（这里是原点）
             offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
             
-            # 只跟随偏航角（yaw），不跟随俯仰和滚转
-            # 原因：让 LiDAR 保持水平，更稳定
-            attach_yaw_only=True,
+            # instinctRL-0: attach_yaw_only=False for solid-state MID360.
+            # MID360 is a non-repetitive scanning LiDAR, not a spinning mirror.
+            # This changes LiDAR data distribution vs old yaw-only policies.
+            attach_yaw_only=False,
             
             # 使用 Bpearl 激光雷达的扫描模式
             pattern_cfg=patterns.BpearlPatternCfg(
@@ -166,6 +175,11 @@ class NavigationEnv(IsaacEnv):
         self.drone = drone_model(cfg=cfg)
         # 生成无人机，初始位置在 z=2.0 米处
         drone_prim = self.drone.spawn(translations=[(0.0, 0.0, 2.0)])[0]
+
+        # instinctRL-0: Discover base_link child prim for LiDAR attachment.
+        # Uses robust search strategy from MID360 integration test.
+        self._drone_spawn_prim = drone_prim
+        self._base_link_name = self._resolve_base_link(drone_prim)
 
         # ============================================
         # 2. 添加光照（让场景可见）
@@ -398,19 +412,56 @@ class NavigationEnv(IsaacEnv):
 
         self.dyn_obs_step_count += 1
 
+    def _resolve_base_link(self, drone_root_prim_path: str) -> str:
+        """
+        Find the base_link child prim name under the drone root prim.
+
+        Uses the robust search strategy from the MID360 integration test
+        (test_livox_mid360.py): tries candidate names in priority order,
+        falls back to first rigid child, then to drone root.
+
+        Args:
+            drone_root_prim_path: Full prim path of spawned drone root
+                                  (e.g., /World/envs/env_0/TaslabUAV_0)
+
+        Returns:
+            Name of the base_link child prim (e.g., "base_link"),
+            or empty string if no suitable child found.
+        """
+        candidates = ["base_link", "body", "base", "chassis"]
+        drone_prim = prim_utils.get_prim_at_path(drone_root_prim_path)
+        for name in candidates:
+            test_path = f"{drone_root_prim_path}/{name}"
+            if prim_utils.is_prim_path_valid(test_path):
+                print(f"[instinctRL-0] LiDAR attachment point: {test_path}")
+                return name
+        # Fallback: use first rigid child
+        children = prim_utils.get_prim_children(drone_prim)
+        if children:
+            child_name = str(children[0].GetPath()).split("/")[-1]
+            print(f"[instinctRL-0] LiDAR attachment point (fallback): "
+                  f"{drone_root_prim_path}/{child_name}")
+            return child_name
+        print(f"[instinctRL-0] WARNING: No base_link found under {drone_root_prim_path}. "
+              f"Attaching LiDAR to drone root.")
+        return ""
+
 
     def _set_specs(self):
-        observation_dim = 8
-        num_dim_each_dyn_obs_state = 10
-
-        # Observation Spec
+        # instinctRL-0: Actor input contract — removed forbidden fields.
+        #   state[0:5]  (rpos_clipped_g, distance_2d/z): FORBIDDEN (position-derived)
+        #   state[5:8]  (vel_g):                       FORBIDDEN (explicit velocity)
+        #   direction   (goal-frame target direction):  FORBIDDEN (position-derived)
+        #   dynamic_obstacle (privileged pos/vel/size): FORBIDDEN (simulator state)
+        # Only lidar remains as the allowed raw sensor input.
+        # Additional allowed fields (v_cmd, masks, weights, IMU cues, history)
+        # will be added by instinctRL-A and instinctRL-B.
         self.observation_spec = CompositeSpec({
             "agents": CompositeSpec({
                 "observation": CompositeSpec({
-                    "state": UnboundedContinuousTensorSpec((observation_dim,), device=self.device), 
-                    "lidar": UnboundedContinuousTensorSpec((1, self.lidar_hbeams, self.lidar_vbeams), device=self.device),
-                    "direction": UnboundedContinuousTensorSpec((1, 3), device=self.device),
-                    "dynamic_obstacle": UnboundedContinuousTensorSpec((1, self.cfg.algo.feature_extractor.dyn_obs_num, num_dim_each_dyn_obs_state), device=self.device),
+                    "lidar": UnboundedContinuousTensorSpec(
+                        (1, self.lidar_hbeams, self.lidar_vbeams), device=self.device
+                    ),
                 }),
             }).expand(self.num_envs)
         }, shape=[self.num_envs], device=self.device)
@@ -447,6 +498,10 @@ class NavigationEnv(IsaacEnv):
 
         info_spec = CompositeSpec({
             "drone_state": UnboundedContinuousTensorSpec((self.drone.n, 13), device=self.device),
+            # instinctRL-0: Critic-only privileged fields (never seen by actor).
+            # These are used by the critic feature extractor for value estimation.
+            "target_rpos": UnboundedContinuousTensorSpec((1, 3), device=self.device),
+            "target_distance": UnboundedContinuousTensorSpec((1, 1), device=self.device),
         }).expand(self.num_envs).to(self.device)
         self.observation_spec["stats"] = stats_spec
         self.observation_spec["info"] = info_spec
@@ -593,6 +648,11 @@ class NavigationEnv(IsaacEnv):
         distance = rpos.norm(dim=-1, keepdim=True)  # 3D 距离
         distance_2d = rpos[..., :2].norm(dim=-1, keepdim=True)  # 水平距离
         distance_z = rpos[..., 2].unsqueeze(-1)  # 垂直距离（高度差）
+
+        # instinctRL-0: Store target-relative info for critic-only privileged branch.
+        # These fields go to info namespace; the actor never sees them.
+        self.info["target_rpos"][:] = rpos
+        self.info["target_distance"][:] = distance
         
         # b. 指向目标的单位方向向量（在目标坐标系下）
         # 为什么要坐标变换？
@@ -671,11 +731,12 @@ class NavigationEnv(IsaacEnv):
             dynamic_collision = torch.zeros(self.num_envs, 1, dtype=torch.bool, device=self.cfg.device)
             
         # -----------------Network Input Final--------------
+        # instinctRL-0: Actor input contract — only raw sensor input.
+        # Forbidden fields (drone_state, target_dir_2d, dyn_obs_states) are
+        # computed above for reward/collision/evaluation use only and must
+        # NOT enter the actor observation dict.
         obs = {
-            "state": drone_state,
             "lidar": self.lidar_scan,
-            "direction": target_dir_2d,
-            "dynamic_obstacle": dyn_obs_states
         }
 
 

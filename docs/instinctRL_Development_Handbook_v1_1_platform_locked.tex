@@ -1,0 +1,557 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\setlength{\LTpre}{0.4em}
+\setlength{\LTpost}{0.8em}
+\setlength{\emergencystretch}{3em}
+\hbadness=10000
+\hfuzz=30pt
+
+\newcommand{\code}[1]{\texttt{\detokenize{#1}}}
+\newcommand{\vcmd}{v^{\mathrm{cmd}}_t}
+\newcommand{\vcorr}{v^{\mathrm{corr}}_t}
+\newcommand{\vgov}{\bar v^g_t}
+\newcommand{\vfin}{\tilde v_t}
+\newcommand{\vbrake}{v^{\mathrm{brake}}_t}
+\newcommand{\vsafe}{v_{\mathrm{safe}}}
+\newcommand{\amax}{a_{\max}}
+
+\title{\textbf{instinctRL Development Handbook v1.1:\\Platform-Locked Code-Aware Implementation Plan}}
+\author{NavRL / instinctRL}
+\date{}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+%============================================================
+\section{Title and Purpose}
+
+This handbook is the platform-locked code-aware development plan for
+\textbf{instinctRL}. The scientific target remains Paper~1, derived from
+\code{docs/paper1\_vel\_ctrl.tex} and the method-aligned v0 handbook
+\code{docs/paper1\_vel\_ctrl\_handbook.tex}. This document does not redesign
+the method or change the scientific positioning.
+
+The locked method is:
+\begin{itemize}
+\item range--inertial measurement-space velocity governor;
+\item learned governor outputs a corrected body-frame velocity command;
+\item velocity-controller execution, not CTBR, motor thrust, body-rate, or
+attitude-level learned action;
+\item measurement-space anchor for station-keeping;
+\item range-Jacobian observability logging for analysis/evaluation;
+\item ICS-inspired command attenuation, not a formal CBF guarantee.
+\end{itemize}
+
+\paragraph{Development name.}
+The code and implementation project name is \textbf{instinctRL}. Module names,
+config keys, stages, tickets, logs, and implementation artifacts must use
+\code{instinctRL}. The term Paper~1 may be used only to refer to the scientific
+target and paper route.
+
+\paragraph{Platform and sensor lock.}
+The LiDAR sensor is \textbf{Livox MID360}. The UAV platform is
+\textbf{TASLAB\_UAV}. The simulator already contains MID360 simulation helpers
+and a TASLAB\_UAV OmniDrones model/controller interface; instinctRL must reuse
+these assets. A generic LiDAR, generic ray sensor, generic drone, or new
+simulator may be used only as a debugging-only fallback and must be labeled as
+such in configs and logs.
+
+\paragraph{Hard information contract.}
+No pose, odometry, explicit velocity estimate, reconstructed map, SLAM state,
+or privileged simulator state may enter the deployed actor input. Privileged
+state may be used only for reward, critic input, evaluation, logging, or
+upper-bound baselines.
+
+\paragraph{Domain note.}
+The repository root \code{CONTEXT.md} still describes a broader INSTINCT route
+with CTBR, required recurrent actors, CMDPs, and PPO-Lagrangian. That glossary
+does not override this platform-locked instinctRL handbook. For this document,
+\code{paper1\_vel\_ctrl.tex} is authoritative.
+
+%============================================================
+\section{Platform and Sensor Infrastructure Audit}
+
+\subsection{instinctRL-0: Platform and Sensor Infrastructure Audit}
+
+This stage must be completed before new learning modules are implemented. Its
+purpose is to prove that the locked MID360--TASLAB\_UAV platform stack is
+available, correctly wired, and actor-input compliant.
+
+\begin{longtable}{@{}L{0.22\textwidth}L{0.36\textwidth}L{0.32\textwidth}@{}}
+\caption{instinctRL-0 acceptance criteria.}\\
+\toprule
+\textbf{Audit item} & \textbf{Repository evidence to inspect/reuse} & \textbf{Acceptance criterion} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Audit item} & \textbf{Repository evidence to inspect/reuse} & \textbf{Acceptance criterion} \\
+\midrule
+\endhead
+MID360 ray pattern and frame convention & \code{training/envs/livox\_mid360.py}: \code{LivoxMid360Config}, \code{LivoxMid360Pattern}, \code{generate\_rays()}, \code{create\_livox\_from\_hydra\_cfg()} & Stable ray ordering, documented body-frame convention \(X\) forward, \(Y\) left, \(Z\) up, and deterministic RL mode available. \\
+MID360 range output & \code{NavigationEnv} RayCaster path in \code{training/scripts/env.py}; integration helper in \code{training/scripts/livox\_mid360\_integration.py}; tests in \code{training/unit\_test/test\_livox\_mid360.py} & MID360 produces a flat range vector \(r_t\) with timestamps and consistent ray count. \\
+Mask and dropout handling & \code{LivoxMid360Pattern.apply\_noise()} already models Gaussian noise, dropout, near-range dropout, and invalid \(\infty\) returns. & Valid-return mask \(m_t\) is derived from finite in-range MID360 returns; dropout is represented explicitly. \\
+Reliability weights & Neighbor consistency can reuse \code{training/envs/lidar\_processor.py} projection/debug metadata and MID360 validity/noise signals. & Reliability weights \(w_t\in[0,1]\) are computed without surface normals and logged. \\
+Update rate and timestamps & MID360 file documents 10 Hz frame rate; active simulation calls \code{lidar.update(self.dt)} in \code{NavigationEnv.\_post\_sim\_step}. & Logs include sensor timestamp/frame age; history buffer marks stale or repeated frames. \\
+TASLAB\_UAV model & \code{omni\_drones/robots/drone/taslab\_uav.py}, \code{assets/usd/taslab\_uav.yaml}, \code{taslab\_uav.usd}, \code{drone/\_\_init\_\_.py}. & \code{MultirotorBase.REGISTRY["TaslabUAV"]} resolves and spawns the locked platform. \\
+TASLAB\_UAV parameters & \code{taslab\_uav.yaml}; \code{docs/TASLAB\_UAV\_README.md}; \code{unit\_test/test\_hover.py}, \code{test\_flight.py}. & Mass, inertia, rotor layout, force constants, and max rotor speeds are loaded from TASLAB\_UAV parameters. \\
+Velocity controller interface & \code{train.py} uses \code{VelController(LeePositionController)}; TASLAB gains in \code{lee\_controller\_taslab\_uav.yaml}. & TASLAB\_UAV accepts corrected body-frame velocity commands through an adapter into the existing velocity-controller path. \\
+Actor-input contract & Current \code{env.py}, \code{ppo.py}, and ROS wrappers. & No pose, odometry, explicit velocity, map, or privileged simulator state reaches deployed actor inputs. \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Known platform-lock gaps in current code.}
+The active \code{NavigationEnv} creates a RayCaster with
+\code{prim\_path="/World/envs/env_.*/Hummingbird\_0/base\_link"} even though
+\code{training/cfg/drone.yaml} selects \code{drone.model\_name: "TaslabUAV"}.
+This must be fixed by resolving the spawned TASLAB\_UAV base link dynamically
+or by formatting the prim path from \code{cfg.drone.model\_name}. The active
+environment also uses \code{patterns.BpearlPatternCfg} directly; MID360 helpers
+exist, but instinctRL-0 must verify whether the active training path is using
+the MID360 configuration, ray ordering, masks, dropout, and timestamps.
+
+%============================================================
+\section{Repository Overview}
+
+\begin{longtable}{@{}L{0.16\textwidth}L{0.25\textwidth}L{0.20\textwidth}L{0.18\textwidth}L{0.15\textwidth}@{}}
+\caption{Existing infrastructure and instinctRL reuse plan.}\\
+\toprule
+\textbf{Subsystem} & \textbf{Existing files / directories} & \textbf{Current role} & \textbf{instinctRL reuse} & \textbf{Missing pieces} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Subsystem} & \textbf{Existing files / directories} & \textbf{Current role} & \textbf{instinctRL reuse} & \textbf{Missing pieces} \\
+\midrule
+\endhead
+Training entry points & \code{isaac-training/training/scripts/train.py}, \code{eval.py} & Launch Isaac Sim, build \code{NavigationEnv}, wrap with \code{VelController}, train/evaluate PPO, log WandB. & Reuse entry points; add \code{instinctRL.enabled} mode and platform audit. & instinctRL metrics, input audit, platform-lock checks. \\
+Environment & \code{training/scripts/env.py} & Builds TASLAB-configured drone, terrain, current RayCaster, observations, rewards, done flags. & Reuse \code{NavigationEnv}; gate instinctRL observation/reward/action path. & Hardcoded Hummingbird LiDAR path; actor leaks pose/velocity. \\
+MID360 simulation & \code{training/envs/livox\_mid360.py}; \code{training/scripts/livox\_mid360\_integration.py}; \code{unit\_test/test\_livox\_mid360.py}. & MID360 config, ray pattern, mount transform, occlusion, noise/dropout, helper tests. & Reuse; do not create a new sensor simulator. & Wire helper into active \code{NavigationEnv}; add timestamps/reliability output. \\
+Range projection & \code{training/envs/lidar\_processor.py}. & Converts point clouds to body-frame depth images with grid masks/debug info. & Reuse for optional MID360 range image/CNN representation and neighbor consistency. & Preserve raw range vector for anchor/ICS. \\
+TASLAB\_UAV model & \code{third\_party/OmniDrones/.../taslab\_uav.py}, \code{taslab\_uav.yaml}, \code{taslab\_uav.usd}. & Registered OmniDrones multirotor with TASLAB parameters. & Reuse as locked platform. & Verify prim path and controller gains in active training. \\
+Velocity controller & \code{VelController}, \code{LeePositionController}; \code{lee\_controller\_taslab\_uav.yaml}. & Converts velocity command to low-level rotor action. & Reuse; instinctRL stays velocity-controller-based. & Body-frame to controller-frame adapter and audit logs. \\
+Observation pipeline & \code{env.py:\_set\_specs}, \code{\_compute\_state\_and\_obs}. & Current actor sees \code{lidar}, \code{state}, \code{direction}, \code{dynamic\_obstacle}. & Reuse only the range acquisition and privileged logging parts. & Remove actor pose/velocity/map leaks; add history. \\
+Policy network & \code{training/scripts/ppo.py}. & CNN lidar encoder, dynamic-obstacle MLP, Beta actor outputting raw velocity. & Reuse PPO loop and parts of encoder. & Governor head \((\alpha_t,\vcorr)\), actor/critic split. \\
+Reward code & Inline in \code{env.py}. & Goal-tracking velocity reward, safety, smoothness, height, collision. & Reuse simulator quantities reward-only. & instinctRL tracking, anchor, intervention, safety terms. \\
+Command generation & \code{training/scripts/command\_generator.py}. & Vectorized adversarial command modes. & Reuse for training/evaluation command regimes only. & Feed only \(\vcmd\), not privileged generator inputs, to actor. \\
+Logging/evaluation & \code{train.py}, \code{utils.py}, \code{EpisodeStats}, WandB. & Basic return/reach/collision/video logging. & Reuse logging plumbing. & Anchor, ICS, observability, audit, platform-lock logs. \\
+ROS deployment & \code{ros1/navigation\_runner/scripts/navigation.py}, \code{policy\_server.py}, \code{srv/*.srv}, \code{safeAction.cpp}. & Current deployment uses odometry, map raycast, dynamic-obstacle services, ORCA-style safety. & Reuse only process/service/publisher scaffolding. & New MID360-range and IMU policy request excluding odom/map actor inputs. \\
+\bottomrule
+\end{longtable}
+
+%============================================================
+\section{instinctRL Module-to-Code Mapping}
+
+\begin{longtable}{@{}L{0.08\textwidth}L{0.16\textwidth}L{0.21\textwidth}L{0.25\textwidth}L{0.20\textwidth}@{}}
+\caption{instinctRL modules, reuse first.}\\
+\toprule
+\textbf{ID} & \textbf{Method role} & \textbf{Existing code to reuse} & \textbf{Changes or new functions} & \textbf{Why new code is needed} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Method role} & \textbf{Existing code to reuse} & \textbf{Changes or new functions} & \textbf{Why new code is needed} \\
+\midrule
+\endhead
+instinctRL-M0 & Platform and sensor audit. & MID360 files, TASLAB files, \code{train.py}, \code{env.py}, unit tests. & Add \code{instinctRL/platform\_audit.py} or test-only audit helper. & No current single check proves MID360 is attached to TASLAB and actor-clean. \\
+instinctRL-M1 & Observation/history buffer. & \code{env.py} range extraction; \code{livox\_mid360.py}; \code{lidar\_processor.py}. & Add history buffer and actor schema under \code{instinctRL/observation.py}. & Existing observation contains forbidden pose/velocity and has no history/timestamps. \\
+instinctRL-M2 & Measurement-space anchor. & Reuse MID360 \(r,m,w\) from M1. & Add \code{instinctRL/anchor.py}: hysteresis, capture, masked error, logs. & No existing anchor lifecycle or anchor loss exists. \\
+instinctRL-M3 & Velocity governor network. & Reuse PPO loop and LiDAR encoder from \code{ppo.py}. & Add governor head or \code{instinctRL/governor.py} producing \(\alpha_t,\vcorr\). & Current actor outputs raw velocity and consumes forbidden fields. \\
+instinctRL-M4 & ICS-inspired attenuation. & Reuse range/history from M1 and command path from \code{train.py}. & Add \code{instinctRL/ics.py}: range-rate fit, active set, \(\beta_t\). & Existing \code{safeAction.cpp} is ORCA/map/obstacle-state based and not actor-contract compliant. \\
+instinctRL-M5 & Observability logger. & Reuse RayCaster scene and evaluation logger. & Add \code{instinctRL/observability.py}. & No existing range-Jacobian or drift correlation logger. \\
+instinctRL-M6 & Reward terms. & Reuse privileged state and collision computation in \code{env.py}. & Add \code{instinctRL/rewards.py} or gated reward functions. & Existing reward is goal navigation, not measurement-space station-keeping. \\
+instinctRL-M7 & Evaluation/logging/input audit. & Reuse \code{utils.evaluate}, \code{EpisodeStats}, WandB. & Add \code{instinctRL/audit.py}, metrics hooks. & Existing logging lacks actor contract and Paper~1 contribution metrics. \\
+instinctRL-M8 & Baseline/ablation harness. & Reuse configs, command generator, train/eval scripts. & Add config switches \code{instinctRL.baseline.id}. & Existing configs do not isolate B0--B8. \\
+instinctRL-M9 & Real-robot deployment wrapper. & Reuse ROS nodes/services as scaffolding. & Add MID360/IMU policy wrapper and message schema. & Current ROS actor input path uses odometry/map raycast/obstacle state. \\
+\bottomrule
+\end{longtable}
+
+%============================================================
+\section{Actor Input Contract Audit}
+
+\begin{longtable}{@{}L{0.23\textwidth}L{0.22\textwidth}L{0.39\textwidth}@{}}
+\caption{Current and target actor inputs.}\\
+\toprule
+\textbf{Candidate field} & \textbf{Current source} & \textbf{instinctRL status} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Candidate field} & \textbf{Current source} & \textbf{instinctRL status} \\
+\midrule
+\endhead
+MID360 range \(r_t\) & RayCaster hit distance or \code{LivoxMid360Pattern} generated rays. & Allowed actor input. Must be true distance, not only danger-coded inverse range. \\
+Valid-return mask \(m_t\) & Derived from finite in-range MID360 returns and dropout. & Allowed actor input. Required. \\
+Reliability weights \(w_t\) & Derived from validity, dropout, staleness, neighbor consistency. & Allowed actor input. Required; no surface normals. \\
+Ray directions / ordering metadata & MID360 pattern in body frame. & Allowed for deterministic ICS and preprocessing; actor may receive only configured representation. \\
+IMU / attitude cues & TASLAB/drone state or ROS IMU. & Allowed only as derived body angular rate, gravity direction, and attitude cue; no translational pose/velocity. \\
+Operator command \(\vcmd\) & Operator or command generator output. & Allowed actor input in body/governor frame. \\
+Previous issued command & New governor state. & Allowed actor input. \\
+History \(h_t\) & New buffer over allowed fields. & Allowed actor input. \\
+\code{state}: \code{rpos\_clipped\_g}, \code{distance\_2d}, \code{distance\_z} & \code{env.py} from target and drone position. & Forbidden deployed actor input. Keep only for reward/evaluation if needed. \\
+\code{vel\_g} & \code{env.py} from root-state velocity. & Forbidden deployed actor input. Reward/critic/evaluation only. \\
+\code{direction} & \code{env.py}/\code{ppo.py} target direction. & Forbidden for deployed actor. Replace goal-frame policy with body-frame command convention. \\
+\code{dynamic\_obstacle} & Simulator obstacle pose/velocity relative to drone. & Forbidden deployed actor input. Evaluation/upper-bound only. \\
+\code{info/drone\_state} and root state & \code{env.py}. & Privileged; reward/critic/logging only. \\
+ROS odometry/map raycast & \code{navigation.py}. & Forbidden deployed actor input. May be used for low-level infrastructure or evaluation only. \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Audit implementation.}
+Add an \code{instinctRL.audit} check that runs at environment construction,
+policy initialization, rollout collection, evaluation, checkpoint export, and
+ROS inference. It must fail on keys or producer metadata containing
+\code{pose}, \code{pos}, \code{position}, \code{odom}, \code{velocity},
+\code{vel\_g}, \code{vel\_w}, \code{root\_state}, \code{map}, \code{slam},
+\code{privileged}, \code{direction}, \code{distance}, or
+\code{dynamic\_obstacle}, unless the field is explicitly in a reward-only,
+critic-only, logging-only, or baseline-upper-bound branch.
+
+%============================================================
+\section{Action Interface Plan}
+
+The governor action remains velocity-controller based:
+\[
+  \vgov = \alpha_t\vcmd + \vcorr,\qquad
+  \vfin = \beta_t\vgov + (1-\beta_t)\vbrake .
+\]
+
+\begin{longtable}{@{}L{0.28\textwidth}L{0.62\textwidth}@{}}
+\caption{Velocity-controller action path on TASLAB\_UAV.}\\
+\toprule
+\textbf{Step} & \textbf{Implementation plan} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Step} & \textbf{Implementation plan} \\
+\midrule
+\endhead
+Governor output & Reuse \code{ppo.py} training loop but replace actor head so it outputs \(\alpha_t\in[0,1]\) and bounded \(\vcorr\). \\
+Body-frame convention & Define \(\vcmd,\vcorr,\vgov,\vfin\) in TASLAB body/governor frame. Use attitude/yaw information only in the command adapter, not as translational actor state. \\
+Clipping and smoothing & Clip \(\vcorr\), clip \(\vgov\) to velocity bounds, and smooth/rate-limit before ICS. Store previous issued command in the history buffer. \\
+ICS attenuation & Apply \(\beta_t\) in \code{instinctRL/ics.py} after smoothing and before the controller transform. Empty active set returns \(\beta_t=1\). \\
+Velocity controller execution & Reuse \code{VelController(LeePositionController)} and TASLAB parameters. The adapter converts the final body-frame velocity command to the velocity frame expected by \code{VelController}. \\
+Forbidden interfaces & Do not expose TASLAB rotor actions, CTBR, body rates, motor thrust, or attitude setpoints as the learned instinctRL action. \\
+\bottomrule
+\end{longtable}
+
+%============================================================
+\section{Observation and History Buffer Implementation Plan}
+
+\begin{longtable}{@{}L{0.25\textwidth}L{0.61\textwidth}@{}}
+\caption{Observation mapping for MID360--TASLAB\_UAV.}\\
+\toprule
+\textbf{Term} & \textbf{Concrete plan} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Concrete plan} \\
+\midrule
+\endhead
+\(r_t\) & Use MID360 ray ordering from \code{LivoxMid360Pattern} or the active RayCaster configured with MID360 angles. Compute \(r_i=\|p^{hit}_i-p^{lidar}\|\), not only \code{lidar\_range-r_i}. \\
+\(m_t\) & Use finite, in-range, non-occluded, non-dropout returns. Invalid and dropout beams become mask zero. \\
+\(w_t\) & Combine valid return, staleness, noise/dropout confidence, and neighbor consistency. Reuse \code{lidar\_processor.py} projection where helpful. \\
+Timestamps & Record MID360 frame time, simulation time, and age relative to policy step. Mark stale or repeated frames. \\
+IMU/attitude cues & Derive body angular velocity and gravity direction from TASLAB state or ROS IMU; keep position and translational velocity out of actor input. \\
+\(\vcmd\) & Source from operator or \code{AdversarialCommandGenerator}; generator may use privileged information internally for scenario generation, but only the command enters the actor. \\
+Previous action & Store \(\tilde v_{t-1}\) and optionally \(\bar v^g_{t-1}\), bounded and frame-labeled. \\
+History \(h_t\) & Maintain a fixed window over allowed fields, masks, weights, timestamps, and previous command. \\
+\bottomrule
+\end{longtable}
+
+Tests: MID360 shape/ray count, ray-order stability, timestamp monotonicity,
+mask/dropout behavior, reliability bounds, history rollover, stale-frame
+handling, and actor-input absence of pose/odometry/velocity/map/privileged
+state.
+
+%============================================================
+\section{Measurement-Space Anchor Implementation Plan}
+
+The anchor manager is new because no current code captures or regulates a
+measurement-space station-keeping reference. It must consume only \(r_t,m_t,w_t\)
+and \(\vcmd\).
+
+\begin{longtable}{@{}L{0.28\textwidth}L{0.58\textwidth}@{}}
+\caption{Anchor requirements.}\\
+\toprule
+\textbf{Function} & \textbf{Implementation} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Function} & \textbf{Implementation} \\
+\midrule
+\endhead
+Null-command hysteresis & \(\chi_t\) activates when \(\|\vcmd\|\le\epsilon_0\), deactivates when \(\|\vcmd\|>\epsilon_1\), with \(\epsilon_1>\epsilon_0\). \\
+Anchor capture & On activation rising edge, freeze MID360 \(r^\star,m^\star\) and timestamp. \\
+Anchor reset & Reset on episode reset, explicit operator reset, large-command exit, or insufficient valid anchor fraction. \\
+Masked anchor error & \(e^r_t=(m_t\odot m^\star\odot w_t)\odot(r_t-r^\star)\). \\
+Anchor loss & Robust masked loss active only while \(\chi_t=1\). No pose or odometry. \\
+Logs & Active fraction, activation count, hold duration, valid-anchor fraction, mean/max anchor error, reset reason. \\
+\bottomrule
+\end{longtable}
+
+%============================================================
+\section{Governor Network Implementation Plan}
+
+Reuse the PPO collection/update loop in \code{training/scripts/ppo.py}. Reuse
+the existing LiDAR CNN only if the MID360 representation is image-like; if the
+canonical actor input is a flat MID360 vector with masks/weights/history, add a
+small history-stacking MLP or TCN encoder. GRU/LSTM may be added only as an
+ablation.
+
+\begin{itemize}
+\item Actor input: allowed MID360 range/mask/weights, IMU cues, command,
+previous command/output, anchor features, and history.
+\item Actor output: \(\alpha_t\) and \(\vcorr\), followed by deterministic
+formation of \(\vgov\).
+\item Critic input: may include privileged TASLAB pose/velocity/clearance only
+through a separate critic-only branch.
+\item Configs: \code{instinctRL.governor.encoder}, \code{alpha\_mode},
+\code{v\_corr\_limit}, \code{velocity\_limit}, \code{smoothing\_tau}.
+\item Tests: output bounds, no critic-to-actor leakage, export compatibility,
+and deterministic mean action.
+\end{itemize}
+
+%============================================================
+\section{ICS-Inspired Intervention Implementation Plan}
+
+The deployed intervention layer must not use surface normals, map geometry,
+odometry, explicit velocity estimates, or privileged simulator state. It uses
+MID360 ranges, masks, reliability weights, body-frame ray directions, command
+velocity, and history.
+
+\begin{longtable}{@{}L{0.27\textwidth}L{0.59\textwidth}@{}}
+\caption{ICS-inspired attenuation details.}\\
+\toprule
+\textbf{Component} & \textbf{Plan} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Component} & \textbf{Plan} \\
+\midrule
+\endhead
+\(c_i(u)\) & For candidate command \(u=\vgov\), compute line-of-sight approach component along MID360 ray direction \(d_i\), weighted by \(m_iw_i\). \\
+Range-rate fitting & Estimate \(\dot r_i\) from MID360 history and timestamps using robust finite differences or short linear fit. \\
+\(\vsafe(d)\) & \(\vsafe(d)=\sqrt{2\amax\max(d-d_{\mathrm{safe}},0)}\). \\
+Latency margin & Reduce effective clearance by command speed times sensor/controller latency plus configured margin. \\
+Active set & Beams with valid, reliable returns and braking-feasibility risk. Invalid or stale beams are excluded or handled conservatively. \\
+Empty active set & Return \(\beta_t=1\) and \(\vfin=\vgov\). \\
+Emergency bypass & If reliable minimum clearance is below emergency threshold, ignore governor command and send \(\vbrake\)/hover command. \\
+Logs & \(\beta_t\), active-set size, worst beam, minimum clearance, worst margin, emergency flag, \(\vgov\), \(\vfin\). \\
+\bottomrule
+\end{longtable}
+
+Tests: monotonic \(\beta_t\) with speed/clearance, empty active set, emergency
+bypass, no surface-normal imports/fields, no odometry/map access, and final
+command bounds.
+
+%============================================================
+\section{Observability Logger Implementation Plan}
+
+Range-Jacobian observability is an evaluation and analysis module, not a
+deployed control dependency.
+
+\paragraph{Simulation/offline logger.}
+Use RayCaster scene access and simulator hit information to compute \(J\) from
+surface normals if available, or from finite-difference ray casting. Surface
+normals are allowed only in this offline logger. Log rank estimate,
+\(\sigma_{\min}(J)\), condition number, weak direction, valid beam fraction,
+scenario ID, and drift.
+
+\paragraph{Hardware proxy.}
+For real TASLAB\_UAV/MID360 trials, use scan geometry, valid-beam distribution,
+range variation, and small commanded probes to compute an empirical
+observability proxy. Label it as a proxy, not the exact \(J\).
+
+Required plots: drift versus \(\sigma_{\min}(J)\), per-scenario drift ranking,
+and weak-direction drift alignment.
+
+%============================================================
+\section{Reward and Training Plan}
+
+Reward code currently lives inline in \code{NavigationEnv.\_compute\_state\_and\_obs}.
+instinctRL should either refactor it to \code{instinctRL/rewards.py} or gate a
+clearly marked instinctRL reward path in \code{env.py}. Privileged TASLAB state
+may be used for reward and critic only.
+
+\begin{longtable}{@{}L{0.28\textwidth}L{0.44\textwidth}L{0.18\textwidth}@{}}
+\caption{Reward terms.}\\
+\toprule
+\textbf{Term} & \textbf{Plan} & \textbf{Privilege status} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Term} & \textbf{Plan} & \textbf{Privilege status} \\
+\midrule
+\endhead
+Tracking reward & Penalize unsafe deviation from \(\vcmd\) under nonzero command. & Actor-clean; actual velocity optional reward/eval only. \\
+Anchor reward & Penalize masked MID360 anchor error under null command. & Actor-clean. \\
+Safety penalty & Penalize low clearance and collision labels. & Reward/critic/eval only if from simulator. \\
+Command-compliance gated by \(\beta_t\) & Do not punish attenuation when ICS marks command unsafe. & Actor-clean. \\
+Intervention-usage penalty & Discourage policy reliance on ICS. & Uses ICS logs. \\
+Smoothness penalty & Penalize changes in \(\vgov\) and \(\vfin\). & Actor-clean. \\
+Collision penalty & Large terminal penalty from simulator/contact safety boundary. & Reward/eval only. \\
+\bottomrule
+\end{longtable}
+
+%============================================================
+\section{Baselines and Ablations}
+
+\begin{longtable}{@{}L{0.08\textwidth}L{0.23\textwidth}L{0.25\textwidth}L{0.30\textwidth}@{}}
+\caption{instinctRL baseline switches.}\\
+\toprule
+\textbf{ID} & \textbf{Config switch} & \textbf{Expected input fields} & \textbf{Contribution tested} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{ID} & \textbf{Config switch} & \textbf{Expected input fields} & \textbf{Contribution tested} \\
+\midrule
+\endhead
+B0 & \code{instinctRL.baseline.id=direct\_velocity} & \(\vcmd\) only. & TASLAB velocity controller alone. \\
+B1 & \code{state\_velocity\_upper\_bound} & Privileged state/velocity, labeled upper bound. & Gap to forbidden state-aided policy. \\
+B2 & \code{no\_history} & Single-frame allowed MID360/IMU/command. & Value of history. \\
+B3 & \code{no\_anchor} & Full actor inputs, no anchor loss/features. & Measurement-space anchor contribution. \\
+B4 & \code{no\_imu} & MID360, command, previous output, history. & IMU cue contribution. \\
+B5 & \code{no\_ics} & Full governor, \(\beta_t=1\). & ICS attenuation contribution. \\
+B6 & \code{distance\_only\_filter} & Range minimum and command. & Distance-only filtering comparison. \\
+B7 & \code{braking\_heuristic} & MID360 ranges, masks, command, braking params. & Nonlearned braking heuristic. \\
+B8 & \code{simplified\_cbf\_vo\_optional} & Baseline-specific geometric inputs, not main method. & Optional filter comparison. \\
+\bottomrule
+\end{longtable}
+
+Metrics for all relevant baselines: station-keeping drift, range-anchor error,
+tracking RMSE, minimum clearance, collision rate, ICS violation rate, command
+preservation ratio, intervention frequency, and observability metrics.
+
+%============================================================
+\section{Experiment Pipeline}
+
+Required scenario groups are corner, flat wall, corridor/tunnel, open field,
+cluttered indoor, unsafe command toward wall, gap/doorway, dynamic obstacle if
+available, real-robot observable holding, and real-robot unsafe-command
+approach. Scenarios may reuse \code{universal\_generator.py}, current obstacle
+terrain, or dedicated test fixtures, but each run must log platform
+\code{TASLAB\_UAV}, sensor \code{Livox MID360}, actor-input audit result, and
+baseline ID.
+
+The required metric set is station-keeping drift, range-anchor error, tracking
+RMSE, minimum clearance, collision rate, ICS violation rate, command
+preservation ratio, intervention frequency, observability metrics, and
+real-robot repeatability. Pose/mocap/odom may be used for evaluation metrics
+only and must be absent from actor inputs.
+
+%============================================================
+\section{Development Tickets}
+
+\begin{longtable}{@{}L{0.14\textwidth}L{0.18\textwidth}L{0.38\textwidth}L{0.20\textwidth}@{}}
+\caption{instinctRL implementation tickets.}\\
+\toprule
+\textbf{Ticket} & \textbf{Objective} & \textbf{Implementation tasks} & \textbf{Acceptance} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Ticket} & \textbf{Objective} & \textbf{Implementation tasks} & \textbf{Acceptance} \\
+\midrule
+\endhead
+instinctRL-0 & Platform and sensor infrastructure audit. & Verify TASLAB registry/config/USD/params/controller; wire MID360 to TASLAB base link; validate range vector, mask, weights, ray ordering, timestamps; run actor audit. & All audit criteria pass; no actor leak; no generic platform/sensor in normal configs. \\
+instinctRL-A & Direct velocity-governor baseline. & Add instinctRL config namespace; create actor-clean command path; preserve TASLAB velocity-controller execution. & B0 runs on TASLAB/MID360; actor audit passes. \\
+instinctRL-B & Observation/history buffer. & Build MID360 \(r,m,w\), timestamps, IMU cues, command, previous output, history. & Shape/timing/dropout tests pass. \\
+instinctRL-C & Measurement-space anchor. & Add anchor manager, hysteresis, capture/reset, masked error, anchor reward/logs. & Anchor lifecycle tests pass; B3 ablation exists. \\
+instinctRL-D & Observability logger. & Add offline range-Jacobian and hardware proxy logger, plots, drift correlation. & Required plots produced; no deployed normal use. \\
+instinctRL-E & ICS-inspired attenuation. & Add range-rate fit, active set, \(\vsafe\), latency margin, \(\beta_t\), emergency bypass. & Monotonicity and no-normal tests pass; B5 exists. \\
+instinctRL-F & Reward integration and training. & Add reward terms and critic-only privileged branch; prevent actor leakage. & Reward tests and first stable training run pass. \\
+instinctRL-G & Baselines and ablations. & Add B0--B8 config isolation and evaluator matrix. & All baselines run/log required metrics. \\
+instinctRL-H & Real-robot deployment validation. & Add MID360/IMU/command ROS wrapper, body-frame velocity output, bag replay audit. & No odom/map actor input; latency and safety logs present. \\
+\bottomrule
+\end{longtable}
+
+\paragraph{Risk level and dependencies.}
+instinctRL-0, B, C, E, F, and H are high risk. instinctRL-A, D, and G are
+medium risk. All later tickets depend on instinctRL-0 because platform and
+sensor lock violations invalidate results.
+
+%============================================================
+\section{Automated Tests and Audits}
+
+\begin{itemize}
+\item Platform lock: assert \code{cfg.drone.model\_name == "TaslabUAV"} and
+sensor config identifies Livox MID360 in instinctRL runs.
+\item MID360 range: stable ray count, ray ordering, frame convention, timestamp
+monotonicity, mask/dropout handling, reliability bounds.
+\item TASLAB velocity interface: corrected body-frame velocity command reaches
+the existing \code{VelController}/\code{LeePositionController} adapter without
+exposing motor/CTBR actions to the actor.
+\item Actor input contract: no pose, odometry, explicit velocity, map, SLAM,
+dynamic-obstacle privileged state, or root state in actor TensorDicts.
+\item Observation history: fixed shapes, rollover, stale/dropped frame markers.
+\item Anchor lifecycle: hysteresis, capture, reset, masked error, inactive loss.
+\item ICS: monotonicity, empty active set \(\beta_t=1\), emergency bypass, no
+surface-normal use in deployed code.
+\item Rewards: each term activates under intended condition and privileged
+quantities stay reward/critic/eval only.
+\item Baselines: config isolation for B0--B8 and explicit input-schema logs.
+\item Logging completeness: platform lock, actor audit, anchor, ICS,
+observability, reward terms, and metrics emitted.
+\end{itemize}
+
+%============================================================
+\section{Risks and Mitigation}
+
+\begin{longtable}{@{}L{0.30\textwidth}L{0.58\textwidth}@{}}
+\caption{instinctRL risks and mitigations.}\\
+\toprule
+\textbf{Risk} & \textbf{Mitigation} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Risk} & \textbf{Mitigation} \\
+\midrule
+\endhead
+Active RayCaster remains attached to Hummingbird path. & Make instinctRL-0 fail until the MID360 prim path resolves to TASLAB\_UAV base link. \\
+MID360 helper exists but is not wired into training. & Reuse \code{create\_livox\_from\_hydra\_cfg} or integration helper; log active sensor source. \\
+Low-level controller uses state internally. & State claim boundary: actor is pose/odometry-free; controller internals are conventional stabilization. \\
+Open-field unobservability. & Report as method limitation using observability logger; do not hide degenerate cases. \\
+Range dropout and latency. & Use masks, weights, timestamps, staleness, latency margin, and dropout tests. \\
+Policy overuses ICS. & Penalize intervention usage and compare against B5 no-ICS. \\
+Frame convention mismatch. & Test body-frame unit commands through TASLAB controller adapter and ROS wrapper. \\
+Reward hacking. & Log component rewards and validate with baselines and held-out scenarios. \\
+Sim-to-real gap. & Keep TASLAB parameters and MID360 noise/dropout; validate with bag replay and conservative hardware tests. \\
+Surface normals leak into deployed safety. & Separate observability logger from deployed ICS and add static/runtime no-normal audits. \\
+\bottomrule
+\end{longtable}
+
+%============================================================
+\section{Final Deliverables}
+
+The v1.1 platform-locked handbook is complete only if:
+\begin{itemize}
+\item all code/development names use \code{instinctRL};
+\item MID360 and TASLAB\_UAV are locked as the normal platform/sensor;
+\item instinctRL-0 audits MID360 range vector, mask, weights, ray ordering,
+timestamps, and TASLAB velocity-command acceptance;
+\item every instinctRL module maps to existing infrastructure first;
+\item every proposed new file/function explains why existing infrastructure is
+insufficient;
+\item every deployed actor input is audited;
+\item every forbidden shortcut has a test or manual check;
+\item every scientific contribution has a supporting experiment;
+\item any generic sensor/platform/simulator use is marked debugging-only.
+\end{itemize}
+
+\paragraph{Current unavoidable limitations to flag.}
+The current repository is close to the locked platform, but not yet compliant:
+\code{training/cfg/drone.yaml} selects \code{TaslabUAV}, while
+\code{NavigationEnv} still hard-codes a Hummingbird LiDAR attachment path; the
+active actor receives forbidden goal-relative pose and explicit velocity; and
+the ROS wrapper uses odometry and map raycasting in the policy path. These are
+implementation limitations, not method changes.
+
+\end{document}

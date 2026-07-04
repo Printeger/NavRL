@@ -36,7 +36,7 @@ from tensordict.nn import TensorDictModuleBase, TensorDictSequential, TensorDict
 from einops.layers.torch import Rearrange  # 用于方便地重排张量维度
 from torchrl.modules import ProbabilisticActor
 from torchrl.envs.transforms import CatTensors
-from utils import ValueNorm, make_mlp, IndependentNormal, Actor, GAE, make_batch, IndependentBeta, BetaActor, vec_to_world
+from utils import ValueNorm, make_mlp, IndependentNormal, Actor, GAE, make_batch, IndependentBeta, BetaActor
 
 
 class PPO(TensorDictModuleBase):
@@ -55,7 +55,7 @@ class PPO(TensorDictModuleBase):
         self.device = device
 
         # ============================================
-        # 1. LiDAR 特征提取器（CNN）
+        # 1. LiDAR 特征提取器（CNN）— actor 和 critic 共享
         # ============================================
         # 输入形状：[batch, 1, 36, 4] (36个水平角度 × 4个垂直角度)
         # 输出：128 维特征向量
@@ -79,41 +79,47 @@ class PPO(TensorDictModuleBase):
             nn.LazyLinear(128), 
             nn.LayerNorm(128),  # 层归一化，稳定训练
         ).to(self.device)
-        
+
         # ============================================
-        # 2. 动态障碍物特征提取器（MLP）
+        # 2. Actor 特征提取器（LiDAR only — 无特权状态）
         # ============================================
-        # 输入：最近的 N 个动态障碍物的状态信息
-        # 输出：64 维特征向量
-        dynamic_obstacle_network = nn.Sequential(
-            Rearrange("n c w h -> n (c w h)"),  # 展平
-            make_mlp([128, 64])  # 两层 MLP: 输入 -> 128 -> 64
+        # instinctRL-0: Actor receives only raw sensor input per the
+        # actor input contract. No pose, odometry, velocity, map, or
+        # privileged simulator state.
+        self.actor_feature_extractor = TensorDictSequential(
+            TensorDictModule(feature_extractor_network, [("agents", "observation", "lidar")], ["_cnn_feature"]),
+            TensorDictModule(make_mlp([128, 256]), ["_cnn_feature"], ["_actor_feature"]),
         ).to(self.device)
 
         # ============================================
-        # 3. 完整特征提取器（组合所有输入）
+        # 3. Critic 特征提取器（actor 特征 + 特权状态）
         # ============================================
-        # 将三种输入拼接：
-        #   - LiDAR 特征 (128维)
-        #   - 无人机状态 (8维：距离、方向、速度)
-        #   - 动态障碍物特征 (64维)
-        # 总共：128 + 8 + 64 = 200维 -> 经过 MLP -> 256维
-        self.feature_extractor = TensorDictSequential(
-            TensorDictModule(feature_extractor_network, [("agents", "observation", "lidar")], ["_cnn_feature"]),
-            TensorDictModule(dynamic_obstacle_network, [("agents", "observation", "dynamic_obstacle")], ["_dynamic_obstacle_feature"]),
-            CatTensors(["_cnn_feature", ("agents", "observation", "state"), "_dynamic_obstacle_feature"], "_feature", del_keys=False), 
-            TensorDictModule(make_mlp([256, 256]), ["_feature"], ["_feature"]),
+        # instinctRL-0: Critic may use privileged drone_state,
+        # target_rpos, and target_distance from info namespace.
+        # These fields are never seen by the actor.
+        critic_input_network = nn.Sequential(
+            nn.LazyLinear(256),
+            nn.ELU(),
+            nn.LazyLinear(256),
+        ).to(self.device)
+        self.critic_feature_extractor = TensorDictSequential(
+            CatTensors(
+                ["_actor_feature", ("info", "drone_state"),
+                 ("info", "target_rpos"), ("info", "target_distance")],
+                "_critic_input", del_keys=False
+            ),
+            TensorDictModule(critic_input_network, ["_critic_input"], ["_critic_feature"]),
         ).to(self.device)
 
         # ============================================
         # 4. Actor 网络（策略网络）
         # ============================================
-        # 输入：256维特征
+        # 输入：_actor_feature (LiDAR-derived, 256-dim)
         # 输出：Beta 分布的参数 (alpha, beta)
         # 动作空间：3维速度指令 [vx, vy, vz]，范围 [0, 1]（后续会缩放）
         self.n_agents, self.action_dim = action_spec.shape
         self.actor = ProbabilisticActor(
-            TensorDictModule(BetaActor(self.action_dim), ["_feature"], ["alpha", "beta"]),
+            TensorDictModule(BetaActor(self.action_dim), ["_actor_feature"], ["alpha", "beta"]),
             in_keys=["alpha", "beta"],
             out_keys=[("agents", "action_normalized")],  # 输出在 [0, 1] 之间
             distribution_class=IndependentBeta,  # 使用 Beta 分布
@@ -123,10 +129,10 @@ class PPO(TensorDictModuleBase):
         # ============================================
         # 5. Critic 网络（价值网络）
         # ============================================
-        # 输入：256维特征
+        # 输入：_critic_feature (actor features + privileged info, 256-dim)
         # 输出：状态价值 V(s)（1个标量）
         self.critic = TensorDictModule(
-            nn.LazyLinear(1), ["_feature"], ["state_value"] 
+            nn.LazyLinear(1), ["_critic_feature"], ["state_value"] 
         ).to(self.device)
         
         # 价值归一化：稳定训练，避免价值爆炸
@@ -143,9 +149,12 @@ class PPO(TensorDictModuleBase):
         # Huber Loss: 结合 L1 和 L2 损失的优点，对异常值鲁棒
         self.critic_loss_fn = nn.HuberLoss(delta=10)
 
-        # 为三个组件分别创建优化器
-        self.feature_extractor_optim = torch.optim.Adam(
-            self.feature_extractor.parameters(), 
+        # instinctRL-0: Separate optimizers for actor features, actor head, and critic.
+        # actor_feature_optim covers both the shared CNN backbone and the
+        # critic-specific privileged-state MLP.
+        self.actor_feature_optim = torch.optim.Adam(
+            list(self.actor_feature_extractor.parameters()) +
+            list(self.critic_feature_extractor.parameters()),
             lr=cfg.feature_extractor.learning_rate
         )
         self.actor_optim = torch.optim.Adam(
@@ -178,17 +187,21 @@ class PPO(TensorDictModuleBase):
         
         参数:
             tensordict: 包含观测的字典
-                - ("agents", "observation", "lidar"): LiDAR 数据
-                - ("agents", "observation", "state"): 无人机状态
-                - ("agents", "observation", "dynamic_obstacle"): 动态障碍物
+                - ("agents", "observation", "lidar"): LiDAR 数据 (actor input)
+                - ("info", "drone_state"): 无人机特权状态 (critic-only)
+                - ("info", "target_rpos"): 目标相对位置 (critic-only)
+                - ("info", "target_distance"): 目标距离 (critic-only)
         
         返回:
             tensordict: 添加了动作和价值的字典
                 - ("agents", "action"): 世界坐标系下的速度指令
                 - "state_value": 状态价值
         """
-        # 提取特征
-        self.feature_extractor(tensordict)
+        # Actor 特征提取（LiDAR only — 无特权状态）
+        self.actor_feature_extractor(tensordict)
+        
+        # Critic 特征提取（actor 特征 + 特权状态）
+        self.critic_feature_extractor(tensordict)
         
         # Actor 前向：生成动作分布并采样
         # 输出：("agents", "action_normalized") ∈ [0, 1]^3
@@ -199,18 +212,61 @@ class PPO(TensorDictModuleBase):
         self.critic(tensordict)
 
         # ============================================
-        # 坐标变换：局部坐标 -> 世界坐标
+        # 动作：直接输出世界坐标系速度（无 goal-frame 变换）
         # ============================================
-        # 1. 将 [0, 1] 缩放到 [-action_limit, action_limit]
-        # 例如：action_limit=2 -> [-2, 2] m/s
+        # instinctRL-0: No goal-frame transform — outputs world-frame velocity.
+        # instinctRL-A will replace this with body-frame governor output.
         actions = (2 * tensordict["agents", "action_normalized"] * self.cfg.actor.action_limit) - self.cfg.actor.action_limit
-        
-        # 2. 从目标方向坐标系转换到世界坐标系
-        # 原因：策略在目标方向坐标系下输出动作，更容易学习
-        actions_world = vec_to_world(actions, tensordict["agents", "observation", "direction"])
-        tensordict["agents", "action"] = actions_world
+        tensordict["agents", "action"] = actions
         
         return tensordict
+
+    def verify_actor_critic_separation(self, tensordict: TensorDict) -> bool:
+        """
+        Test that changing critic-only privileged fields does NOT change actor actions.
+
+        This is the canonical audit check for the instinctRL actor input contract:
+        the critic may see privileged state (drone_state, target_rpos, target_distance),
+        but the actor must be independent of those fields.
+
+        Args:
+            tensordict: A batch of observations with both actor and critic fields.
+
+        Returns:
+            True if the test passes (actor output unchanged by critic-field perturbation).
+
+        Raises:
+            AssertionError if changing critic-only fields alters actor output.
+        """
+        with torch.no_grad():
+            # Reference: actor output with original privileged fields
+            self.actor_feature_extractor(tensordict)
+            self.actor(tensordict)
+            ref_action = tensordict["agents", "action_normalized"].clone()
+
+            # Perturb ALL critic-only privileged fields significantly
+            perturbed_td = tensordict.clone()
+            perturbed_td["info", "drone_state"] += (
+                torch.randn_like(perturbed_td["info", "drone_state"]) * 10.0
+            )
+            perturbed_td["info", "target_rpos"] += (
+                torch.randn_like(perturbed_td["info", "target_rpos"]) * 10.0
+            )
+            perturbed_td["info", "target_distance"] += (
+                torch.randn_like(perturbed_td["info", "target_distance"]) * 10.0
+            )
+
+            # Re-run actor on perturbed data (critic fields changed, actor should be unaffected)
+            self.actor_feature_extractor(perturbed_td)
+            self.actor(perturbed_td)
+            perturbed_action = perturbed_td["agents", "action_normalized"]
+
+            assert torch.allclose(ref_action, perturbed_action, atol=1e-5), (
+                "instinctRL-0 AUDIT FAIL: Changing critic-only privileged fields "
+                "(drone_state, target_rpos, target_distance) altered actor output! "
+                "Actor input contract violated."
+            )
+        return True
 
     def train(self, tensordict):
         """
@@ -233,8 +289,10 @@ class PPO(TensorDictModuleBase):
         # ============================================
         next_tensordict = tensordict["next"]
         with torch.no_grad():
-            # 使用 vmap 批量处理多个时间步
-            next_tensordict = torch.vmap(self.feature_extractor)(next_tensordict)
+            # instinctRL-0: Asymmetric actor-critic — compute next-state features
+            # using both actor (LiDAR-only) and critic (privileged) paths.
+            next_tensordict = torch.vmap(self.actor_feature_extractor)(next_tensordict)
+            next_tensordict = torch.vmap(self.critic_feature_extractor)(next_tensordict)
             next_values = self.critic(next_tensordict)["state_value"]
         
         # 获取奖励和终止标志
@@ -304,7 +362,9 @@ class PPO(TensorDictModuleBase):
         # ============================================
         # 第 1 步：重新计算当前策略下的动作概率
         # ============================================
-        self.feature_extractor(tensordict)
+        # instinctRL-0: Asymmetric — actor features from LiDAR only,
+        # critic features from actor features + privileged info.
+        self.actor_feature_extractor(tensordict)
         
         # 获取当前策略的动作分布
         action_dist = self.actor.get_dist(tensordict)  # Beta(alpha, beta)
@@ -370,7 +430,9 @@ class PPO(TensorDictModuleBase):
         # ============================================
         # 第 6 步：反向传播和梯度更新
         # ============================================
-        self.feature_extractor_optim.zero_grad()
+        # instinctRL-0: Asymmetric optimizers — actor features + critic features
+        # share the actor_feature_optim (CNN backbone + critic MLP).
+        self.actor_feature_optim.zero_grad()
         self.actor_optim.zero_grad()
         self.critic_optim.zero_grad()
         loss.backward()  # 计算梯度
@@ -384,7 +446,7 @@ class PPO(TensorDictModuleBase):
         )
         
         # 应用梯度
-        self.feature_extractor_optim.step()
+        self.actor_feature_optim.step()
         self.actor_optim.step()
         self.critic_optim.step()
         
