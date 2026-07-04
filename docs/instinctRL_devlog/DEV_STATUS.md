@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-04
-> **Current Stage**: B-closeout / smoke exit-status rerun before instinctRL-C
+> **Current Stage**: instinctRL-C ready
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,12 +10,12 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | B-closeout / smoke exit-status rerun before instinctRL-C |
-| **Active ticket** | instinctRL-B smoke exit-status validation |
-| **Next ticket** | instinctRL-C only after post-workaround smoke exits 0 |
-| **Final go/no-go** | instinctRL-C: NO-GO |
-| **instinctRL-A** | PASS with open runtime verification item(s) |
-| **instinctRL-B** | RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING |
+| **Current stage** | instinctRL-C ready |
+| **Active ticket** | instinctRL-C may start |
+| **Next ticket** | instinctRL-C measurement-space anchor manager |
+| **Final go/no-go** | instinctRL-C: GO |
+| **instinctRL-A** | PASS |
+| **instinctRL-B** | COMPLETE |
 
 ---
 
@@ -24,9 +24,9 @@
 | Ticket | Verdict | Notes |
 |--------|---------|-------|
 | instinctRL-0 | Accepted as prior platform audit baseline | Earlier audit remains useful context, but current B acceptance is judged against active code. |
-| instinctRL-A | PASS with open runtime verification item(s) | Accepted as B0 smoke-test / infrastructure baseline, not learning success. Adapter frame direction has a pure unit test; full runtime smoke must still run in a provisioned Isaac environment. |
-| instinctRL-B | Runtime checks passed on user GPU; final exit-status rerun pending | Code blockers are addressed. NavRL pytest/PPO hybrid validation passes. User-side GPU smoke completed 500/500 B0/B steps and MID360 validation, then hit an Isaac Kit shutdown segfault after success. Smoke success path now exits before `SimulationApp.close()`. |
-| instinctRL-C | NO-GO | Do not start until the post-workaround smoke command exits 0. |
+| instinctRL-A | PASS | Accepted as B0 smoke-test / infrastructure baseline, not learning success. Adapter frame direction is unit-tested and covered by the B0 smoke command path. |
+| instinctRL-B | COMPLETE | Code blockers are addressed. NavRL pytest/PPO hybrid validation passes. User-side GPU smoke completed 500/500 B0/B steps, actor/schema/action audits, PPO hybrid forward, MID360 `[4, 1, 360, 59]` returns, and shutdown workaround exits before Isaac Kit teardown segfault. |
+| instinctRL-C | GO | B acceptance blockers are cleared. C may start, but C implementation must stay within the handbook anchor-manager scope. |
 
 ---
 
@@ -34,12 +34,12 @@
 
 | ID | Former blocker | Current code fact | Remaining acceptance requirement |
 |----|----------------|-------------------|----------------------------------|
-| B-FIX-001 | Active env RayCaster used `patterns.BpearlPatternCfg` | `env.py` now uses `instinctRL.mid360_pattern.create_mid360_pattern_cfg()` for the active instinctRL RayCaster path; local search found no `BpearlPatternCfg` use in `training/scripts/env.py`, `training/scripts/instinctRL`, or `training/cfg`. | Run Isaac runtime smoke proving active MID360 returns and stable ray layout in the real env. |
-| B-FIX-002 | Body-to-world adapter frame direction was wrong/unverified | `BodyToWorldVelocityAdapter` now uses body-to-world quaternion rotation; identity, yaw 90 deg, and roll/pitch unit tests pass. | Include adapter path in runtime smoke. |
-| B-FIX-003 | `instinctRL.enabled=true` returned after B0 smoke only | `instinctRL.mode` now separates `smoke` and `train`; PPO hybrid forward is covered by NavRL pytest; user-side smoke ran 500/500 B0/B steps. | Re-run smoke after shutdown workaround to confirm shell exit status is 0. |
-| B-FIX-004 | `prev_action` was not fed from issued governor output | `env.set_prev_issued_action_body()` stores the previous issued body-frame command; `observation.py` now requires `prev_action` and unit tests verify feedback. | Confirm in runtime smoke across reset/step boundaries. |
-| B-FIX-005 | Actor audit scanned key names only | `audit.py` now includes `check_actor_schema()` for the hybrid actor input shape/key contract; pure actor schema tests pass. | Runtime actor audit must pass on real `TensorDict` from `NavigationEnv`. |
-| B-FIX-006 | B tests were missing | NavRL pytest now passes all added B tests, including PPO hybrid forward, actor/critic separation, and RayCaster in-place offset regression coverage. | Run the Isaac runtime smoke once GPU/driver visibility is restored. |
+| B-FIX-001 | Active env RayCaster used `patterns.BpearlPatternCfg` | `env.py` now uses `instinctRL.mid360_pattern.create_mid360_pattern_cfg()`; active smoke prints `LivoxMid360Pattern rays=21240 shape=(360, 59)`. | Complete |
+| B-FIX-002 | Body-to-world adapter frame direction was wrong/unverified | `BodyToWorldVelocityAdapter` uses body-to-world quaternion rotation; identity, yaw 90 deg, and roll/pitch unit tests pass; adapter path is exercised by B0 smoke action audit. | Complete |
+| B-FIX-003 | `instinctRL.enabled=true` returned after B0 smoke only | `instinctRL.mode` separates `smoke` and `train`; PPO hybrid forward is covered by NavRL pytest and smoke. | Complete |
+| B-FIX-004 | `prev_action` was not fed from issued governor output | `env.set_prev_issued_action_body()` stores the previous issued body-frame command; observation tests verify feedback; smoke completed 500 steps. | Complete |
+| B-FIX-005 | Actor audit scanned key names only | `audit.py` includes `check_actor_schema()`; runtime actor/schema audit passed on real `TensorDict`. | Complete |
+| B-FIX-006 | B tests were missing | NavRL pytest passes all added B tests, including PPO hybrid forward, actor/critic separation, and RayCaster in-place offset regression coverage. | Complete |
 
 ---
 
@@ -54,6 +54,7 @@
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Reaches CUDA preflight, then fails: no CUDA-capable device visible. |
 | `nvidia-smi` | Failed: could not communicate with NVIDIA driver. |
 | `conda activate NavRL && python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"` | `False`, `0`. |
+| User-side post-workaround GPU smoke | Passed: PPO hybrid forward, actor/schema/action audits, 500/500 steps, MID360 raw range `[4, 1, 360, 59]`, valid returns `28.62%`, `B0 Smoke Test PASSED`, `Observation smoke path PASSED`, and smoke success path exited before `SimulationApp.close()`. |
 
 ---
 
@@ -74,8 +75,8 @@
 
 ## Superseded Records
 
-Earlier 2026-07-04 devlog entries that mark instinctRL-B as `Complete` or say to proceed to instinctRL-C remain superseded. The current truthful conclusion is:
+Earlier 2026-07-04 devlog entries that marked instinctRL-B as partial or kept instinctRL-C blocked are superseded. The current truthful conclusion is:
 
-- `instinctRL-A`: PASS with open runtime verification item(s)
-- `instinctRL-B`: RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING
-- `instinctRL-C`: NO-GO until post-workaround smoke exits 0
+- `instinctRL-A`: PASS
+- `instinctRL-B`: COMPLETE
+- `instinctRL-C`: GO

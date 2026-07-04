@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-04 (NavRL validation)
+> **Last Updated**: 2026-07-04 (instinctRL-B complete)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -41,7 +41,7 @@
 ### Test A.7: Body→World Velocity Adapter
 - **What**: Body-frame v_cmd correctly transformed to world-frame
 - **Where**: `BodyToWorldVelocityAdapter.forward()` during smoke test
-- **Current status**: Pure unit test passed; runtime smoke still pending.
+- **Current status**: Unit test passed; B0/B smoke path passed.
 - **Evidence**: `training/unit_test/test_instinctrl_command_adapter.py` covers identity, 90 deg yaw, and roll/pitch cases.
 - **Pass**: Known quaternion cases prove body -> world direction; integration smoke shows body X/Y/Z commands map to expected world motion.
 - **Fail**: Any yaw/roll/pitch case maps through inverse direction, or only shape/NaN checks are performed.
@@ -62,7 +62,7 @@
 
 ## instinctRL-B: Observation / History Buffer
 
-**Current verdict**: RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING. Code fixes and NavRL pytest/PPO validation pass. User-side GPU smoke completed the B checks, then hit an Isaac Kit shutdown segfault after success; smoke mode now exits before `SimulationApp.close()` and needs one post-workaround rerun to confirm shell exit code 0.
+**Current verdict**: COMPLETE. Code fixes, NavRL pytest/PPO validation, and user-side GPU smoke all pass. Smoke mode exits before `SimulationApp.close()` after successful validation to avoid Isaac Kit teardown segfaults after pass.
 
 ### Required Before-C Tests
 
@@ -99,10 +99,11 @@
 | `nvidia-smi` | Failed: could not communicate with NVIDIA driver. |
 | `conda activate NavRL && python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"` | `False`, `0`. |
 | User-side GPU smoke after MID360 RayCaster fix | Passed all B0/B checks: 500/500 steps, PPO hybrid forward, actor/schema/action audits, MID360 raw range `[4, 1, 360, 59]`, valid returns `33.04%`; then segfaulted inside `SimulationApp.close()` during Isaac Kit shutdown. |
+| User-side post-workaround GPU smoke | Passed: PPO hybrid forward, actor/schema/action audits, 500/500 steps, MID360 raw range `[4, 1, 360, 59]`, valid returns `28.62%`, `B0 Smoke Test PASSED`, `Observation smoke path PASSED`, and success path exited before `SimulationApp.close()`. |
 
-### Remaining Required Validation Before C
+### Before-C Validation
 
-- Re-run `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` after the shutdown workaround and confirm shell exit status is 0.
+- No remaining B blocker before C.
 - When running the smoke command manually, keep `env_dyn.num_obstacles=0` on the same command line, or use shell line continuations (`\`) so Hydra receives it as an override.
 - Smoke mode exits before `SimulationApp.close()` after successful validation because Isaac Kit can segfault during shutdown after an otherwise-passed smoke.
 

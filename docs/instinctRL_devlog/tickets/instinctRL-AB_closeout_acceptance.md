@@ -2,9 +2,9 @@
 
 > **Date**: 2026-07-04
 > **Stage**: Historical B-closeout before the B-fix implementation pass
-> **Final conclusion**: instinctRL-C was NO-GO at this checkpoint. See `instinctRL-B_observation_history_buffer.md` for the later B-fix implementation and remaining runtime validation blockers.
+> **Final conclusion**: Historical pre-fix report. Superseded by `instinctRL-B_observation_history_buffer.md`, which now marks instinctRL-B complete and instinctRL-C GO.
 
-> **Supersession note**: This report records the pre-fix closeout facts. Later on 2026-07-04, code fixes addressed the listed B-FIX implementation blockers, but instinctRL-B remained partial because runtime/PPO validation could not be executed locally.
+> **Supersession note**: This report records the pre-fix closeout facts. Later on 2026-07-04, code fixes, NavRL pytest, PPO hybrid validation, and user-side GPU smoke cleared the listed B-FIX items.
 
 ## Scope
 
@@ -74,7 +74,7 @@ Open A verification item before C:
 
 ## B Verdict
 
-`instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED.
+Pre-fix finding: instinctRL-B was not accepted at this checkpoint.
 
 Partial acceptance:
 
@@ -111,8 +111,8 @@ Not fully accepted:
 - Actor provenance test proving no pose, linear velocity, odometry, map, or privileged simulator state enters actor tensors.
 - Short instinctRL PPO collect/update smoke or explicit config-level separation of B0 smoke from training.
 
-## Final Go/No-Go
+## Final Current Status
 
-- `instinctRL-A`: PASS with open verification item(s)
-- `instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED
-- `instinctRL-C`: NO-GO until B-fix checklist passes
+- `instinctRL-A`: PASS
+- `instinctRL-B`: COMPLETE
+- `instinctRL-C`: GO

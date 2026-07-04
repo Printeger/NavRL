@@ -4,6 +4,33 @@
 
 ---
 
+## 2026-07-04 (instinctRL-B acceptance)
+
+### instinctRL-B: Complete; instinctRL-C GO
+
+**Status**: instinctRL-B full acceptance complete. instinctRL-C may start.
+
+- Final user-side smoke passed after the shutdown workaround:
+  - PPO hybrid forward smoke passed.
+  - Actor input audit passed.
+  - Actor schema audit passed.
+  - Action type audit passed.
+  - 500/500 smoke steps completed.
+  - MID360 raw range shape `[4, 1, 360, 59]`, valid returns `28.62%`.
+  - `B0 Smoke Test PASSED` and `Observation smoke path PASSED`.
+  - Smoke success path exited before `SimulationApp.close()` to avoid Isaac Kit teardown segfault after pass.
+- NavRL pytest remains green: `14 passed, 2 warnings`.
+- Active MID360 path is `LivoxMid360Pattern`, not `BpearlPatternCfg`.
+- Hybrid actor input is `lidar_grid` + `state_vec`; privileged fields remain critic/reward/info only.
+
+**Final conclusion**:
+
+- `instinctRL-A`: PASS
+- `instinctRL-B`: COMPLETE
+- `instinctRL-C`: GO
+
+---
+
 ## 2026-07-04 (Smoke shutdown handling)
 
 ### instinctRL-B: Avoid Isaac Kit shutdown segfault after passed smoke
@@ -89,8 +116,8 @@
 
 - **instinctRL-A**: Accepted as B0 smoke-test / infrastructure baseline, not learning success.
 - **instinctRL-A verification update**: Adapter frame direction has now been corrected and unit-tested. Runtime integration remains covered by the before-C smoke validation.
-- **instinctRL-B**: Partial acceptance only. The later implementation fixed the known code blockers, and subsequent NavRL pytest/PPO validation passes. Full acceptance remains blocked by unrun Isaac runtime smoke due GPU visibility.
-- **instinctRL-C**: NO-GO until runtime validation in `TEST_PLAN.md` passes.
+- **instinctRL-B**: Historical closeout finding superseded. Later B-fix implementation, NavRL pytest/PPO validation, and user-side GPU smoke completed B acceptance.
+- **instinctRL-C**: Current status is GO.
 
 This entry supersedes earlier 2026-07-04 entries that described instinctRL-B as complete or recommended proceeding directly to instinctRL-C.
 
