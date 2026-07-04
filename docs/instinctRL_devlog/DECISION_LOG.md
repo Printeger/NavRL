@@ -5,13 +5,23 @@
 
 ---
 
+## D-2026-07-04-015: NavRL Unit/PPO Validation Passes, C Still Waits on GPU Runtime Smoke
+
+**Decision**: Treat NavRL pytest/PPO validation as passed, but keep instinctRL-C blocked until Isaac runtime smoke passes with a visible CUDA GPU.
+
+**Rationale**: Running through `conda activate NavRL` resolves the earlier apparent dependency problems: Click, Hydra, TorchRL, TensorDict, and `ForkingPickler` are available on the activated Isaac Sim Python path. The PPO hybrid test then exposed a real code bug: critic-only privileged fields had shape `[N,1,D]` and were concatenated with `_actor_feature` `[N,256]` without flattening. After flattening those critic fields, the B unit/PPO test set passes (`13 passed`). The remaining failed command reaches `train.py` CUDA preflight and stops because no CUDA-capable device is visible; `nvidia-smi` also cannot communicate with the NVIDIA driver.
+
+**Consequence**: instinctRL-B remains `PARTIAL / NOT FULLY ACCEPTED` only because the real Isaac RayCaster/runtime path has not been exercised. instinctRL-C remains `NO-GO` until the runtime smoke passes in a GPU-visible environment.
+
+---
+
 ## D-2026-07-04-014: B-Fix Implementation Does Not Yet Authorize instinctRL-C
 
 **Decision**: Keep instinctRL-C blocked after the B-fix implementation pass until runtime validation succeeds.
 
-**Rationale**: The code blockers found during closeout have been addressed: active instinctRL RayCaster wiring no longer uses `BpearlPatternCfg`, body-to-world adapter semantics are corrected and unit-tested, previous issued action is fed into the observation builder, actor schema audit exists, and `instinctRL.mode` separates smoke from train. However, handbook acceptance also requires executable evidence through the actual runtime path. The local environment cannot currently run standard `pytest`, TorchRL/PPO hybrid forward validation, or Isaac runtime smoke because dependencies are missing or broken.
+**Rationale**: Superseded in part by D-2026-07-04-015. The code blockers found during closeout have been addressed: active instinctRL RayCaster wiring no longer uses `BpearlPatternCfg`, body-to-world adapter semantics are corrected and unit-tested, previous issued action is fed into the observation builder, actor schema audit exists, and `instinctRL.mode` separates smoke from train. Later NavRL validation proved pytest/PPO now pass; only Isaac runtime smoke remains blocked by GPU visibility.
 
-**Consequence**: instinctRL-B remains `PARTIAL / NOT FULLY ACCEPTED`. instinctRL-C remains `NO-GO` until `TEST_PLAN.md` B validation commands pass in a correctly provisioned environment.
+**Consequence**: instinctRL-B remains `PARTIAL / NOT FULLY ACCEPTED`. instinctRL-C remains `NO-GO` until `TEST_PLAN.md` B runtime smoke passes in a GPU-visible environment.
 
 ---
 

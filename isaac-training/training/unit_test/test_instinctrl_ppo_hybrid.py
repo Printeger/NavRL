@@ -72,5 +72,5 @@ def test_ppo_hybrid_forward_and_actor_critic_separation():
     td = _obs_spec().zero()
     out = policy(td.clone())
     assert ("agents", "action") in out.keys(True)
-    assert out["agents", "action"].shape == torch.Size([2, 1, 3])
+    assert out["agents", "action"].shape == torch.Size([2, 3])
     assert policy.verify_actor_critic_separation(td.clone())

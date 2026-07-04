@@ -4,11 +4,31 @@
 
 ---
 
+## 2026-07-04 (NavRL environment validation)
+
+### instinctRL-B: NavRL pytest/PPO validation passed; runtime smoke GPU-blocked
+
+**Status**: Unit/PPO validation passed in the activated `NavRL` conda environment. Full B acceptance is still blocked by Isaac runtime GPU visibility.
+
+- Corrected the validation command path: tests must run after `conda activate NavRL`, not by directly invoking `/home/mint/miniconda3/envs/NavRL/bin/python`.
+- Confirmed activated `NavRL` resolves:
+  - `torch 2.0.1+cu118` from the Isaac Sim prebundle, with `ForkingPickler` available.
+  - `tensordict 0.4.0+3725bcc` and `torchrl 0.4.0+3725bcc` from repo third-party paths.
+  - `click 8.1.3`, `wandb 0.23.1`, `hydra 1.3.2`.
+- Fixed PPO critic privileged-field concatenation by flattening `info.drone_state`, `info.target_rpos`, and `info.target_distance` before concatenating them with `_actor_feature`.
+- Updated the PPO hybrid test to match the current PPO action shape `[N, 3]`.
+- `python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` now passes: `13 passed`.
+- Minimal Isaac smoke now reaches the CUDA preflight but cannot run here because no CUDA-capable device is visible; `nvidia-smi` cannot communicate with the NVIDIA driver and `torch.cuda.is_available()` is `False`.
+
+**Acceptance conclusion**: instinctRL-B remains **PARTIAL / NOT FULLY ACCEPTED** only because Isaac runtime smoke cannot run without visible GPU/driver support in this environment. instinctRL-C remains **NO-GO** until runtime smoke passes.
+
+---
+
 ## 2026-07-04 (B-fix implementation)
 
 ### instinctRL-B: Observation / History Buffer Fix Pass
 
-**Status**: Implementation complete, runtime acceptance pending. Current stage remains `B-closeout / B-runtime validation before instinctRL-C`.
+**Status**: Implementation complete. Superseded by the later NavRL validation entry above.
 
 - Replaced the active instinctRL RayCaster pattern path with a Livox MID360 helper wrapper; `env.py` no longer uses `patterns.BpearlPatternCfg` for instinctRL.
 - Fixed `BodyToWorldVelocityAdapter` to use body-to-world quaternion rotation semantics and added identity, yaw, and roll/pitch frame tests.
@@ -18,16 +38,12 @@
 - Added explicit `instinctRL.mode` separation: `smoke` runs B0/B observation smoke; `train` initializes PPO and runs the hybrid actor audit/forward path before continuing training.
 - Added pure Python/PyTorch unit tests for MID360 pattern shape/order, observation semantics, previous-action feedback, actor schema, PPO hybrid forward smoke, and command-adapter frame convention.
 
-**Actual validation run**:
+**Initial validation note**:
 
-- `python3 -m pytest ...` could not run because the base Python environment has no `pytest`.
-- Manual pure unit-test runner passed all runnable tests under both base Python and the `NavRL` conda Python.
-- `test_instinctrl_ppo_hybrid.py` skipped in the local environment because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`.
-- Minimal Isaac runtime smoke did not run to completion locally:
-  - base Python: `ModuleNotFoundError: No module named 'hydra'`
-  - `NavRL` conda Python: `ModuleNotFoundError: No module named 'click'` via `wandb`
+- This entry originally recorded failures from direct Python invocation paths. The later `NavRL environment validation` entry corrected that: after `conda activate NavRL`, pytest/PPO validation passes.
+- Current remaining blocker is Isaac runtime smoke only, because this environment cannot see a CUDA-capable GPU/driver.
 
-**Acceptance conclusion**: instinctRL-B is **PARTIAL / NOT FULLY ACCEPTED** until the runtime smoke and PPO hybrid forward validation pass in a correctly provisioned Isaac/TorchRL environment. instinctRL-C remains **NO-GO**.
+**Acceptance conclusion**: Superseded by the later NavRL validation entry. instinctRL-B remains **PARTIAL / NOT FULLY ACCEPTED** until Isaac runtime smoke passes.
 
 ---
 
@@ -39,7 +55,7 @@
 
 - **instinctRL-A**: Accepted as B0 smoke-test / infrastructure baseline, not learning success.
 - **instinctRL-A verification update**: Adapter frame direction has now been corrected and unit-tested. Runtime integration remains covered by the before-C smoke validation.
-- **instinctRL-B**: Partial acceptance only. The later implementation fixed the known code blockers, but full acceptance remains blocked by unrun Isaac runtime smoke and unrun local TorchRL PPO hybrid forward validation.
+- **instinctRL-B**: Partial acceptance only. The later implementation fixed the known code blockers, and subsequent NavRL pytest/PPO validation passes. Full acceptance remains blocked by unrun Isaac runtime smoke due GPU visibility.
 - **instinctRL-C**: NO-GO until runtime validation in `TEST_PLAN.md` passes.
 
 This entry supersedes earlier 2026-07-04 entries that described instinctRL-B as complete or recommended proceeding directly to instinctRL-C.

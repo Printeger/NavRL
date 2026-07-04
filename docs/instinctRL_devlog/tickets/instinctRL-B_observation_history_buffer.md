@@ -46,6 +46,7 @@ Handbook-aligned B acceptance requires:
 | `training/scripts/instinctRL/observation.py` | Requires externally supplied `prev_action`; clamps weights to `[0, 1]`; keeps invalid-beam weights at `0`; tracks frame age and stale frames; supports selected-env history reset. |
 | `training/scripts/instinctRL/command_adapter.py` | Corrected body-to-world quaternion rotation semantics; removed incorrect inverse rotation use. |
 | `training/scripts/instinctRL/audit.py` | Added hybrid actor schema audit for `lidar_grid` and `state_vec`. |
+| `training/scripts/ppo.py` | Flattened critic-only privileged fields before concatenation with `_actor_feature`, fixing the NavRL PPO hybrid forward path. |
 | `training/scripts/instinctRL/__init__.py` | Moved observation and MID360 pattern helpers into the active instinctRL module list. |
 | `training/scripts/train.py` | Added `instinctRL.mode` split; smoke mode runs B0/B observation checks; train mode runs actor/schema audit and PPO hybrid forward smoke before normal training. |
 | `training/cfg/train.yaml` | Added `instinctRL.mode: "smoke"`. |
@@ -60,7 +61,7 @@ Handbook-aligned B acceptance requires:
 | `training/unit_test/test_instinctrl_mid360_pattern.py` | MID360 ray count/shape, deterministic order/hash, and sensor-configured count. |
 | `training/unit_test/test_instinctrl_observation.py` | True raw range, valid mask, reliability bounds, invalid weights, timestamp/frame age, stale frames, history rollover, selected-env reset, and previous action feedback. |
 | `training/unit_test/test_instinctrl_actor_audit.py` | Actor absence/schema tests for forbidden fields and hybrid actor obs keys. |
-| `training/unit_test/test_instinctrl_ppo_hybrid.py` | PPO hybrid forward smoke when TorchRL/TensorDict dependencies import correctly; explicit local skip when those dependencies are unavailable. |
+| `training/unit_test/test_instinctrl_ppo_hybrid.py` | PPO hybrid forward smoke plus actor/critic separation in the activated NavRL environment. |
 
 ---
 
@@ -72,6 +73,7 @@ Handbook-aligned B acceptance requires:
 - `reset_history(env_ids)` clears only selected env history rows while preserving global frame-time continuity.
 - `state_vec` remains `history_len * 13`: IMU6 + `v_cmd`3 + `prev_action`3 + frame_age1 per frame.
 - `audit.check_actor_schema()` requires exactly `lidar_grid` and `state_vec` in actor observation and validates expected dimensions.
+- `ppo.py` now flattens `info.drone_state`, `info.target_rpos`, and `info.target_distance` before critic concatenation. Actor feature extraction still reads only `lidar_grid` and `state_vec`.
 - `train.py` separates `instinctRL.mode=smoke` from `instinctRL.mode=train` instead of treating every instinctRL run as a B0-only early return.
 
 ---
@@ -80,13 +82,13 @@ Handbook-aligned B acceptance requires:
 
 | Command | Result |
 |---------|--------|
-| `python3 -m pytest isaac-training/training/unit_test/test_instinctrl_*.py` | Failed before collection because the base Python environment has no `pytest`. |
-| Manual pure unit-test runner under base Python | Passed all runnable tests; PPO hybrid test skipped because TorchRL/TensorDict unavailable. |
-| Manual pure unit-test runner under `/home/mint/miniconda3/envs/NavRL/bin/python` | Passed all runnable tests; PPO hybrid test skipped because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `13 passed, 2 warnings`. |
+| `conda activate NavRL` dependency probe | Passed: `torch 2.0.1+cu118`, `tensordict 0.4.0+3725bcc`, `torchrl 0.4.0+3725bcc`, `click 8.1.3`, `wandb 0.23.1`, `hydra 1.3.2`; `ForkingPickler=True`. |
 | `python3 -m py_compile ...` for changed code/tests | Passed. |
 | `rg -n "BpearlPatternCfg|patterns\\." isaac-training/training/scripts/env.py isaac-training/training/scripts/instinctRL isaac-training/training/cfg -S` | No matches. |
-| `python3 isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: base Python lacks `hydra`. |
-| `/home/mint/miniconda3/envs/NavRL/bin/python isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: `wandb` import requires missing `click`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Reaches CUDA preflight, then fails: no CUDA-capable device visible. |
+| `nvidia-smi` | Failed: could not communicate with NVIDIA driver. |
+| `conda activate NavRL && python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"` | `False`, `0`. |
 
 ---
 
@@ -94,9 +96,7 @@ Handbook-aligned B acceptance requires:
 
 | ID | Blocker | Required result |
 |----|---------|-----------------|
-| B-VAL-001 | Isaac runtime smoke has not run in this local environment. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` passes reset, step, multi-step history rollover, actor/schema audit, no NaN, and MID360 valid returns. |
-| B-VAL-002 | TorchRL/PPO hybrid forward validation could not run locally. | `test_instinctrl_ppo_hybrid.py` and/or `instinctRL.mode=train` forward smoke passes with real TorchRL/TensorDict dependencies. |
-| B-VAL-003 | Standard pytest gate is unavailable locally. | `pytest` runs the new B test files and reports pass, with no dependency-related skips except explicitly documented runtime-only skips. |
+| B-VAL-001 | Isaac runtime smoke has not run because this environment cannot see a CUDA-capable GPU/driver. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` passes reset, step, multi-step history rollover, actor/schema audit, no NaN, and MID360 valid returns in a GPU-visible Isaac environment. |
 
 ---
 
@@ -104,4 +104,4 @@ Handbook-aligned B acceptance requires:
 
 - `instinctRL-A`: PASS with open runtime verification item(s)
 - `instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED
-- `instinctRL-C`: NO-GO until B-VAL-001 through B-VAL-003 pass
+- `instinctRL-C`: NO-GO until B-VAL-001 passes

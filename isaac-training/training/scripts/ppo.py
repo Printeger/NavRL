@@ -104,10 +104,14 @@ class PPO(TensorDictModuleBase):
             nn.ELU(),
             nn.LazyLinear(256),
         ).to(self.device)
+        flatten_privileged = nn.Flatten(start_dim=1)
         self.critic_feature_extractor = TensorDictSequential(
+            TensorDictModule(flatten_privileged, [("info", "drone_state")], ["_critic_drone_state"]),
+            TensorDictModule(flatten_privileged, [("info", "target_rpos")], ["_critic_target_rpos"]),
+            TensorDictModule(flatten_privileged, [("info", "target_distance")], ["_critic_target_distance"]),
             CatTensors(
-                ["_actor_feature", ("info", "drone_state"),
-                 ("info", "target_rpos"), ("info", "target_distance")],
+                ["_actor_feature", "_critic_drone_state",
+                 "_critic_target_rpos", "_critic_target_distance"],
                 "_critic_input", del_keys=False
             ),
             TensorDictModule(critic_input_network, ["_critic_input"], ["_critic_feature"]),

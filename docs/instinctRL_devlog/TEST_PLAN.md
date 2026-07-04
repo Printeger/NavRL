@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-04 (B-fix implementation)
+> **Last Updated**: 2026-07-04 (NavRL validation)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -62,7 +62,7 @@
 
 ## instinctRL-B: Observation / History Buffer
 
-**Current verdict**: PARTIAL / NOT FULLY ACCEPTED. Code fixes and pure tests are in place, but full acceptance is blocked by missing runtime smoke and local TorchRL/PPO validation.
+**Current verdict**: PARTIAL / NOT FULLY ACCEPTED. Code fixes and NavRL pytest/PPO validation pass; full acceptance is blocked by missing Isaac runtime smoke because this environment cannot see a CUDA-capable GPU.
 
 ### Required Before-C Tests
 
@@ -77,7 +77,7 @@
 | B.7 History rollover | Fixed window rolls exactly one frame per policy step and resets per env reset | Pure observation test passed |
 | B.8 Previous issued action feedback | `prev_action` slots equal prior governor/controller output, not default zeros | Code fixed; pure observation test passed; runtime smoke pending |
 | B.9 Actor input provenance | Audit proves `lidar_grid` and `state_vec` contain only allowed fields | Hybrid schema audit and actor absence test passed; full runtime TensorDict audit pending |
-| B.10 PPO/training-path smoke | `instinctRL.enabled=true` can run a short PPO collect/update path, or smoke-only mode is explicitly separated | Mode split implemented; local TorchRL/PPO validation blocked by dependency import error |
+| B.10 PPO/training-path smoke | `instinctRL.enabled=true` can run a PPO hybrid initialization/forward path, or smoke-only mode is explicitly separated | Mode split implemented; NavRL PPO hybrid forward test passes |
 
 ### Added Test Files
 
@@ -91,19 +91,18 @@
 
 | Command | Result |
 |---------|--------|
-| `python3 -m pytest isaac-training/training/unit_test/test_instinctrl_*.py` | Failed before collection because base Python has no `pytest`. |
-| Manual pure unit-test runner under base Python | Passed all runnable tests; PPO hybrid test skipped because TorchRL/TensorDict unavailable. |
-| Manual pure unit-test runner under `/home/mint/miniconda3/envs/NavRL/bin/python` | Passed all runnable tests; PPO hybrid test skipped because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` | Passed: `13 passed, 2 warnings`. |
 | `python3 -m py_compile isaac-training/training/scripts/train.py isaac-training/training/scripts/env.py isaac-training/training/scripts/ppo.py isaac-training/training/scripts/instinctRL/audit.py isaac-training/training/scripts/instinctRL/command_adapter.py isaac-training/training/scripts/instinctRL/observation.py isaac-training/training/scripts/instinctRL/mid360_pattern.py isaac-training/training/unit_test/test_instinctrl_*.py` | Passed. |
 | `rg -n "BpearlPatternCfg|patterns\\." isaac-training/training/scripts/env.py isaac-training/training/scripts/instinctRL isaac-training/training/cfg -S` | No matches. |
-| `python3 isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: base Python lacks `hydra`. |
-| `/home/mint/miniconda3/envs/NavRL/bin/python isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: `wandb` import requires missing `click`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && python - <<'PY' ... dependency probe ... PY` | Passed: activated NavRL resolves Isaac torch 2.0.1, TorchRL/TensorDict, Hydra, WandB, and Click; `ForkingPickler=True`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Reaches CUDA preflight, then fails: no CUDA-capable device visible. |
+| `nvidia-smi` | Failed: could not communicate with NVIDIA driver. |
+| `conda activate NavRL && python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"` | `False`, `0`. |
 
 ### Remaining Required Validation Before C
 
-- Run the pure tests through `pytest` once `pytest` is available.
 - Run `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` in the Isaac runtime environment and confirm reset, step, multi-step history rollover, actor audit, no NaN, and MID360 valid returns.
-- Run minimal `instinctRL.mode=train` initialization/forward smoke after repairing the local TorchRL/TensorDict dependency issue.
+- Run the same smoke after NVIDIA driver/GPU visibility is restored; Python dependencies are no longer the blocker when `conda activate NavRL` is used.
 
 ### instinctRL-C: Measurement-Space Anchor
 - Null-command hysteresis (ε₀ < ε₁)
