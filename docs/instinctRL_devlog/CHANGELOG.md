@@ -4,6 +4,43 @@
 
 ---
 
+## 2026-07-05 (instinctRL-C acceptance)
+
+### instinctRL-C: Measurement-Space Anchor Manager Complete
+
+**Status**: instinctRL-C full acceptance complete. instinctRL-D may start; instinctRL-E/F remain deferred.
+
+- Added `training/scripts/instinctRL/anchor.py`:
+  - `AnchorConfig`, `AnchorState`, `AnchorStepOutput`, `MeasurementSpaceAnchorManager`, and pure `huber_loss()`.
+  - Null-command hysteresis with `||v_cmd|| <= eps_enter` capture and `||v_cmd|| >= eps_exit` command reset.
+  - Fixed reset enum: `0 none`, `1 episode`, `2 explicit`, `3 command`, `4 invalid`.
+  - Reset priority: `episode > explicit > command > invalid > none`.
+  - Capture-time `r_star`, bool `m_star`, and reliability `w_star`.
+  - Handbook-aligned dense error: `(m_t * m_star * w_t) * (r_t - r_star)`.
+  - Fixed-structural-denominator Huber `anchor_loss`.
+  - Public scalar metrics separated from dense internal cache.
+- Integrated anchor manager passively in `env.py`:
+  - Scalar diagnostics are written to `info`: `anchor_active`, `anchor_loss`, `anchor_valid_fraction`, `anchor_error_mean`, `anchor_error_max`, `anchor_hold_steps`, `anchor_activation_count`, `anchor_reset_reason`.
+  - Dense `anchor_error`, masks, and anchor references remain internal through `self.anchor_outputs`.
+  - Actor observation remains `lidar_grid` + `state_vec`; no anchor tensors are added to actor input.
+- Added `instinctRL.anchor.*` config in `training/cfg/train.yaml`.
+- Added `training/unit_test/test_instinctrl_anchor.py`.
+
+**Validation**:
+
+- `python -m pytest -q training/unit_test/test_instinctrl_anchor.py` passed: `11 passed, 1 warning`.
+- B+C pytest suite passed: `25 passed, 2 warnings`.
+- `py_compile` passed for changed C code/tests.
+- TorchRL int64 spec probe passed for `anchor_reset_reason`.
+
+**Final conclusion**:
+
+- `instinctRL-C`: COMPLETE
+- `instinctRL-D`: GO
+- `instinctRL-E/F`: NO-GO until their stage prerequisites are opened
+
+---
+
 ## 2026-07-04 (instinctRL-B acceptance)
 
 ### instinctRL-B: Complete; instinctRL-C GO

@@ -5,6 +5,39 @@
 
 ---
 
+## D-2026-07-05-001: instinctRL-C Anchor Manager Boundary and Semantics
+
+**Decision**: Mark instinctRL-C complete as an actor-clean measurement-space anchor manager with passive env diagnostics only. Do not implement reward integration, B3 ablation, observability logging, ICS, or training convergence in C.
+
+**Public env boundary**:
+
+- Add only scalar anchor diagnostics to `info`: `anchor_active`, `anchor_loss`, `anchor_valid_fraction`, `anchor_error_mean`, `anchor_error_max`, `anchor_hold_steps`, `anchor_activation_count`, `anchor_reset_reason`.
+- Keep dense `anchor_error`, `usable_anchor_mask`, `r_star`, `m_star`, and `w_star` in internal runtime cache only.
+- Actor observation remains `lidar_grid` + `state_vec`; no anchor tensors enter actor `state_vec` or `lidar_grid`.
+
+**Locked semantics**:
+
+- Reset enum: `0 none`, `1 episode`, `2 explicit`, `3 command`, `4 invalid`.
+- Reset priority: `episode > explicit > command > invalid > none`.
+- Capture when inactive and `||v_cmd|| <= eps_enter`; command reset when active and `||v_cmd|| >= eps_exit`; require `eps_enter < eps_exit`.
+- `anchor_activation_count` is per-episode cumulative and resets only on episode reset.
+- `anchor_hold_steps` is an integer step counter: `0` inactive, `1` on capture step, increments while active, resets to `0` on any reset.
+- Store `r_star`, bool `m_star`, and `w_star` at capture. `w_star` gates usability diagnostics but does not multiply `anchor_error`.
+- `anchor_valid_fraction = sum(structural_mask & m_t & m_star & (w_t > 0) & (w_star > 0)) / sum(structural_mask)`.
+- `anchor_error = m_t_float * m_star_float * w_t * (r_t - r_star)`.
+- `anchor_loss` uses per-beam standard Huber reduced over the fixed structural denominator, not over `sum(usable_anchor_mask)`.
+- Public metrics describe post-transition state. A reset step reports inactive public metrics and the selected reset reason.
+
+**Validation policy**: `MeasurementSpaceAnchorManager.step()` fails fast on bad shapes/devices/dtypes/non-finite tensors, except it accepts `v_cmd` as `[N,3]` or `[N,1,3]`. Finite weights are clamped to `[0,1]`.
+
+**Config policy**: canonical key is `instinctRL.anchor.min_valid_anchor_fraction`; `min_valid_fraction` is rejected. Threshold must satisfy `0.0 < min_valid_anchor_fraction <= 1.0`.
+
+**Rationale**: C establishes the stable anchor lifecycle and diagnostics required by later reward, ablation, and evaluation work while preserving the actor-clean contract accepted in instinctRL-B.
+
+**Consequence**: instinctRL-D may start next. instinctRL-E/F remain no-go until their own stage scopes are opened.
+
+---
+
 ## D-2026-07-04-016: instinctRL-B Complete, instinctRL-C May Start
 
 **Decision**: Mark instinctRL-B complete and allow instinctRL-C to start.

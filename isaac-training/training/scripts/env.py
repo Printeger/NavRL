@@ -210,6 +210,21 @@ class NavigationEnv(IsaacEnv):
             )
             print("[instinctRL-B] MID360ObservationBuilder created "
                   f"(history={cfg.instinctRL.observation.history_len})")
+
+            anchor_cfg = getattr(cfg.instinctRL, "anchor", None)
+            if anchor_cfg is not None and getattr(anchor_cfg, "enabled", False):
+                from instinctRL.anchor import AnchorConfig, MeasurementSpaceAnchorManager
+                self._anchor_manager = MeasurementSpaceAnchorManager(
+                    AnchorConfig.from_namespace(
+                        anchor_cfg,
+                        lidar_hbeams=self.lidar_hbeams,
+                        lidar_vbeams=self.lidar_vbeams,
+                    ),
+                    num_envs=self.num_envs,
+                    device=self.device,
+                )
+                self.anchor_outputs = {}
+                print("[instinctRL-C] MeasurementSpaceAnchorManager created")
         
         # ============================================
         # 第 5 步：初始化目标和状态变量
@@ -579,7 +594,7 @@ class NavigationEnv(IsaacEnv):
 
         # instinctRL-A: Add v_cmd to info spec (critic-accessible, not actor input).
         # Body-frame velocity command for B0 baseline.
-        info_spec = CompositeSpec({
+        info_spec_fields = {
             "drone_state": UnboundedContinuousTensorSpec((self.drone.n, 13), device=self.device),
             # instinctRL-0: Critic-only privileged fields (never seen by actor).
             # These are used by the critic feature extractor for value estimation.
@@ -587,7 +602,24 @@ class NavigationEnv(IsaacEnv):
             "target_distance": UnboundedContinuousTensorSpec((1, 1), device=self.device),
             # instinctRL-A: Body-frame velocity command (critic-accessible).
             "v_cmd": UnboundedContinuousTensorSpec((1, 3), device=self.device),
-        }).expand(self.num_envs).to(self.device)
+        }
+        anchor_cfg = getattr(getattr(self.cfg, "instinctRL", None), "anchor", None)
+        if anchor_cfg is not None and getattr(anchor_cfg, "enabled", False):
+            info_spec_fields.update({
+                # instinctRL-C: Scalar anchor diagnostics only. Dense anchor
+                # tensors stay in self.anchor_outputs and never enter actor obs.
+                "anchor_active": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_loss": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_valid_fraction": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_error_mean": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_error_max": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_hold_steps": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_activation_count": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "anchor_reset_reason": UnboundedContinuousTensorSpec(
+                    (1,), dtype=torch.long, device=self.device
+                ),
+            })
+        info_spec = CompositeSpec(info_spec_fields).expand(self.num_envs).to(self.device)
         self.observation_spec["stats"] = stats_spec
         self.observation_spec["info"] = info_spec
         self.stats = stats_spec.zero()
@@ -665,6 +697,9 @@ class NavigationEnv(IsaacEnv):
             self._prev_issued_action_body[env_ids] = 0.0
         if hasattr(self, "_obs_builder"):
             self._obs_builder.reset_history(env_ids)
+        if hasattr(self, "_anchor_manager"):
+            from instinctRL.anchor import ANCHOR_RESET_EPISODE
+            self._anchor_manager.reset(env_ids, reason=ANCHOR_RESET_EPISODE)
         self.height_range[env_ids, 0, 0] = torch.min(pos[:, 0, 2], self.target_pos[env_ids, 0, 2])
         self.height_range[env_ids, 0, 1] = torch.max(pos[:, 0, 2], self.target_pos[env_ids, 0, 2])
 
@@ -733,6 +768,18 @@ class NavigationEnv(IsaacEnv):
                 num_envs=self.num_envs,
                 prev_action=self._prev_issued_action_body,
             )
+
+            if hasattr(self, "_anchor_manager"):
+                anchor_out = self._anchor_manager.step(
+                    obs_frame["range"],
+                    obs_frame["mask"],
+                    obs_frame["weight"],
+                    self._v_cmd,
+                )
+                self.anchor_outputs = anchor_out.cache
+                for key, value in anchor_out.metrics.items():
+                    self.info[key][:] = value
+
             obs_hist = self._obs_builder.build_history(obs_frame)
 
             # Raw range for reward computation (keep self.lidar_scan for backward compat)

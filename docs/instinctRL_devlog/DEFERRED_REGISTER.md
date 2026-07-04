@@ -1,17 +1,17 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-04 (instinctRL-B complete)
+> **Last Updated**: 2026-07-05 (instinctRL-C complete)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
 
 ---
 
-## Before-C Validation Blockers
+## Before-D Validation Blockers
 
-None. instinctRL-B acceptance blockers are cleared; instinctRL-C may start.
+None. instinctRL-C acceptance blockers are cleared; instinctRL-D may start.
 
-Completed B validation evidence is recorded in `TEST_PLAN.md` and `tickets/instinctRL-B_observation_history_buffer.md`.
+Completed C validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-C_measurement_space_anchor.md`, and `tests/instinctRL-C_test_report.md`.
 
 ---
 
@@ -49,9 +49,11 @@ Completed B validation evidence is recorded in `TEST_PLAN.md` and `tickets/insti
 | **Reason** | Anchor manager requires MID360 r, m, w from instinctRL-B. No existing anchor lifecycle exists. |
 | **Target stage** | instinctRL-C |
 | **Trigger condition** | instinctRL-B complete; r, m, w available |
-| **Acceptance test** | Null-command hysteresis (ε₀<ε₁); anchor capture on rising edge; masked anchor error e^r=(m⊙m*⊙w)⊙(r−r*); reset on episode/large-command/insufficient-valid-fraction; anchor loss active only under null command; B3 ablation exists |
-| **Status** | ⬜ Open |
+| **Acceptance test** | Null-command hysteresis (ε₀<ε₁); anchor capture on rising edge; masked anchor error e^r=(m⊙m*⊙w)⊙(r−r*); reset on episode/large-command/insufficient-valid-fraction; anchor loss active only under null command; scalar diagnostics in info; actor obs remains clean |
+| **Status** | ✅ Complete |
 | **Module ref** | Handbook M2 (`instinctRL/anchor.py`) |
+
+**Closeout correction**: C intentionally did not implement anchor reward or B3 ablation execution. Those remain reward/baseline work, not C acceptance blockers for the manager/passive diagnostics ticket.
 
 ### D-004: Range-Jacobian Observability Logger
 
@@ -145,7 +147,9 @@ Completed B validation evidence is recorded in `TEST_PLAN.md` and `tickets/insti
 | **Target stage** | instinctRL-C or later |
 | **Trigger condition** | Anchor manager requires high-quality weights |
 | **Acceptance test** | Neighbor-consistency weights improve anchor error vs binary mask baseline; compute 4-neighbor median deviation |
-| **Status** | ⬜ Open |
+| **Status** | ⬜ Open, carried forward beyond C |
+
+**C closeout note**: instinctRL-C stores capture-time `w_star` and uses current `w_t`, but it does not implement neighbor-consistency weighting. This is not a C blocker because C acceptance uses the existing B reliability weights.
 
 ### D-011: Longer History Ablations (8/16 frames)
 

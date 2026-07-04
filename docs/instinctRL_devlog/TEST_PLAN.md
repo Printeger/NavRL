@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-04 (instinctRL-B complete)
+> **Last Updated**: 2026-07-05 (instinctRL-C complete)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -107,12 +107,47 @@
 - When running the smoke command manually, keep `env_dyn.num_obstacles=0` on the same command line, or use shell line continuations (`\`) so Hydra receives it as an override.
 - Smoke mode exits before `SimulationApp.close()` after successful validation because Isaac Kit can segfault during shutdown after an otherwise-passed smoke.
 
-### instinctRL-C: Measurement-Space Anchor
-- Null-command hysteresis (ε₀ < ε₁)
-- Anchor capture on rising edge
-- Masked anchor error computation
-- Anchor reset (episode, large cmd, insufficient valid)
-- Anchor loss active only under null cmd
+## instinctRL-C: Measurement-Space Anchor
+
+**Current verdict**: COMPLETE. Anchor manager unit tests and B+C regression suite pass in the activated NavRL conda environment. Env integration is passive and preserves the actor-clean `lidar_grid` + `state_vec` contract.
+
+### Required C Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| C.1 Config validation | `eps_enter < eps_exit`; `0.0 < min_valid_anchor_fraction <= 1.0`; canonical key rejects `min_valid_fraction`; `huber_delta > 0` | Pure anchor test passed |
+| C.2 Null-command hysteresis | Capture at `||v_cmd|| <= eps_enter`; no capture between enter/exit; command reset at `||v_cmd|| >= eps_exit` | Pure anchor test passed |
+| C.3 Reset priority | `episode > explicit > command > invalid > none` with fixed enum `0..4` | Pure anchor test passed |
+| C.4 Anchor capture | Rising edge freezes `r_star`, bool `m_star`, and `w_star`; later frames do not mutate them | Pure anchor test passed |
+| C.5 Reset state rules | Episode reset clears activation count; explicit/command/invalid resets preserve it; all resets clear active anchor and hold steps | Pure anchor test passed |
+| C.6 Hold duration | `anchor_hold_steps` is an integer step counter, not seconds | Pure anchor test passed |
+| C.7 Mask/weight semantics | `m_t/m_star` are boolean validity; `w_t/w_star` are reliability weights; `w_star` gates usability but not anchor error | Pure anchor test passed |
+| C.8 Valid anchor fraction | Fixed structural denominator; inactive reports zero; active below threshold resets invalid; no `sum(m_star)` denominator | Pure anchor test passed |
+| C.9 Masked anchor error | `anchor_error = m_t_float * m_star_float * w_t * (r_t - r_star)` | Pure anchor test passed |
+| C.10 Huber helper/loss | Pure per-element Huber helper; anchor loss reduced over fixed structural denominator; zero usable beams produce zero/no NaN | Pure anchor test passed |
+| C.11 Diagnostics | Public `anchor_error_mean/max` are weighted residual diagnostics over usable beams; reset steps report post-transition inactive metrics | Pure anchor test passed |
+| C.12 Structural mask | Optional `[H,V]` structural mask; all-ones default; reject per-env masks; denominator uses structural mask sum | Pure anchor test passed |
+| C.13 Fail-fast validation | Bad shapes/devices/dtypes/non-finite inputs fail fast; only `v_cmd [N,1,3] -> [N,3]` is normalized | Pure anchor test passed |
+| C.14 Return boundary | `AnchorStepOutput.metrics` contains `[N,1]` public scalar diagnostics; dense tensors are only in `cache` | Pure anchor test passed |
+| C.15 Env actor contract | `env.py` writes scalar metrics to `info`; dense cache remains internal; actor obs does not contain `anchor_*` keys | Source-level env integration test passed |
+
+### Added Test File
+
+- `training/unit_test/test_instinctrl_anchor.py`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_anchor.py` | Passed: `11 passed, 1 warning`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py` | Passed: `25 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/anchor.py training/scripts/env.py training/unit_test/test_instinctrl_anchor.py` | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python - <<'PY' ... TorchRL int64 spec probe ... PY` | Passed: int64 `UnboundedContinuousTensorSpec` is supported for `anchor_reset_reason`. |
+
+### C Scope Boundary
+
+- Complete in C: anchor lifecycle, masked error, robust loss helper, scalar diagnostics, passive env integration, tests.
+- Deferred beyond C: anchor reward integration, B3 ablation execution, observability logger, ICS attenuation, reward redesign, training convergence.
 
 ### instinctRL-D: Observability Logger
 - Range-Jacobian rank estimation

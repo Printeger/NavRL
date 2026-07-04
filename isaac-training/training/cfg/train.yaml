@@ -53,3 +53,12 @@ instinctRL:
     enable_dropout: false              # MID360 random dropout (deferred)
     tau_staleness: 0.5                 # Staleness time constant (seconds)
     # Options: direct_velocity, no_history, no_anchor, no_imu, no_ics, ...
+
+  # instinctRL-C: Measurement-space anchor manager
+  anchor:
+    enabled: true                      # Passive scalar diagnostics + internal dense cache
+    eps_enter: 0.05                    # Capture when ||v_cmd|| <= eps_enter
+    eps_exit: 0.15                     # Reset when ||v_cmd|| >= eps_exit
+    min_valid_anchor_fraction: 0.10    # Invalid reset below this fixed-grid fraction
+    huber_delta: 0.25                  # Per-beam Huber delta for anchor_loss
+    reset_on_large_command: true       # Large command exits null-command anchor
