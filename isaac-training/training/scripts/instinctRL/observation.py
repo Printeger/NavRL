@@ -125,8 +125,9 @@ class MID360ObservationBuilder:
         # --- 4. IMU cues: body angular velocity + gravity direction ---
         # These are allowed actor inputs — no position, linear velocity, or
         # privileged simulator state.
-        ang_vel_body = drone_state[..., 10:13]  # [N, 3]  body angular velocity
-        quat = drone_state[..., 3:7]            # [N, 4]  attitude quaternion
+        drone_state = drone_state.reshape(N, 13)
+        ang_vel_body = drone_state[:, 10:13]  # [N, 3]  body angular velocity
+        quat = drone_state[:, 3:7]            # [N, 4]  attitude quaternion
 
         # Gravity direction in body frame (world→body rotation)
         gravity_world = torch.tensor([0.0, 0.0, -1.0], device=self.device)

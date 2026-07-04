@@ -8,22 +8,14 @@
 ## instinctRL-A: B0 Smoke Test
 
 ### Test A.1: Platform Lock Audit
-- **What**: Assert `cfg.drone.model_name == "TaslabUAV"` and MID360 sensor params
-- **Where**: `instinctRL/audit.py:check_platform_lock()`
-- **Pass**: Both checks return True
-- **Fail**: RuntimeError with descriptive message
+- **Runtime result**: ✅ PASSED (2026-07-04)
+- **Evidence**: `PLATFORM AUDIT PASS: drone.model_name='TaslabUAV' | sensor matches Livox MID360 FOV [-7°, 52°] | lidar_range=40m (MID360)`
 
-### Test A.2: Actor Input Audit
-- **What**: Scan actor observation keys for forbidden substrings (pose, pos, position, odom, velocity, vel_g, vel_w, root_state, map, slam, privileged, direction, distance, dynamic_obstacle)
-- **Where**: `instinctRL/audit.py:check_actor_input()`
-- **Pass**: No forbidden substrings found in actor observation keys
-- **Fail**: RuntimeError listing violated patterns
+### Test A.2: Actor Input Audit (Runtime ✅ 2026-07-04)
+- **Evidence**: `ACTOR INPUT AUDIT PASS: no forbidden fields in actor observation`
 
-### Test A.3: Action Type Audit
-- **What**: Verify action is 3-dim velocity, not 4-dim CTBR or motor thrust
-- **Where**: `instinctRL/audit.py:check_action_type()`
-- **Pass**: action.shape[-1] == 3
-- **Fail**: RuntimeError if 4-dim (CTBR) or other unexpected dimension
+### Test A.3: Action Type Audit (Runtime ✅ 2026-07-04)
+- **Evidence**: `ACTION TYPE AUDIT PASS: 3-dim velocity command`
 
 ### Test A.4: Environment Reset
 - **What**: `env.reset()` returns valid TensorDict with required keys
@@ -55,17 +47,11 @@
 - **Pass**: Motor commands in [-1, 1] range, drone moves
 - **Fail**: NaN in motor commands, drone doesn't move
 
-### Test A.9: Smoke Rollout Stability
-- **What**: 500 consecutive physics steps without crash or NaN
-- **Where**: `train.py` B0 smoke test loop
-- **Pass**: Loop completes; no RuntimeError
-- **Fail**: NaN in action/reward, crash, or exception
+### Test A.9: Smoke Rollout Stability (Runtime ✅ 2026-07-04)
+- **Evidence**: `Completed 50/500 ... 500/500 steps.`, no NaN errors
 
-### Test A.10: LiDAR Range Statistics
-- **What**: LiDAR returns physically plausible ranges
-- **Where**: End of B0 smoke test
-- **Pass**: min ≥ 0, max ≤ lidar_range (40m), valid fraction > 0
-- **Fail**: Negative ranges, all ranges at max, valid fraction = 0
+### Test A.10: LiDAR Range Statistics (Runtime ✅ 2026-07-04)
+- **Evidence**: `shape=torch.Size([4, 1, 360, 59]), valid=18.97%`
 
 ---
 

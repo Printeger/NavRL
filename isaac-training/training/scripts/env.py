@@ -16,10 +16,13 @@ NavigationEnv -> IsaacEnv (OmniDrones) -> EnvBase (TorchRL)
 import torch
 import einops
 import numpy as np
+import importlib.util
+import os
+import sys
 from tensordict.tensordict import TensorDict, TensorDictBase
 from torchrl.data import UnboundedContinuousTensorSpec, CompositeSpec, DiscreteTensorSpec
-from omni_drones.envs.isaac_env import IsaacEnv, AgentSpec
 import omni.isaac.orbit.sim as sim_utils
+import omni_drones
 from omni_drones.robots.drone import MultirotorBase
 from omni.isaac.orbit.assets import AssetBaseCfg
 from omni.isaac.orbit.terrains import TerrainImporterCfg, TerrainImporter, TerrainGeneratorCfg, HfDiscreteObstaclesTerrainCfg
@@ -32,6 +35,34 @@ import omni.isaac.orbit.sim as sim_utils
 import omni.isaac.orbit.utils.math as math_utils
 from omni.isaac.orbit.assets import RigidObject, RigidObjectCfg
 import time
+
+
+def _load_isaac_env_base():
+    """
+    Load OmniDrones' isaac_env.py without executing omni_drones.envs.__init__.
+
+    The package __init__ eagerly imports all sample environments, including
+    camera-based tasks that require omni.replicator. NavigationEnv only needs
+    IsaacEnv, so loading the file directly keeps B0 headless dependencies small.
+    """
+    module_name = "_navrl_omnidrones_isaac_env"
+    if module_name in sys.modules:
+        module = sys.modules[module_name]
+    else:
+        module_path = os.path.join(
+            os.path.dirname(omni_drones.__file__),
+            "envs",
+            "isaac_env.py",
+        )
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    return module.IsaacEnv
+
+
+IsaacEnv = _load_isaac_env_base()
+
 
 class NavigationEnv(IsaacEnv):
     """
@@ -66,7 +97,7 @@ class NavigationEnv(IsaacEnv):
                 - cfg.env: 环境配置（地图大小、障碍物数量）
                 - cfg.env_dyn: 动态障碍物配置
         """
-        print("[Navigation Environment]: Initializing Env...")
+        print("[Navigation Environment]: Initializing Env...", flush=True)
         
         # ============================================
         # 第 1 步：配置 LiDAR 参数
@@ -88,12 +119,16 @@ class NavigationEnv(IsaacEnv):
         # 1. 初始化 Isaac Sim 上下文
         # 2. 调用 _design_scene() 创建场景
         # 3. 调用 _set_specs() 定义空间规范
+        print("[Navigation Environment]: Calling IsaacEnv.__init__...", flush=True)
         super().__init__(cfg, cfg.headless)
+        print("[Navigation Environment]: IsaacEnv.__init__ complete.", flush=True)
         
         # ============================================
         # 第 3 步：初始化无人机
         # ============================================
+        print("[Navigation Environment]: Initializing TASLAB_UAV articulation...", flush=True)
         self.drone.initialize()  # 初始化无人机物理属性
+        print("[Navigation Environment]: TASLAB_UAV articulation initialized.", flush=True)
         self.init_vels = torch.zeros_like(self.drone.get_velocities())  # 初始速度为 0
 
         # ============================================
@@ -106,7 +141,7 @@ class NavigationEnv(IsaacEnv):
             drone_prim_pattern = f"/World/envs/env_.*/{self.cfg.drone.model_name}_0/{base_link}"
         else:
             drone_prim_pattern = f"/World/envs/env_.*/{self.cfg.drone.model_name}_0"
-        print(f"[instinctRL-0] LiDAR prim path pattern: {drone_prim_pattern}")
+        print(f"[instinctRL-0] LiDAR prim path pattern: {drone_prim_pattern}", flush=True)
         ray_caster_cfg = RayCasterCfg(
             # 绑定到无人机的 base_link（所有环境的所有无人机）
             prim_path=drone_prim_pattern,
@@ -131,8 +166,10 @@ class NavigationEnv(IsaacEnv):
             # 检测的对象：只检测地面（静态障碍物在地面上）
             mesh_prim_paths=["/World/ground"],
         )
+        print("[instinctRL-0] Initializing MID360 RayCaster...", flush=True)
         self.lidar = RayCaster(ray_caster_cfg)
         self.lidar._initialize_impl()  # 初始化射线投射器
+        print("[instinctRL-0] MID360 RayCaster initialized.", flush=True)
         self.lidar_resolution = (self.lidar_hbeams, self.lidar_vbeams)  # (36, 4)
 
         # instinctRL-B: Create MID360 observation builder (actor-clean pipeline)

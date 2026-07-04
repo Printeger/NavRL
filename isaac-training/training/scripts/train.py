@@ -21,7 +21,6 @@ import datetime
 import wandb              # 实验跟踪工具
 import torch
 from omegaconf import DictConfig, OmegaConf
-from omni.isaac.kit import SimulationApp     # Isaac Sim 应用
 # OmniDrones imports moved inside main() after SimulationApp startup
 # to avoid the "loaded before SimulationApp" warning and init issues.
 
@@ -44,6 +43,26 @@ def main(cfg):
              - cfg.algo: PPO 算法超参数
              - cfg.sensor: 传感器配置（LiDAR）
     """
+    instinct_enabled = bool(getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled)
+
+    if instinct_enabled:
+        from instinctRL.audit import check_platform_lock
+
+        print("\n" + "=" * 60, flush=True)
+        print("[instinctRL-A] B0 Smoke Test: Direct Velocity Pass-Through", flush=True)
+        print("=" * 60, flush=True)
+        print("[instinctRL-A] Running pre-Isaac platform audit...", flush=True)
+
+        platform_ok, platform_msg = check_platform_lock(cfg)
+        print(f"[instinctRL audit] {platform_msg}", flush=True)
+        if not platform_ok:
+            raise RuntimeError(f"instinctRL platform audit FAILED: {platform_msg}")
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "[instinctRL-A] CUDA preflight failed: no CUDA-capable device is "
+                "visible. B0 smoke requires Isaac Sim GPU physics/MID360 ray casting."
+            )
+
     # ============================================
     # 第 1 步：启动 Isaac Sim 仿真器
     # ============================================
@@ -51,7 +70,24 @@ def main(cfg):
     #   - 创建 3D 仿真场景
     #   - 运行物理引擎（PhysX）
     #   - 渲染图形（如果 headless=False）
-    sim_app = SimulationApp({"headless": cfg.headless, "anti_aliasing": 1})
+    from omni.isaac.kit import SimulationApp     # Isaac Sim 应用
+    app_experience = ""
+    if cfg.headless and os.environ.get("EXP_PATH"):
+        app_experience = f'{os.environ["EXP_PATH"]}/omni.isaac.sim.python.gym.headless.kit'
+    sim_app = SimulationApp(
+        {"headless": cfg.headless, "anti_aliasing": 1},
+        experience=app_experience,
+    )
+    if app_experience:
+        from omni.isaac.core.utils.extensions import enable_extension
+
+        for extension_name in (
+            "omni.isaac.debug_draw",
+            "omni.syntheticdata",
+            "omni.replicator.core",
+        ):
+            enable_extension(extension_name)
+        sim_app.update()
 
     # Import OmniDrones/TorchRL modules AFTER SimulationApp (Isaac Sim requirement)
     from ppo import PPO
@@ -71,29 +107,31 @@ def main(cfg):
     #   - 视频录制（评估时的无人机飞行）
     
     # 将 Hydra 的 DictConfig 转换为普通字典，避免序列化错误
-    wandb_config = OmegaConf.to_container(cfg, resolve=True)
-    
-    if (cfg.wandb.run_id is None):
-        # 新建一个训练运行（run）
-        run = wandb.init(
-            project=cfg.wandb.project,  # WandB 项目名称
-            name=f"{cfg.wandb.name}/{datetime.datetime.now().strftime('%m-%d_%H-%M')}",
-            entity=cfg.wandb.entity,    # WandB 用户名/团队名
-            config=wandb_config,        # 保存所有配置参数
-            mode=cfg.wandb.mode,        # "offline" 或 "online"
-            id=wandb.util.generate_id(),
-        )
-    else:
-        # 恢复之前中断的训练运行
-        run = wandb.init(
-            project=cfg.wandb.project,
-            name=f"{cfg.wandb.name}/{datetime.datetime.now().strftime('%m-%d_%H-%M')}",
-            entity=cfg.wandb.entity,
-            config=wandb_config,
-            mode=cfg.wandb.mode,
-            id=cfg.wandb.run_id,
-            resume="must"  # 必须恢复之前的运行
-        )
+    run = None
+    if not instinct_enabled:
+        wandb_config = OmegaConf.to_container(cfg, resolve=True)
+        
+        if (cfg.wandb.run_id is None):
+            # 新建一个训练运行（run）
+            run = wandb.init(
+                project=cfg.wandb.project,  # WandB 项目名称
+                name=f"{cfg.wandb.name}/{datetime.datetime.now().strftime('%m-%d_%H-%M')}",
+                entity=cfg.wandb.entity,    # WandB 用户名/团队名
+                config=wandb_config,        # 保存所有配置参数
+                mode=cfg.wandb.mode,        # "offline" 或 "online"
+                id=wandb.util.generate_id(),
+            )
+        else:
+            # 恢复之前中断的训练运行
+            run = wandb.init(
+                project=cfg.wandb.project,
+                name=f"{cfg.wandb.name}/{datetime.datetime.now().strftime('%m-%d_%H-%M')}",
+                entity=cfg.wandb.entity,
+                config=wandb_config,
+                mode=cfg.wandb.mode,
+                id=cfg.wandb.run_id,
+                resume="must"  # 必须恢复之前的运行
+            )
 
     # ============================================
     # 第 3 步：创建导航训练环境
@@ -110,20 +148,12 @@ def main(cfg):
     # ============================================
     # instinctRL-A: Platform audit + B0 smoke test
     # ============================================
-    if getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled:
-        from instinctRL.audit import check_platform_lock, check_actor_input, check_action_type
+    if instinct_enabled:
+        from instinctRL.audit import check_actor_input, check_action_type
         from instinctRL.governor import MinimalGovernor
         from instinctRL.command_adapter import BodyToWorldVelocityAdapter
 
-        print("\n" + "=" * 60)
-        print("[instinctRL-A] Running platform and actor audit...")
-        print("=" * 60)
-
-        # Audit 1: Platform lock
-        platform_ok, platform_msg = check_platform_lock(cfg)
-        print(f"[instinctRL audit] {platform_msg}")
-        if not platform_ok:
-            raise RuntimeError(f"instinctRL platform audit FAILED: {platform_msg}")
+        print("[instinctRL-A] Creating B0 governor and body-to-world adapter...", flush=True)
 
         # Create B0 governor and body→world adapter
         gov_cfg = cfg.algo.instinctRL.governor
@@ -132,8 +162,8 @@ def main(cfg):
             velocity_limit=gov_cfg.velocity_limit,
         ).to(cfg.device)
         adapter = BodyToWorldVelocityAdapter().to(cfg.device)
-        print(f"[instinctRL-A] Governor: B0 (alpha={gov_cfg.alpha_fixed})")
-        print(f"[instinctRL-A] Baseline: {cfg.instinctRL.baseline.id}")
+        print(f"[instinctRL-A] Governor: B0 (alpha={gov_cfg.alpha_fixed})", flush=True)
+        print(f"[instinctRL-A] Baseline: {cfg.instinctRL.baseline.id}", flush=True)
 
     # ============================================
     # 第 4 步：包装环境（添加控制器）
@@ -148,54 +178,75 @@ def main(cfg):
     # ============================================
     # instinctRL-A: B0 Smoke Test
     # ============================================
-    if getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled:
-        print("\n" + "=" * 60)
-        print("[instinctRL-A] B0 Smoke Test: Direct Velocity Pass-Through")
-        print("=" * 60)
-
+    if instinct_enabled:
         smoke_steps = 500
-        print(f"[instinctRL-A] Running {smoke_steps} physics steps...")
+        print(f"[instinctRL-A] Running {smoke_steps} physics steps...", flush=True)
 
-        td = env.reset()
-        for step in range(smoke_steps):
-            v_cmd_body = td["info", "v_cmd"]
+        try:
+            print("[instinctRL-A] Resetting transformed environment...", flush=True)
+            td = transformed_env.reset()
+            print("[instinctRL-A] Reset complete.", flush=True)
+            for step in range(smoke_steps):
+                v_cmd_body = td["info", "v_cmd"]
 
-            # Audit 2: Actor input check (first step only)
-            if step == 0:
-                actor_ok, actor_msg = check_actor_input(td)
-                print(f"[instinctRL audit] {actor_msg}")
-                if not actor_ok:
-                    raise RuntimeError(f"instinctRL actor audit FAILED: {actor_msg}")
+                # Audit 2: Actor input check (first step only)
+                if step == 0:
+                    actor_ok, actor_msg = check_actor_input(td)
+                    print(f"[instinctRL audit] {actor_msg}", flush=True)
+                    if not actor_ok:
+                        raise RuntimeError(f"instinctRL actor audit FAILED: {actor_msg}")
 
-            # B0: v_cmd → governor (α=1, v_corr=0) → v_gov
-            gov_out = governor(v_cmd_body)
-            v_gov_body = gov_out.v_gov
+                # B0: v_cmd → governor (α=1, v_corr=0) → v_gov
+                gov_out = governor(v_cmd_body)
+                v_gov_body = gov_out.v_gov
 
-            # Body → world using privileged drone quaternion
-            drone_quat = td["info", "drone_state"][..., 3:7]
-            v_gov_world = adapter(v_gov_body, drone_quat)
+                # Body → world using privileged drone quaternion at controller boundary.
+                # The actor never receives this attitude/pose state.
+                drone_quat = td["info", "drone_state"][..., 3:7]
+                v_gov_world = adapter(v_gov_body, drone_quat)
 
-            # Audit 3: Action type check
-            if step == 0:
-                action_ok, action_msg = check_action_type(v_gov_world, expected_dim=3)
-                print(f"[instinctRL audit] {action_msg}")
-                if not action_ok:
-                    raise RuntimeError(f"instinctRL action audit FAILED: {action_msg}")
+                # Audit 3: Action type check
+                if step == 0:
+                    action_ok, action_msg = check_action_type(v_gov_world, expected_dim=3)
+                    print(f"[instinctRL audit] {action_msg}", flush=True)
+                    if not action_ok:
+                        raise RuntimeError(f"instinctRL action audit FAILED: {action_msg}")
 
-            td[("agents", "action")] = v_gov_world.squeeze(1)
-            td = transformed_env.step(td)
+                action = v_gov_world.squeeze(1)
+                if torch.isnan(action).any():
+                    raise RuntimeError(f"[instinctRL-A] NaN in action at step {step}!")
 
-            if torch.isnan(td["agents", "action"]).any():
-                raise RuntimeError(f"[instinctRL-A] NaN in action at step {step}!")
-            td = td["next"]
+                td[("agents", "action")] = action
+                step_td = transformed_env.step(td)
 
-        # Verify LiDAR
-        lidar_range = env.lidar_raw_range
-        print(f"[instinctRL-A] LiDAR raw range: shape={lidar_range.shape}, "
-              f"valid={((lidar_range < env.lidar_range).float().mean().item()):.2%}")
-        print(f"\n[instinctRL-A] B0 Smoke Test PASSED ({smoke_steps} steps).")
-        print("[instinctRL-A] Complete. Stopping before full PPO training.")
-        sim_app.close()
+                reward = step_td["next", "agents", "reward"]
+                if torch.isnan(reward).any():
+                    raise RuntimeError(f"[instinctRL-A] NaN in reward at step {step}!")
+                td = step_td["next"]
+                if (step + 1) % 50 == 0:
+                    print(f"[instinctRL-A] Completed {step + 1}/{smoke_steps} steps.", flush=True)
+
+            # Verify LiDAR
+            lidar_range = getattr(env, "lidar_raw_range", None)
+            if lidar_range is None or lidar_range.numel() == 0:
+                raise RuntimeError("[instinctRL-A] LiDAR raw range missing or empty.")
+            valid_ratio = (
+                torch.isfinite(lidar_range) & (lidar_range < env.lidar_range)
+            ).float().mean().item()
+            if valid_ratio <= 0.0:
+                raise RuntimeError("[instinctRL-A] LiDAR has no valid returns.")
+            print(f"[instinctRL-A] LiDAR raw range: shape={lidar_range.shape}, "
+                  f"valid={valid_ratio:.2%}", flush=True)
+            print(f"\n[instinctRL-A] B0 Smoke Test PASSED ({smoke_steps} steps).", flush=True)
+            print("[instinctRL-A] Complete. Stopping before full PPO training.", flush=True)
+        except Exception as exc:
+            print(
+                f"[instinctRL-A] B0 Smoke Test FAILED: {type(exc).__name__}: {exc}",
+                flush=True,
+            )
+            raise
+        finally:
+            sim_app.close()
         return
 
     # ============================================

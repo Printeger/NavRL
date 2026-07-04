@@ -10,13 +10,13 @@
 | Field | Value |
 |-------|-------|
 | **Current stage** | instinctRL-B — Observation / History Buffer |
-| **Stage status** | ✅ Complete — Hybrid observation pipeline built |
+| **Stage status** | ✅ Complete — Hybrid observation pipeline built + runtime verified |
 | **Active ticket** | instinctRL-B |
 | **Next ticket** | instinctRL-C — Measurement-Space Anchor |
-| **Method consistency** | ✅ Velocity-controller-based (body-frame `\vgov = \alpha_t\vcmd + \vcorr`). Paper 1 route preserved. No CTBR, body-rate, or motor actions. |
-| **Platform lock** | ✅ TASLAB_UAV selected in `drone.yaml`. Prim path dynamically resolved via `_resolve_base_link()`. `attach_yaw_only=False` for MID360. |
-| **Sensor lock** | ✅ LiDAR prim path dynamically resolves to TASLAB_UAV base_link. MID360 simulation helpers ready for wiring in instinctRL-A. |
-| **Actor input compliance** | ✅ Sanitized: only `lidar` in actor observation. Forbidden fields excluded. `verify_actor_critic_separation()` test added. |
+| **Method consistency** | ✅ Velocity-controller-based. Paper 1 route preserved. |
+| **Platform lock** | ✅ TASLAB_UAV runtime verified (4 envs, 500-step smoke test PASSED) |
+| **Sensor lock** | ✅ MID360 runtime verified: LiDAR [4,1,360,59], 18.97% valid returns |
+| **Actor input compliance** | ✅ Both `check_actor_input` and `check_action_type` PASSED at runtime |
 
 ---
 
@@ -26,8 +26,8 @@
 |--------|-------|------|-------|
 | instinctRL-0 | Platform and Sensor Infrastructure Audit | 2026-07-03 | Audit report produced. 5 blockers identified. |
 | instinctRL-0 | Blocker Fixes (all 5 resolved) | 2026-07-04 | env.py, ppo.py, CONTEXT.md updated. Asymmetric actor-critic. |
-| instinctRL-A | Direct Velocity-Governor Baseline (B0) | 2026-07-04 | Config namespace, governor, adapter, audit, B0 smoke test. |
-| instinctRL-B | Observation / History Buffer | 2026-07-04 | Hybrid observation: raw range, mask, weight, IMU, history. |
+| instinctRL-A | Direct Velocity-Governor Baseline (B0) | 2026-07-04 | Config namespace, governor, adapter, audit. B0 smoke test PASSED (7/7). |
+| instinctRL-B | Observation / History Buffer | 2026-07-04 | Hybrid observation: raw range, mask, weight, IMU, history. Runtime verified. |
 
 ---
 

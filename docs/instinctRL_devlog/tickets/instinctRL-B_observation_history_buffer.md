@@ -1,7 +1,7 @@
 # instinctRL-B: Observation / History Buffer
 
 > **Ticket ID**: instinctRL-B  
-> **Status**: ✅ Complete  
+> **Status**: ✅ Complete — Runtime verified (B0 smoke test, 2026-07-04 PM4)  
 > **Date**: 2026-07-04  
 > **Dependencies**: instinctRL-A  
 > **Blocks**: instinctRL-C, instinctRL-E, instinctRL-F  
@@ -77,8 +77,9 @@ Build the complete actor-clean observation pipeline: MID360 raw range $r_t$, val
 
 ---
 
-## Tests Run (Code-Level)
+## Tests Run
 
+**Code-level**:
 | Test | Result |
 |------|:------:|
 | ObservationBuilder import | ✅ |
@@ -86,12 +87,21 @@ Build the complete actor-clean observation pipeline: MID360 raw range $r_t$, val
 | Observation spec shape correctness | ✅ |
 | PPO feature extractor input keys match | ✅ |
 
+**Runtime (B0 smoke test, 4 envs)**:
+| Test | Result | Evidence |
+|------|:------:|----------|
+| Hybrid obs lidar_grid shape | ✅ | `[4, 12, 360, 59]` (12 = 4 history × 3 channels) |
+| Hybrid obs state_vec shape | ✅ | `[4, 52]` (52 = 4 history × 13) |
+| MID360ObservationBuilder init | ✅ | `MID360ObservationBuilder created (history=4)` |
+| Actor input audit (with new obs) | ✅ | `ACTOR INPUT AUDIT PASS` |
+| No NaN in observation | ✅ | 500 steps clean |
+
 ## Known Issues
 
-1. **B0 smoke test**: Blocked by Isaac Sim PhysX fabric issue (pre-existing, not caused by B changes)
-2. **Noise/dropout**: Deferred (D-009), config switches present but OFF by default
-3. **Neighbor-consistency weights**: Deferred (D-010)
-4. **Longer history ablations**: Deferred (D-011)
+1. **Noise/dropout**: Deferred (D-009), config switches present but OFF by default
+2. **Neighbor-consistency weights**: Deferred (D-010)
+3. **Longer history ablations**: Deferred (D-011)
+4. **512-env scaling**: Same as instinctRL-A — works with ≤4 envs
 
 ---
 

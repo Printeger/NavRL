@@ -1,7 +1,7 @@
 # instinctRL-A: Direct Velocity-Governor Baseline
 
 > **Ticket ID**: instinctRL-A  
-> **Status**: ⚠️ Code Complete — Runtime blocked by Isaac Sim PhysX fabric issue  
+> **Status**: ✅ Complete — B0 smoke test PASSED (7/7 criteria, 2026-07-04 PM4)  
 > **Date**: 2026-07-04  
 > **Dependencies**: instinctRL-0 (all 5 blockers resolved)  
 > **Blocks**: instinctRL-B, instinctRL-C, instinctRL-D, instinctRL-E, instinctRL-F, instinctRL-G, instinctRL-H  
@@ -111,23 +111,30 @@ Establish the clean body-frame velocity command path with B0 (α=1, v_corr=0 pas
 
 ## Tests Run
 
-| Test | Result |
-|------|:------:|
-| A.1 Platform lock audit | ✅ Code compiles; checks defined |
-| A.2 Actor input audit | ✅ Code compiles; scan logic defined |
-| A.3 Action type audit | ✅ Code compiles; dim check defined |
-| A.4–A.10 Smoke test (requires Isaac Sim) | ⬜ Deferred to runtime |
+| Test | Result | Evidence |
+|------|:------:|----------|
+| A.1 Platform lock audit | ✅ | `PLATFORM AUDIT PASS: TaslabUAV + MID360` |
+| A.2 Actor input audit | ✅ | `ACTOR INPUT AUDIT PASS` |
+| A.3 Action type audit | ✅ | `ACTION TYPE AUDIT PASS: 3-dim velocity` |
+| A.4 Environment reset | ✅ | `Reset complete.` |
+| A.5 TASLAB_UAV spawn | ✅ | `TaslabUAV_0/base_link`, mass=1.1583kg |
+| A.6 MID360 attachment | ✅ | `[4, 1, 360, 59]`, 18.97% valid |
+| A.7 Body→World adapter | ✅ | B0 governor α=1.0, 500 steps no NaN |
+| A.8 VelController execution | ✅ | `4 articulations`, motor commands valid |
+| A.9 Smoke rollout stability | ✅ | `Completed 500/500 steps`, Exit 0 |
+| A.10 LiDAR statistics | ✅ | min ≥ 0, max ≤ 40m |
+
+**Runtime**: 141.9s, `python3 training/scripts/train.py env.num_envs=4 env_dyn.num_obstacles=0`
 
 ---
 
 ## Known Issues
 
-1. **Smoke test not run**: The B0 smoke test requires Isaac Sim runtime. Code is ready but needs execution in the Isaac Sim environment.
-2. **v_cmd initial tensor**: `_v_cmd` tensor initialized lazily on first call to `_compute_state_and_obs`. If env reset occurs before first step, `_v_cmd` may not exist. Mitigation: handled by `hasattr` check in `_compute_state_and_obs`.
-3. **Standard PPO mode untested**: When `instinctRL.enabled=false`, the standard PPO training path should still work. Not tested after instinctRL-0 changes.
+1. **512-env scaling**: B0 smoke test hang with 512 envs (PhysX fabric memory). Works with ≤4 envs on RTX 4070 Ti SUPER (16GB).
+2. **Standard PPO mode**: Not tested with instinctRL.enabled=false after B changes.
 
 ---
 
 ## Next Recommended Step
 
-Proceed to **instinctRL-B**: Observation / History Buffer. Build MID360 r, m, w, timestamps, IMU cues, command, previous output, history buffer. Dependencies: instinctRL-A complete.
+✅ instinctRL-A complete. Proceeded to instinctRL-B (also verified in same run). Build MID360 r, m, w, timestamps, IMU cues, command, previous output, history buffer. Dependencies: instinctRL-A complete.

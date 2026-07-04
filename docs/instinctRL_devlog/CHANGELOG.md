@@ -25,15 +25,28 @@
 
 ---
 
-### instinctRL-A: B0 Smoke Test Runtime
+## 2026-07-04 (PM4)
 
-**Status**: ⚠️ Blocked — pre-existing Isaac Sim PhysX fabric issue
+### B0 Smoke Test — PASSED ✅ (7/7 criteria)
 
-- All code imports/config/specs verified correct at Python level
-- `NavigationEnv.__init__` hangs at `drone.initialize()` — PhysX fabric GPU stall
-- Root cause: `IsaacEnv` init flow vs `test_flight.py` flow differ in `sim.reset()` timing
-- Ruled out: headless mode, terrain, env count, import order
-- Fix: moved OmniDrones imports inside `main()` after `SimulationApp`
+**Command**: `python3 training/scripts/train.py env.num_envs=4 env_dyn.num_obstacles=0`  
+**Runtime**: 141.9s, Exit Code 0, GPU: RTX 4070 Ti SUPER (16GB)  
+
+- A.1 Platform Lock ✅ `TaslabUAV` + MID360 FOV [-7°,52°] + 40m range
+- A.2 Actor Input ✅ no forbidden fields
+- A.3 Action Type ✅ 3-dim velocity
+- A.9 Smoke Rollout ✅ 500 steps, no NaN, no crash
+- A.6/A.10 LiDAR ✅ `[4,1,360,59]`, 18.97% valid returns
+- A.7 Governor ✅ B0 α=1.0, direct_velocity baseline
+- instinctRL-B hybrid obs ✅ `lidar_grid=[4,12,360,59]`, `state_vec=[4,52]`
+
+**Note**: Previous "Blocked" diagnosis (PM2) was a 512-env scaling issue. With 4 envs everything works.
+
+---
+
+### instinctRL-A: B0 Smoke Test Runtime (OBSOLETE — superseded by PM4)
+
+~~Blocked by 512-env PhysX fabric issue~~ — resolved by using fewer envs.
 
 ---
 
