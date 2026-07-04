@@ -150,7 +150,7 @@ class NavigationEnv(IsaacEnv):
             self.height_range = torch.zeros(self.num_envs, 1, 2)
             
             # 前一步的速度（用于计算平滑性奖励）
-            self.prev_drone_vel_w = torch.zeros(self.num_envs, 1 , 3)     
+            self.prev_drone_vel_w = torch.zeros(self.num_envs, 1 , 3) 
 
 
     def _design_scene(self):
@@ -178,8 +178,10 @@ class NavigationEnv(IsaacEnv):
 
         # instinctRL-0: Discover base_link child prim for LiDAR attachment.
         # Uses robust search strategy from MID360 integration test.
-        self._drone_spawn_prim = drone_prim
-        self._base_link_name = self._resolve_base_link(drone_prim)
+        # drone.spawn() returns a Usd.Prim; extract the path string.
+        drone_prim_path_str = str(drone_prim.GetPath())
+        self._drone_spawn_prim = drone_prim_path_str
+        self._base_link_name = self._resolve_base_link(drone_prim_path_str)
 
         # ============================================
         # 2. 添加光照（让场景可见）
@@ -496,12 +498,16 @@ class NavigationEnv(IsaacEnv):
             "truncated": UnboundedContinuousTensorSpec(1),
         }).expand(self.num_envs).to(self.device)
 
+        # instinctRL-A: Add v_cmd to info spec (critic-accessible, not actor input).
+        # Body-frame velocity command for B0 baseline.
         info_spec = CompositeSpec({
             "drone_state": UnboundedContinuousTensorSpec((self.drone.n, 13), device=self.device),
             # instinctRL-0: Critic-only privileged fields (never seen by actor).
             # These are used by the critic feature extractor for value estimation.
             "target_rpos": UnboundedContinuousTensorSpec((1, 3), device=self.device),
             "target_distance": UnboundedContinuousTensorSpec((1, 1), device=self.device),
+            # instinctRL-A: Body-frame velocity command (critic-accessible).
+            "v_cmd": UnboundedContinuousTensorSpec((1, 3), device=self.device),
         }).expand(self.num_envs).to(self.device)
         self.observation_spec["stats"] = stats_spec
         self.observation_spec["info"] = info_spec
@@ -653,6 +659,33 @@ class NavigationEnv(IsaacEnv):
         # These fields go to info namespace; the actor never sees them.
         self.info["target_rpos"][:] = rpos
         self.info["target_distance"][:] = distance
+
+        # instinctRL-A: Compute raw MID360 range (true distance, not danger-coded).
+        # B0 uses basic range; full preprocessing (masks, weights, timestamps)
+        # is deferred to instinctRL-B.
+        self.lidar_raw_range = (
+            (self.lidar.data.ray_hits_w - self.lidar.data.pos_w.unsqueeze(1))
+            .norm(dim=-1)
+            .clamp_max(self.lidar_range)
+            .reshape(self.num_envs, 1, *self.lidar_resolution)
+        )
+
+        # instinctRL-A: Generate body-frame velocity command for B0 baseline.
+        # Fixed low-speed forward command: v_cmd = [0.5, 0.0, 0.0] m/s body-frame.
+        # Simple bounded random generator for short rollouts.
+        # Adversarial/aggressive commands deferred to instinctRL-E.
+        if not hasattr(self, "_v_cmd_step_count"):
+            self._v_cmd_step_count = 0
+        self._v_cmd_step_count += 1
+        # Regenerate command every 2 seconds (approx 125 steps at 62.5 Hz)
+        if self._v_cmd_step_count % 125 == 1:
+            # Simple bounded random body-frame velocity command
+            self._v_cmd = (
+                torch.rand(self.num_envs, 1, 3, device=self.device) * 2.0 - 1.0
+            ) * 0.5  # scale to [-0.5, 0.5] m/s per axis
+            self._v_cmd[..., 2] *= 0.3  # reduce vertical component
+        # Store v_cmd in info (critic-accessible, not actor observation)
+        self.info["v_cmd"] = self._v_cmd.clone()
         
         # b. 指向目标的单位方向向量（在目标坐标系下）
         # 为什么要坐标变换？

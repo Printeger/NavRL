@@ -22,13 +22,8 @@ import wandb              # 实验跟踪工具
 import torch
 from omegaconf import DictConfig, OmegaConf
 from omni.isaac.kit import SimulationApp     # Isaac Sim 应用
-from ppo import PPO                          # PPO 算法实现
-from omni_drones.controllers import LeePositionController  # 低层控制器
-from omni_drones.utils.torchrl.transforms import VelController, ravel_composite
-from omni_drones.utils.torchrl import SyncDataCollector, EpisodeStats  # 数据收集器
-from torchrl.envs.transforms import TransformedEnv, Compose
-from utils import evaluate  # 评估函数
-from torchrl.envs.utils import ExplorationType
+# OmniDrones imports moved inside main() after SimulationApp startup
+# to avoid the "loaded before SimulationApp" warning and init issues.
 
 
 # ============================================
@@ -57,6 +52,15 @@ def main(cfg):
     #   - 运行物理引擎（PhysX）
     #   - 渲染图形（如果 headless=False）
     sim_app = SimulationApp({"headless": cfg.headless, "anti_aliasing": 1})
+
+    # Import OmniDrones/TorchRL modules AFTER SimulationApp (Isaac Sim requirement)
+    from ppo import PPO
+    from omni_drones.controllers import LeePositionController
+    from omni_drones.utils.torchrl.transforms import VelController, ravel_composite
+    from omni_drones.utils.torchrl import SyncDataCollector, EpisodeStats
+    from torchrl.envs.transforms import TransformedEnv, Compose
+    from utils import evaluate
+    from torchrl.envs.utils import ExplorationType
 
     # ============================================
     # 第 2 步：初始化 WandB 实验跟踪
@@ -104,31 +108,99 @@ def main(cfg):
     env = NavigationEnv(cfg)
 
     # ============================================
+    # instinctRL-A: Platform audit + B0 smoke test
+    # ============================================
+    if getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled:
+        from instinctRL.audit import check_platform_lock, check_actor_input, check_action_type
+        from instinctRL.governor import MinimalGovernor
+        from instinctRL.command_adapter import BodyToWorldVelocityAdapter
+
+        print("\n" + "=" * 60)
+        print("[instinctRL-A] Running platform and actor audit...")
+        print("=" * 60)
+
+        # Audit 1: Platform lock
+        platform_ok, platform_msg = check_platform_lock(cfg)
+        print(f"[instinctRL audit] {platform_msg}")
+        if not platform_ok:
+            raise RuntimeError(f"instinctRL platform audit FAILED: {platform_msg}")
+
+        # Create B0 governor and body→world adapter
+        gov_cfg = cfg.algo.instinctRL.governor
+        governor = MinimalGovernor(
+            v_corr_limit=gov_cfg.v_corr_limit,
+            velocity_limit=gov_cfg.velocity_limit,
+        ).to(cfg.device)
+        adapter = BodyToWorldVelocityAdapter().to(cfg.device)
+        print(f"[instinctRL-A] Governor: B0 (alpha={gov_cfg.alpha_fixed})")
+        print(f"[instinctRL-A] Baseline: {cfg.instinctRL.baseline.id}")
+
+    # ============================================
     # 第 4 步：包装环境（添加控制器）
     # ============================================
-    # 为什么需要包装？
-    # - 策略网络输出：速度指令（vx, vy, vz）
-    # - 无人机需要：电机推力（4 个电机的转速）
-    # - VelController：将速度指令转换为电机推力
     transforms = []
-    
-    # Lee Position Controller: 经典的四旋翼控制算法
-    # 参数：重力加速度 9.81 m/s², 无人机物理参数
     controller = LeePositionController(9.81, env.drone.params).to(cfg.device)
-    vel_transform = VelController(controller, yaw_control=False)  # 不控制偏航角
+    vel_transform = VelController(controller, yaw_control=False)
     transforms.append(vel_transform)
-    
-    # 应用变换并设置为训练模式
     transformed_env = TransformedEnv(env, Compose(*transforms)).train()
-    transformed_env.set_seed(cfg.seed)    
-    
+    transformed_env.set_seed(cfg.seed)
+
     # ============================================
-    # 第 5 步：创建 PPO 策略网络
+    # instinctRL-A: B0 Smoke Test
     # ============================================
-    # PPO（Proximal Policy Optimization）包含：
-    #   1. Feature Extractor: CNN 处理 LiDAR 数据
-    #   2. Actor（策略网络）: 输出动作分布
-    #   3. Critic（价值网络）: 评估状态价值
+    if getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled:
+        print("\n" + "=" * 60)
+        print("[instinctRL-A] B0 Smoke Test: Direct Velocity Pass-Through")
+        print("=" * 60)
+
+        smoke_steps = 500
+        print(f"[instinctRL-A] Running {smoke_steps} physics steps...")
+
+        td = env.reset()
+        for step in range(smoke_steps):
+            v_cmd_body = td["info", "v_cmd"]
+
+            # Audit 2: Actor input check (first step only)
+            if step == 0:
+                actor_ok, actor_msg = check_actor_input(td)
+                print(f"[instinctRL audit] {actor_msg}")
+                if not actor_ok:
+                    raise RuntimeError(f"instinctRL actor audit FAILED: {actor_msg}")
+
+            # B0: v_cmd → governor (α=1, v_corr=0) → v_gov
+            gov_out = governor(v_cmd_body)
+            v_gov_body = gov_out.v_gov
+
+            # Body → world using privileged drone quaternion
+            drone_quat = td["info", "drone_state"][..., 3:7]
+            v_gov_world = adapter(v_gov_body, drone_quat)
+
+            # Audit 3: Action type check
+            if step == 0:
+                action_ok, action_msg = check_action_type(v_gov_world, expected_dim=3)
+                print(f"[instinctRL audit] {action_msg}")
+                if not action_ok:
+                    raise RuntimeError(f"instinctRL action audit FAILED: {action_msg}")
+
+            td[("agents", "action")] = v_gov_world.squeeze(1)
+            td = transformed_env.step(td)
+
+            if torch.isnan(td["agents", "action"]).any():
+                raise RuntimeError(f"[instinctRL-A] NaN in action at step {step}!")
+            td = td["next"]
+
+        # Verify LiDAR
+        lidar_range = env.lidar_raw_range
+        print(f"[instinctRL-A] LiDAR raw range: shape={lidar_range.shape}, "
+              f"valid={((lidar_range < env.lidar_range).float().mean().item()):.2%}")
+        print(f"\n[instinctRL-A] B0 Smoke Test PASSED ({smoke_steps} steps).")
+        print("[instinctRL-A] Complete. Stopping before full PPO training.")
+        sim_app.close()
+        return
+
+    # ============================================
+    # 第 5 步：创建 PPO 策略网络（非 instinctRL 模式）
+    # ============================================
     policy = PPO(cfg.algo, transformed_env.observation_spec, transformed_env.action_spec, cfg.device)
 
     # ============================================

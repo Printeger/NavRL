@@ -36,3 +36,12 @@ wandb:
   entity: CERLAB-UAV-RL-Navigation
   mode: offline # online
   run_id: #kw9xf9k9
+
+# ============================================
+# instinctRL Configuration
+# ============================================
+instinctRL:
+  enabled: true                        # Enable instinctRL mode
+  baseline:
+    id: "direct_velocity"             # B0: direct velocity pass-through
+    # Options: direct_velocity, no_history, no_anchor, no_imu, no_ics, ...

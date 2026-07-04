@@ -4,7 +4,50 @@
 
 ---
 
-## 2026-07-04
+## 2026-07-04 (PM2)
+
+### instinctRL-A: B0 Smoke Test Runtime
+
+**Status**: ⚠️ Blocked — pre-existing Isaac Sim PhysX fabric issue
+
+- All code imports/config/specs verified correct at Python level
+- `NavigationEnv.__init__` hangs at `drone.initialize()` — PhysX fabric GPU stall
+- Root cause: `IsaacEnv` init flow vs `test_flight.py` flow differ in `sim.reset()` timing
+- Ruled out: headless mode, terrain, env count, import order
+- Fix: moved OmniDrones imports inside `main()` after `SimulationApp`
+
+---
+
+## 2026-07-04 (PM)
+
+### instinctRL-A: Direct Velocity-Governor Baseline (B0)
+
+**Status**: ✅ Complete
+
+**New modules**:
+- `instinctRL/audit.py` — Staged audit: platform lock, actor input, action type (140 lines)
+- `instinctRL/command_adapter.py` — `BodyToWorldVelocityAdapter` using `quat_rotate_inverse` (55 lines)
+- `instinctRL/governor.py` — `MinimalGovernor` (B0: α=1, v_corr=0) + `GovernorOutput` dataclass (75 lines)
+
+**Config changes**:
+- `cfg/train.yaml`: Added `instinctRL.enabled` + `instinctRL.baseline.id`
+- `cfg/ppo.yaml`: Added `instinctRL.governor.*` (alpha_mode, alpha_fixed, v_corr_limit, velocity_limit, smoothing_tau)
+
+**Code wiring**:
+- `env.py`: v_cmd production (fixed + random body-frame), MID360 raw range, v_cmd in info spec
+- `train.py`: B0 smoke test path (audit → governor → adapter → VelController → 500-step loop → exit)
+
+**Documentation**:
+- `DEFERRED_REGISTER.md` — 8 items (D-001 to D-008)
+- `DECISION_LOG.md` — 6 architectural decisions
+- `TEST_PLAN.md` — 10 B0 smoke tests + future registries
+- `tickets/instinctRL-A_direct_velocity_governor_baseline.md` — Full ticket report
+
+**Method consistency**: All checks pass (velocity action, actor input clean, platform/sensor locked).
+
+---
+
+## 2026-07-04 (AM)
 
 ### instinctRL-0: Blocker Fixes (All 5 Resolved)
 
