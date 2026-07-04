@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-04
-> **Current Stage**: B-closeout / Isaac runtime validation before instinctRL-C
+> **Current Stage**: B-closeout / smoke exit-status rerun before instinctRL-C
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,12 +10,12 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | B-closeout / Isaac runtime validation before instinctRL-C |
-| **Active ticket** | instinctRL-B runtime validation |
-| **Next ticket** | instinctRL-C only after Isaac runtime smoke passes |
+| **Current stage** | B-closeout / smoke exit-status rerun before instinctRL-C |
+| **Active ticket** | instinctRL-B smoke exit-status validation |
+| **Next ticket** | instinctRL-C only after post-workaround smoke exits 0 |
 | **Final go/no-go** | instinctRL-C: NO-GO |
 | **instinctRL-A** | PASS with open runtime verification item(s) |
-| **instinctRL-B** | PARTIAL / NOT FULLY ACCEPTED |
+| **instinctRL-B** | RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING |
 
 ---
 
@@ -25,8 +25,8 @@
 |--------|---------|-------|
 | instinctRL-0 | Accepted as prior platform audit baseline | Earlier audit remains useful context, but current B acceptance is judged against active code. |
 | instinctRL-A | PASS with open runtime verification item(s) | Accepted as B0 smoke-test / infrastructure baseline, not learning success. Adapter frame direction has a pure unit test; full runtime smoke must still run in a provisioned Isaac environment. |
-| instinctRL-B | PARTIAL / NOT FULLY ACCEPTED | Code blockers are addressed. NavRL pytest/PPO hybrid validation passes. Full handbook acceptance is blocked only by local inability to run Isaac runtime smoke because no CUDA-capable GPU/driver is visible. |
-| instinctRL-C | NO-GO | Do not start until B validation checklist passes. |
+| instinctRL-B | Runtime checks passed on user GPU; final exit-status rerun pending | Code blockers are addressed. NavRL pytest/PPO hybrid validation passes. User-side GPU smoke completed 500/500 B0/B steps and MID360 validation, then hit an Isaac Kit shutdown segfault after success. Smoke success path now exits before `SimulationApp.close()`. |
+| instinctRL-C | NO-GO | Do not start until the post-workaround smoke command exits 0. |
 
 ---
 
@@ -36,7 +36,7 @@
 |----|----------------|-------------------|----------------------------------|
 | B-FIX-001 | Active env RayCaster used `patterns.BpearlPatternCfg` | `env.py` now uses `instinctRL.mid360_pattern.create_mid360_pattern_cfg()` for the active instinctRL RayCaster path; local search found no `BpearlPatternCfg` use in `training/scripts/env.py`, `training/scripts/instinctRL`, or `training/cfg`. | Run Isaac runtime smoke proving active MID360 returns and stable ray layout in the real env. |
 | B-FIX-002 | Body-to-world adapter frame direction was wrong/unverified | `BodyToWorldVelocityAdapter` now uses body-to-world quaternion rotation; identity, yaw 90 deg, and roll/pitch unit tests pass. | Include adapter path in runtime smoke. |
-| B-FIX-003 | `instinctRL.enabled=true` returned after B0 smoke only | `instinctRL.mode` now separates `smoke` and `train`; PPO hybrid forward is covered by NavRL pytest. | Run `instinctRL.mode=smoke` runtime smoke in a GPU-visible Isaac environment. |
+| B-FIX-003 | `instinctRL.enabled=true` returned after B0 smoke only | `instinctRL.mode` now separates `smoke` and `train`; PPO hybrid forward is covered by NavRL pytest; user-side smoke ran 500/500 B0/B steps. | Re-run smoke after shutdown workaround to confirm shell exit status is 0. |
 | B-FIX-004 | `prev_action` was not fed from issued governor output | `env.set_prev_issued_action_body()` stores the previous issued body-frame command; `observation.py` now requires `prev_action` and unit tests verify feedback. | Confirm in runtime smoke across reset/step boundaries. |
 | B-FIX-005 | Actor audit scanned key names only | `audit.py` now includes `check_actor_schema()` for the hybrid actor input shape/key contract; pure actor schema tests pass. | Runtime actor audit must pass on real `TensorDict` from `NavigationEnv`. |
 | B-FIX-006 | B tests were missing | NavRL pytest now passes all added B tests, including PPO hybrid forward, actor/critic separation, and RayCaster in-place offset regression coverage. | Run the Isaac runtime smoke once GPU/driver visibility is restored. |
@@ -63,12 +63,12 @@
 |-----------|--------------|--------|
 | Config namespace | `instinctRL.enabled=true`, `instinctRL.mode=smoke`, `baseline.id=direct_velocity`, observation history config exists | Present |
 | B0 governor | `MinimalGovernor` implements alpha=1, v_corr=0 pass-through | Present |
-| Command adapter | Corrected body-to-world rotation and covered by pure unit tests | Present, runtime smoke pending |
+| Command adapter | Corrected body-to-world rotation and covered by pure unit tests | Present, user-side runtime checks passed |
 | Observation builder | Builds range/mask/weight/IMU/v_cmd/prev_action/history tensors; requires real `prev_action` | Present, pure tests pass |
-| Active sensor pattern | Active instinctRL env path uses MID360 helper wrapper, not `BpearlPatternCfg` | Present, runtime smoke pending |
+| Active sensor pattern | Active instinctRL env path uses MID360 helper wrapper, not `BpearlPatternCfg` | Present, user-side runtime checks passed |
 | PPO hybrid input | `ppo.py` consumes `lidar_grid` and `state_vec`; critic privileged fields are flattened before concatenation | Present, NavRL pytest passes |
 | Actor audit | Key scan plus hybrid schema audit | Present, provenance remains by schema/code review rather than full taint proof |
-| Training path | Explicit smoke/train mode split | Present, runtime validation pending |
+| Training path | Explicit smoke/train mode split; smoke success exits before Isaac Kit shutdown | Present, user-side runtime checks passed |
 
 ---
 
@@ -77,5 +77,5 @@
 Earlier 2026-07-04 devlog entries that mark instinctRL-B as `Complete` or say to proceed to instinctRL-C remain superseded. The current truthful conclusion is:
 
 - `instinctRL-A`: PASS with open runtime verification item(s)
-- `instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED
-- `instinctRL-C`: NO-GO until Isaac runtime smoke passes
+- `instinctRL-B`: RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING
+- `instinctRL-C`: NO-GO until post-workaround smoke exits 0

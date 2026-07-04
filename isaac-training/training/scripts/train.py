@@ -16,6 +16,7 @@
 
 import argparse
 import os
+import sys
 import hydra              # 配置管理框架
 import datetime
 import wandb              # 实验跟踪工具
@@ -257,15 +258,21 @@ def main(cfg):
                   f"valid={valid_ratio:.2%}", flush=True)
             print(f"\n[instinctRL-A] B0 Smoke Test PASSED ({smoke_steps} steps).", flush=True)
             print("[instinctRL-B] Observation smoke path PASSED.", flush=True)
+            print(
+                "[instinctRL-B] Smoke validation complete. Exiting before "
+                "SimulationApp.close() to avoid Isaac Kit shutdown segfault.",
+                flush=True,
+            )
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(0)
         except Exception as exc:
             print(
                 f"[instinctRL-A] B0 Smoke Test FAILED: {type(exc).__name__}: {exc}",
                 flush=True,
             )
-            raise
-        finally:
             sim_app.close()
-        return
+            raise
     elif instinct_enabled and instinct_mode != "train":
         sim_app.close()
         raise ValueError(

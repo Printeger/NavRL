@@ -1,7 +1,7 @@
 # instinctRL-B: Observation / History Buffer
 
 > **Ticket ID**: instinctRL-B
-> **Status**: PARTIAL / NOT FULLY ACCEPTED
+> **Status**: RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING
 > **Date**: 2026-07-04
 > **Dependencies**: instinctRL-A
 > **Blocks**: instinctRL-C, instinctRL-E, instinctRL-F
@@ -90,6 +90,7 @@ Handbook-aligned B acceptance requires:
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Reaches CUDA preflight, then fails: no CUDA-capable device visible. |
 | `nvidia-smi` | Failed: could not communicate with NVIDIA driver. |
 | `conda activate NavRL && python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"` | `False`, `0`. |
+| User-side GPU smoke after MID360 RayCaster fix | Passed all B0/B runtime checks: 500/500 steps, PPO hybrid forward, actor/schema/action audits, MID360 raw range `[4, 1, 360, 59]`, valid returns `33.04%`; then segfaulted inside `SimulationApp.close()` during Isaac Kit shutdown. |
 
 ---
 
@@ -97,11 +98,12 @@ Handbook-aligned B acceptance requires:
 
 | ID | Blocker | Required result |
 |----|---------|-----------------|
-| B-VAL-001 | Isaac runtime smoke has not run because this environment cannot see a CUDA-capable GPU/driver. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` passes reset, step, multi-step history rollover, actor/schema audit, no NaN, and MID360 valid returns in a GPU-visible Isaac environment. |
+| B-VAL-001 | Post-workaround smoke exit status has not been rerun on a GPU-visible environment. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` exits with status 0 after printing the already-observed B0/B pass messages. |
 
 Runtime smoke note:
 
 - A user-side GPU smoke exposed and this branch fixed the Orbit RayCaster in-place offset failure on expanded MID360 ray starts.
+- A later user-side GPU smoke passed the B runtime checks and then segfaulted during Isaac Kit shutdown. `instinctRL.mode=smoke` now exits before `SimulationApp.close()` after successful validation so the shell exit status reflects the smoke result.
 - If the smoke command is split across shell lines, `env_dyn.num_obstacles=0` must be continued with `\`; otherwise the shell reports `env_dyn.num_obstacles=0: command not found` and Hydra never receives that override.
 
 ---
@@ -109,5 +111,5 @@ Runtime smoke note:
 ## Verdict
 
 - `instinctRL-A`: PASS with open runtime verification item(s)
-- `instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED
-- `instinctRL-C`: NO-GO until B-VAL-001 passes
+- `instinctRL-B`: RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING
+- `instinctRL-C`: NO-GO until the post-workaround smoke command exits 0

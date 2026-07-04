@@ -4,11 +4,28 @@
 
 ---
 
+## 2026-07-04 (Smoke shutdown handling)
+
+### instinctRL-B: Avoid Isaac Kit shutdown segfault after passed smoke
+
+**Status**: Smoke success path updated.
+
+- User-side smoke reached 500/500 steps and printed:
+  - `B0 Smoke Test PASSED`
+  - `Observation smoke path PASSED`
+  - MID360 raw range shape `[4, 1, 360, 59]`, valid returns `33.04%`
+- The subsequent failure was not an observation/control failure. It occurred after validation, inside `SimulationApp.close()`, with a native segmentation fault during Isaac Kit shutdown.
+- Smoke mode now exits with code 0 immediately after all B0/B validation checks pass, before calling `SimulationApp.close()`. Failure paths still close the app and raise the real exception.
+
+**Acceptance note**: The smoke output before the segfault already satisfied the B runtime checks. The code change prevents Isaac shutdown from turning a passed smoke into a failed shell command.
+
+---
+
 ## 2026-07-04 (MID360 RayCaster runtime fix)
 
 ### instinctRL-B: Fixed RayCaster in-place offset failure
 
-**Status**: Code fix and regression test complete. Full runtime smoke still requires a GPU-visible environment to rerun end-to-end.
+**Status**: Code fix and regression test complete. Superseded by the later smoke shutdown handling entry: user-side runtime smoke reached and passed all B checks.
 
 - User-side smoke reached `NavigationEnv` and active MID360 RayCaster initialization, proving the prior Python dependency blockers were resolved.
 - Runtime failed in Orbit `RayCaster._initialize_rays_impl()` at `self.ray_starts += offset_pos`.
@@ -25,7 +42,7 @@
 
 ### instinctRL-B: NavRL pytest/PPO validation passed; runtime smoke GPU-blocked
 
-**Status**: Unit/PPO validation passed in the activated `NavRL` conda environment. Full B acceptance is still blocked by Isaac runtime GPU visibility.
+**Status**: Unit/PPO validation passed in the activated `NavRL` conda environment. Superseded by later user-side GPU smoke evidence.
 
 - Corrected the validation command path: tests must run after `conda activate NavRL`, not by directly invoking `/home/mint/miniconda3/envs/NavRL/bin/python`.
 - Confirmed activated `NavRL` resolves:
@@ -37,7 +54,7 @@
 - `python -m pytest training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_ppo_hybrid.py -q` now passes: `13 passed`.
 - Minimal Isaac smoke now reaches the CUDA preflight but cannot run here because no CUDA-capable device is visible; `nvidia-smi` cannot communicate with the NVIDIA driver and `torch.cuda.is_available()` is `False`.
 
-**Acceptance conclusion**: instinctRL-B remains **PARTIAL / NOT FULLY ACCEPTED** only because Isaac runtime smoke cannot run without visible GPU/driver support in this environment. instinctRL-C remains **NO-GO** until runtime smoke passes.
+**Acceptance conclusion**: Superseded by later user-side smoke evidence. B runtime checks passed; final acceptance waits only on a post-workaround smoke rerun returning shell exit status 0.
 
 ---
 
@@ -58,9 +75,9 @@
 **Initial validation note**:
 
 - This entry originally recorded failures from direct Python invocation paths. The later `NavRL environment validation` entry corrected that: after `conda activate NavRL`, pytest/PPO validation passes.
-- Current remaining blocker is Isaac runtime smoke only, because this environment cannot see a CUDA-capable GPU/driver.
+- Superseded by later user-side smoke evidence: B runtime checks passed; final acceptance waits only on a post-workaround smoke rerun returning shell exit status 0.
 
-**Acceptance conclusion**: Superseded by the later NavRL validation entry. instinctRL-B remains **PARTIAL / NOT FULLY ACCEPTED** until Isaac runtime smoke passes.
+**Acceptance conclusion**: Superseded by later smoke entries.
 
 ---
 

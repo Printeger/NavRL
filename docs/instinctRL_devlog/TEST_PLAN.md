@@ -62,21 +62,21 @@
 
 ## instinctRL-B: Observation / History Buffer
 
-**Current verdict**: PARTIAL / NOT FULLY ACCEPTED. Code fixes and NavRL pytest/PPO validation pass; full acceptance is blocked by missing Isaac runtime smoke because this environment cannot see a CUDA-capable GPU.
+**Current verdict**: RUNTIME CHECKS PASSED / FINAL EXIT-STATUS RERUN PENDING. Code fixes and NavRL pytest/PPO validation pass. User-side GPU smoke completed the B checks, then hit an Isaac Kit shutdown segfault after success; smoke mode now exits before `SimulationApp.close()` and needs one post-workaround rerun to confirm shell exit code 0.
 
 ### Required Before-C Tests
 
 | Test | Required evidence | Current status |
 |------|-------------------|----------------|
-| B.1 Active MID360 pattern and ray ordering | Active `NavigationEnv` uses Livox MID360 ray ordering or a documented equivalent; no `BpearlPatternCfg` substitute in instinctRL training path | Code fixed; pure pattern count/order test passed; runtime RayCaster smoke pending |
-| B.2 Ray count and shape stability | Repeated reset/step preserves `[N, H, V]` ray layout and expected ray count | Pure MID360 helper test passed; runtime reset/step pending |
+| B.1 Active MID360 pattern and ray ordering | Active `NavigationEnv` uses Livox MID360 ray ordering or a documented equivalent; no `BpearlPatternCfg` substitute in instinctRL training path | User-side runtime smoke passed MID360 shape/valid-return checks |
+| B.2 Ray count and shape stability | Repeated reset/step preserves `[N, H, V]` ray layout and expected ray count | User-side runtime smoke passed with `[4, 1, 360, 59]` raw range |
 | B.3 Raw range correctness | `r_i = ||ray_hit_i - lidar_pos||`, not danger-coded inverse range, with max-range handling | Pure observation test passed |
 | B.4 Valid-return mask | Mask derives from finite in-range returns and handles max-range/dropout explicitly | Pure observation test passed |
 | B.5 Reliability bounds | `w_t` stays in `[0, 1]`; stale/dropout returns are represented correctly | Pure observation test passed |
 | B.6 Timestamp monotonicity and frame age | Sim time is monotonic; repeated/stale frames are detectable | Pure observation test passed |
 | B.7 History rollover | Fixed window rolls exactly one frame per policy step and resets per env reset | Pure observation test passed |
-| B.8 Previous issued action feedback | `prev_action` slots equal prior governor/controller output, not default zeros | Code fixed; pure observation test passed; runtime smoke pending |
-| B.9 Actor input provenance | Audit proves `lidar_grid` and `state_vec` contain only allowed fields | Hybrid schema audit and actor absence test passed; full runtime TensorDict audit pending |
+| B.8 Previous issued action feedback | `prev_action` slots equal prior governor/controller output, not default zeros | Code fixed; pure observation test passed; user-side runtime smoke completed 500 steps |
+| B.9 Actor input provenance | Audit proves `lidar_grid` and `state_vec` contain only allowed fields | Runtime actor/schema audit passed |
 | B.10 PPO/training-path smoke | `instinctRL.enabled=true` can run a PPO hybrid initialization/forward path, or smoke-only mode is explicitly separated | Mode split implemented; NavRL PPO hybrid forward test passes |
 
 ### Added Test Files
@@ -98,12 +98,13 @@
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd isaac-training && python training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Reaches CUDA preflight, then fails: no CUDA-capable device visible. |
 | `nvidia-smi` | Failed: could not communicate with NVIDIA driver. |
 | `conda activate NavRL && python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"` | `False`, `0`. |
+| User-side GPU smoke after MID360 RayCaster fix | Passed all B0/B checks: 500/500 steps, PPO hybrid forward, actor/schema/action audits, MID360 raw range `[4, 1, 360, 59]`, valid returns `33.04%`; then segfaulted inside `SimulationApp.close()` during Isaac Kit shutdown. |
 
 ### Remaining Required Validation Before C
 
-- Run `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` in the Isaac runtime environment and confirm reset, step, multi-step history rollover, actor audit, no NaN, and MID360 valid returns.
-- Run the same smoke after NVIDIA driver/GPU visibility is restored; Python dependencies are no longer the blocker when `conda activate NavRL` is used.
+- Re-run `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` after the shutdown workaround and confirm shell exit status is 0.
 - When running the smoke command manually, keep `env_dyn.num_obstacles=0` on the same command line, or use shell line continuations (`\`) so Hydra receives it as an override.
+- Smoke mode exits before `SimulationApp.close()` after successful validation because Isaac Kit can segfault during shutdown after an otherwise-passed smoke.
 
 ### instinctRL-C: Measurement-Space Anchor
 - Null-command hysteresis (ε₀ < ε₁)
