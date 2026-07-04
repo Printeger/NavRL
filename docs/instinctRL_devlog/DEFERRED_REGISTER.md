@@ -1,8 +1,21 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
+> **Last Updated**: 2026-07-04 (B-fix implementation)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
+
+---
+
+## Before-C Validation Blockers
+
+These are not valid post-C deferrals. The original code blockers have been addressed, but full instinctRL-B acceptance still requires runtime validation before instinctRL-C starts.
+
+| ID | Item | Why it blocks C | Required before-C validation |
+|----|------|-----------------|------------------------------|
+| B-VAL-001 | Isaac runtime smoke for MID360/observation path | C anchor compares measurement-space range vectors; the real RayCaster path must be proven, not only the pure helper. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` passes reset, step, multi-step history rollover, actor audit, no NaN, and MID360 valid returns. |
+| B-VAL-002 | TorchRL/PPO hybrid forward validation | Handbook B requires the actor observation path to connect to the policy, not only produce tensors. | Minimal `instinctRL.mode=train` initialization/forward smoke passes with `lidar_grid` + `state_vec`, without privileged actor fields. |
+| B-VAL-003 | Normal pytest execution | Manual test invocation is useful evidence but not the repository's standard test gate. | `pytest` runs the new `training/unit_test/test_instinctrl_*.py` tests and reports pass/intentional skip only for unavailable runtime dependencies. |
 
 ---
 
@@ -29,7 +42,7 @@
 | **Target stage** | instinctRL-B |
 | **Trigger condition** | instinctRL-A complete; B0 smoke test passes |
 | **Acceptance test** | Stable ray count/ordering; mask derivation from finite in-range returns; dropout handling; reliability bounds [0,1]; timestamp monotonicity; history rollover; stale-frame markers; no actor input leaks |
-| **Status** | ⬜ Open |
+| **Status** | Partial only. Code fixes exist and pure tests pass, but B-VAL-001 through B-VAL-003 block full acceptance. |
 | **Module ref** | Handbook M1 (`instinctRL/observation.py`) |
 
 ### D-003: Measurement-Space Anchor Manager
@@ -106,11 +119,13 @@
 
 ---
 
-## Completed / Resolved Items
+## Completed / Corrected Items
 
 ### D-002: Full MID360 Raw Range / Mask / Weight / History Preprocessing
-- **Resolved**: 2026-07-04 (instinctRL-B)
-- **Module**: `instinctRL/observation.py` — `MID360ObservationBuilder`
+- **Closeout correction**: Not fully accepted as of 2026-07-04.
+- **Current fact**: `instinctRL/observation.py` provides `MID360ObservationBuilder`; active `env.py` uses the MID360 helper wrapper; `prev_action` is wired from the issued command; pure tests for pattern/order, masks, weights, timestamps, history, reset, actor schema, and adapter frame convention pass under a manual runner.
+- **Remaining blocker**: Local environment cannot run standard `pytest`, TorchRL/PPO hybrid forward validation, or Isaac runtime smoke. Full acceptance waits on B-VAL-001 through B-VAL-003.
+- **Status**: Partial / validation pending.
 
 ---
 

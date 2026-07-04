@@ -16,7 +16,15 @@ instinctRL-0 / instinctRL-A
 
 import torch
 import torch.nn as nn
-from omni_drones.utils.torch import quat_rotate_inverse
+
+
+def _quat_rotate(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    q_w = q[:, 0]
+    q_vec = q[:, 1:]
+    a = v * (2.0 * q_w**2 - 1.0).unsqueeze(-1)
+    b = torch.cross(q_vec, v, dim=-1) * q_w.unsqueeze(-1) * 2.0
+    c = q_vec * torch.bmm(q_vec.view(q.shape[0], 1, 3), v.view(q.shape[0], 3, 1)).squeeze(-1) * 2.0
+    return a + b + c
 
 
 class BodyToWorldVelocityAdapter(nn.Module):
@@ -42,13 +50,13 @@ class BodyToWorldVelocityAdapter(nn.Module):
         """
         Rotate body-frame velocity to world-frame.
 
-        Uses quat_rotate_inverse: if q rotates world→body,
-        then q_inverse rotates body→world.
+        Uses OmniDrones' quat_rotate for body→world.  In OmniDrones,
+        quat_rotate_inverse is used for world→body velocity.
         """
         orig_shape = body_vel.shape
         body_vel_flat = body_vel.reshape(-1, 3)
         drone_quat_flat = drone_quat.reshape(-1, 4)
 
-        world_vel_flat = quat_rotate_inverse(drone_quat_flat, body_vel_flat)
+        world_vel_flat = _quat_rotate(drone_quat_flat, body_vel_flat)
 
         return world_vel_flat.reshape(orig_shape)

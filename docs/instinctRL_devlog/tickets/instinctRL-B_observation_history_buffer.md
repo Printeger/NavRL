@@ -1,110 +1,107 @@
 # instinctRL-B: Observation / History Buffer
 
-> **Ticket ID**: instinctRL-B  
-> **Status**: ✅ Complete — Runtime verified (B0 smoke test, 2026-07-04 PM4)  
-> **Date**: 2026-07-04  
-> **Dependencies**: instinctRL-A  
-> **Blocks**: instinctRL-C, instinctRL-E, instinctRL-F  
-> **Risk**: High  
-> **Handbook**: `instinctRL_Development_Handbook_v1_1_platform_locked.tex` §Observation and History Buffer, §Tickets  
-> **Resolves**: D-002 (Full MID360 preprocessing)
+> **Ticket ID**: instinctRL-B
+> **Status**: PARTIAL / NOT FULLY ACCEPTED
+> **Date**: 2026-07-04
+> **Dependencies**: instinctRL-A
+> **Blocks**: instinctRL-C, instinctRL-E, instinctRL-F
+> **Risk**: High
+> **Handbook**: `instinctRL_Development_Handbook_v1_1_platform_locked.tex` Observation / History Buffer and ticket acceptance criteria
+> **Current stage**: B-closeout / B-runtime validation before instinctRL-C
 
 ---
 
-## Goal
+## Scope
 
-Build the complete actor-clean observation pipeline: MID360 raw range $r_t$, valid-return mask $m_t$, staleness-weighted reliability $w_t$, timestamps, allowed IMU cues (body angular velocity + gravity direction), body-frame $v_{cmd}$, previous governor action, and fixed-size history buffer. Wire into `NavigationEnv` and update PPO feature extractor for hybrid input format.
+Finish instinctRL-B without starting instinctRL-C. The work covers the actor-clean MID360 observation path, history buffer, previous issued action feedback, actor schema audit, command-adapter frame test coverage, smoke/train mode separation, and B-stage tests.
 
----
-
-## Files Modified
-
-| File | Change Summary | Lines |
-|------|---------------|:-----:|
-| `cfg/train.yaml` | Added `instinctRL.observation.*` config (history_len, enable_noise, enable_dropout, tau_staleness) | +6 |
-| `scripts/env.py` | Replaced danger-coded LiDAR with MID360ObservationBuilder; hybrid obs spec; v_cmd generation restored | +45 / -30 |
-| `scripts/ppo.py` | Multi-channel CNN + state vector encoder + CatTensors merge for hybrid observation | +15 / -10 |
-| `scripts/instinctRL/__init__.py` | Moved observation from deferred to active | ~1 |
-
-## New Files Created
-
-| File | Purpose | Lines |
-|------|---------|:-----:|
-| `scripts/instinctRL/observation.py` | `MID360ObservationBuilder` + `ObservationConfig`: raw range, mask, staleness-weighted reliability, IMU cues, history buffer | ~220 |
+This ticket does not implement the instinctRL-C anchor manager.
 
 ---
 
-## Main Changes
+## Acceptance Criteria
 
-### 1. Observation Pipeline (`observation.py`)
+Handbook-aligned B acceptance requires:
 
-- **Raw range**: $r_i = \|p^{hit}_i - p^{lidar}\|$, true distance (NOT danger-coded)
-- **Valid-return mask**: $m_t = [\text{finite} \land r > 0.01 \land r < r_{max}]$
-- **Reliability weights**: $w_t = m_t \cdot \exp(-\text{age} / \tau)$, fallback to binary $w_t=m_t$ when age unavailable
-- **IMU cues**: body angular velocity (3) + gravity direction in body frame (3) — no position/velocity
-- **v_cmd**: body-frame velocity command from simple random generator (deferred adversarial)
-- **Previous action**: stored from last governor output
-- **History buffer**: rolling window ($L=4$ default), interleaved grid channels + flat state vector
-
-### 2. Observation Spec (Hybrid Format)
-
-```
-"lidar_grid": [N, L*3, H, V]   — L frames × 3 channels (range, mask, weight)
-"state_vec":  [N, L*13]        — L frames × 13 dims (IMU6 + v_cmd3 + prev3 + age1)
-```
-
-### 3. Feature Extractor
-
-- CNN: `LazyConv2d` auto-adapts to multi-channel input
-- State encoder: `Linear→ELU→LayerNorm` (64-dim)
-- Merge: `CatTensors` → `MLP[192, 256]` → actor feature
+- Active MID360 ray pattern/ray ordering in the training path.
+- Raw range `r_t` as true distance, not danger-coded inverse range.
+- Valid-return mask `m_t` from finite in-range returns.
+- Reliability weights `w_t` bounded in `[0, 1]`, with invalid beams weighted `0`.
+- Timestamp/frame-age handling able to identify stale or repeated frames.
+- Allowed IMU cues only: body angular velocity and gravity direction.
+- Body-frame `v_cmd` and previous issued governor/controller output in history.
+- Fixed-size history rollover and selected-env reset clearing.
+- Actor input limited to allowed fields such as `lidar_grid` and `state_vec`.
+- PPO hybrid input path initializes and forwards through `lidar_grid` + `state_vec`.
+- B runtime smoke passes reset, step, actor audit, no NaN, and MID360 valid returns.
 
 ---
 
-## Method Consistency Checklist
+## Code Changes
 
-| Check | Status |
-|-------|:------:|
-| No pose in actor obs | ✅ |
-| No odometry in actor obs | ✅ |
-| No explicit velocity in actor obs | ✅ |
-| No map/SLAM in actor obs | ✅ |
-| No privileged simulator state in actor obs | ✅ |
-| IMU cues: body ang_vel + gravity only (no linear vel) | ✅ |
-| v_cmd in body frame | ✅ |
-| History buffer over allowed fields only | ✅ |
-| MID360 pattern: 360°×59° FOV | ✅ |
-
----
-
-## Tests Run
-
-**Code-level**:
-| Test | Result |
-|------|:------:|
-| ObservationBuilder import | ✅ |
-| Config loading (history_len=4, tau=0.5) | ✅ |
-| Observation spec shape correctness | ✅ |
-| PPO feature extractor input keys match | ✅ |
-
-**Runtime (B0 smoke test, 4 envs)**:
-| Test | Result | Evidence |
-|------|:------:|----------|
-| Hybrid obs lidar_grid shape | ✅ | `[4, 12, 360, 59]` (12 = 4 history × 3 channels) |
-| Hybrid obs state_vec shape | ✅ | `[4, 52]` (52 = 4 history × 13) |
-| MID360ObservationBuilder init | ✅ | `MID360ObservationBuilder created (history=4)` |
-| Actor input audit (with new obs) | ✅ | `ACTOR INPUT AUDIT PASS` |
-| No NaN in observation | ✅ | 500 steps clean |
-
-## Known Issues
-
-1. **Noise/dropout**: Deferred (D-009), config switches present but OFF by default
-2. **Neighbor-consistency weights**: Deferred (D-010)
-3. **Longer history ablations**: Deferred (D-011)
-4. **512-env scaling**: Same as instinctRL-A — works with ≤4 envs
+| File | Change Summary |
+|------|----------------|
+| `training/scripts/instinctRL/mid360_pattern.py` | Added Livox MID360 RayCaster pattern wrapper, mount helpers, and deterministic ray-order hash helper. |
+| `training/scripts/env.py` | Replaced instinctRL `BpearlPatternCfg` path with MID360 helper wrapper; added previous issued action storage; clears selected env history/action on reset; passes `prev_action` into the builder. |
+| `training/scripts/instinctRL/observation.py` | Requires externally supplied `prev_action`; clamps weights to `[0, 1]`; keeps invalid-beam weights at `0`; tracks frame age and stale frames; supports selected-env history reset. |
+| `training/scripts/instinctRL/command_adapter.py` | Corrected body-to-world quaternion rotation semantics; removed incorrect inverse rotation use. |
+| `training/scripts/instinctRL/audit.py` | Added hybrid actor schema audit for `lidar_grid` and `state_vec`. |
+| `training/scripts/instinctRL/__init__.py` | Moved observation and MID360 pattern helpers into the active instinctRL module list. |
+| `training/scripts/train.py` | Added `instinctRL.mode` split; smoke mode runs B0/B observation checks; train mode runs actor/schema audit and PPO hybrid forward smoke before normal training. |
+| `training/cfg/train.yaml` | Added `instinctRL.mode: "smoke"`. |
 
 ---
 
-## Next Recommended Step
+## Test Coverage Added
 
-Proceed to **instinctRL-C**: Measurement-Space Anchor Manager.
+| Test file | Coverage |
+|-----------|----------|
+| `training/unit_test/test_instinctrl_command_adapter.py` | Identity, yaw 90 deg, and roll/pitch body-to-world transform cases. |
+| `training/unit_test/test_instinctrl_mid360_pattern.py` | MID360 ray count/shape, deterministic order/hash, and sensor-configured count. |
+| `training/unit_test/test_instinctrl_observation.py` | True raw range, valid mask, reliability bounds, invalid weights, timestamp/frame age, stale frames, history rollover, selected-env reset, and previous action feedback. |
+| `training/unit_test/test_instinctrl_actor_audit.py` | Actor absence/schema tests for forbidden fields and hybrid actor obs keys. |
+| `training/unit_test/test_instinctrl_ppo_hybrid.py` | PPO hybrid forward smoke when TorchRL/TensorDict dependencies import correctly; explicit local skip when those dependencies are unavailable. |
+
+---
+
+## Code Evidence
+
+- `env.py` no longer imports `patterns` from Orbit sensors and no longer configures `patterns.BpearlPatternCfg` in the inspected active instinctRL path.
+- `MID360ObservationBuilder.build()` raises if `prev_action` is not supplied, preventing silent zero/default history.
+- `env.set_prev_issued_action_body()` stores the governor/controller command that was issued before the current environment step.
+- `reset_history(env_ids)` clears only selected env history rows while preserving global frame-time continuity.
+- `state_vec` remains `history_len * 13`: IMU6 + `v_cmd`3 + `prev_action`3 + frame_age1 per frame.
+- `audit.check_actor_schema()` requires exactly `lidar_grid` and `state_vec` in actor observation and validates expected dimensions.
+- `train.py` separates `instinctRL.mode=smoke` from `instinctRL.mode=train` instead of treating every instinctRL run as a B0-only early return.
+
+---
+
+## Actual Validation Run
+
+| Command | Result |
+|---------|--------|
+| `python3 -m pytest isaac-training/training/unit_test/test_instinctrl_*.py` | Failed before collection because the base Python environment has no `pytest`. |
+| Manual pure unit-test runner under base Python | Passed all runnable tests; PPO hybrid test skipped because TorchRL/TensorDict unavailable. |
+| Manual pure unit-test runner under `/home/mint/miniconda3/envs/NavRL/bin/python` | Passed all runnable tests; PPO hybrid test skipped because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`. |
+| `python3 -m py_compile ...` for changed code/tests | Passed. |
+| `rg -n "BpearlPatternCfg|patterns\\." isaac-training/training/scripts/env.py isaac-training/training/scripts/instinctRL isaac-training/training/cfg -S` | No matches. |
+| `python3 isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: base Python lacks `hydra`. |
+| `/home/mint/miniconda3/envs/NavRL/bin/python isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: `wandb` import requires missing `click`. |
+
+---
+
+## Remaining Blockers Before C
+
+| ID | Blocker | Required result |
+|----|---------|-----------------|
+| B-VAL-001 | Isaac runtime smoke has not run in this local environment. | `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` passes reset, step, multi-step history rollover, actor/schema audit, no NaN, and MID360 valid returns. |
+| B-VAL-002 | TorchRL/PPO hybrid forward validation could not run locally. | `test_instinctrl_ppo_hybrid.py` and/or `instinctRL.mode=train` forward smoke passes with real TorchRL/TensorDict dependencies. |
+| B-VAL-003 | Standard pytest gate is unavailable locally. | `pytest` runs the new B test files and reports pass, with no dependency-related skips except explicitly documented runtime-only skips. |
+
+---
+
+## Verdict
+
+- `instinctRL-A`: PASS with open runtime verification item(s)
+- `instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED
+- `instinctRL-C`: NO-GO until B-VAL-001 through B-VAL-003 pass

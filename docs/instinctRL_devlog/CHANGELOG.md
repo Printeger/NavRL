@@ -4,11 +4,53 @@
 
 ---
 
+## 2026-07-04 (B-fix implementation)
+
+### instinctRL-B: Observation / History Buffer Fix Pass
+
+**Status**: Implementation complete, runtime acceptance pending. Current stage remains `B-closeout / B-runtime validation before instinctRL-C`.
+
+- Replaced the active instinctRL RayCaster pattern path with a Livox MID360 helper wrapper; `env.py` no longer uses `patterns.BpearlPatternCfg` for instinctRL.
+- Fixed `BodyToWorldVelocityAdapter` to use body-to-world quaternion rotation semantics and added identity, yaw, and roll/pitch frame tests.
+- Wired `prev_action` from the previously issued governor/controller command into `MID360ObservationBuilder`; reset now clears selected env history and previous issued action.
+- Hardened Observation / History Buffer behavior: raw range remains true distance, invalid beams have zero reliability, weights clamp to `[0, 1]`, stale/repeated frames are flagged, and history rollover/reset are unit-tested.
+- Added actor schema audit for hybrid actor input and tests proving actor obs only exposes `lidar_grid` and `state_vec`.
+- Added explicit `instinctRL.mode` separation: `smoke` runs B0/B observation smoke; `train` initializes PPO and runs the hybrid actor audit/forward path before continuing training.
+- Added pure Python/PyTorch unit tests for MID360 pattern shape/order, observation semantics, previous-action feedback, actor schema, PPO hybrid forward smoke, and command-adapter frame convention.
+
+**Actual validation run**:
+
+- `python3 -m pytest ...` could not run because the base Python environment has no `pytest`.
+- Manual pure unit-test runner passed all runnable tests under both base Python and the `NavRL` conda Python.
+- `test_instinctrl_ppo_hybrid.py` skipped in the local environment because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`.
+- Minimal Isaac runtime smoke did not run to completion locally:
+  - base Python: `ModuleNotFoundError: No module named 'hydra'`
+  - `NavRL` conda Python: `ModuleNotFoundError: No module named 'click'` via `wandb`
+
+**Acceptance conclusion**: instinctRL-B is **PARTIAL / NOT FULLY ACCEPTED** until the runtime smoke and PPO hybrid forward validation pass in a correctly provisioned Isaac/TorchRL environment. instinctRL-C remains **NO-GO**.
+
+---
+
+## 2026-07-04 (Closeout Acceptance Review)
+
+### instinctRL-A / instinctRL-B Closeout Before C
+
+**Status**: Historical closeout. Superseded in part by the later B-fix implementation entry above.
+
+- **instinctRL-A**: Accepted as B0 smoke-test / infrastructure baseline, not learning success.
+- **instinctRL-A verification update**: Adapter frame direction has now been corrected and unit-tested. Runtime integration remains covered by the before-C smoke validation.
+- **instinctRL-B**: Partial acceptance only. The later implementation fixed the known code blockers, but full acceptance remains blocked by unrun Isaac runtime smoke and unrun local TorchRL PPO hybrid forward validation.
+- **instinctRL-C**: NO-GO until runtime validation in `TEST_PLAN.md` passes.
+
+This entry supersedes earlier 2026-07-04 entries that described instinctRL-B as complete or recommended proceeding directly to instinctRL-C.
+
+---
+
 ## 2026-07-04 (PM3)
 
 ### instinctRL-B: Observation / History Buffer
 
-**Status**: ✅ Complete
+**Status**: Superseded by closeout review. Implementation exists, but B is only partially accepted.
 
 - **New**: `instinctRL/observation.py` — `MID360ObservationBuilder` (220 lines)
   - Raw MID360 range $r_t$ (true distance, not danger-coded)
@@ -21,7 +63,7 @@
 - **Env**: replaced danger-coded LiDAR with ObservationBuilder; hybrid obs spec (lidar_grid + state_vec)
 - **PPO**: multi-channel CNN + state vector encoder with CatTensors merge
 - **Deferred**: D-009 (noise/dropout curriculum), D-010 (neighbor-consistency weights), D-011 (longer history ablations)
-- **Resolved**: D-002 (Full MID360 preprocessing)
+- **Superseded claim**: This entry originally marked D-002 resolved. The 2026-07-04 closeout review corrected D-002 to partial only.
 
 ---
 

@@ -5,6 +5,26 @@
 
 ---
 
+## D-2026-07-04-014: B-Fix Implementation Does Not Yet Authorize instinctRL-C
+
+**Decision**: Keep instinctRL-C blocked after the B-fix implementation pass until runtime validation succeeds.
+
+**Rationale**: The code blockers found during closeout have been addressed: active instinctRL RayCaster wiring no longer uses `BpearlPatternCfg`, body-to-world adapter semantics are corrected and unit-tested, previous issued action is fed into the observation builder, actor schema audit exists, and `instinctRL.mode` separates smoke from train. However, handbook acceptance also requires executable evidence through the actual runtime path. The local environment cannot currently run standard `pytest`, TorchRL/PPO hybrid forward validation, or Isaac runtime smoke because dependencies are missing or broken.
+
+**Consequence**: instinctRL-B remains `PARTIAL / NOT FULLY ACCEPTED`. instinctRL-C remains `NO-GO` until `TEST_PLAN.md` B validation commands pass in a correctly provisioned environment.
+
+---
+
+## D-2026-07-04-013: A/B Closeout Blocks instinctRL-C
+
+**Decision**: Do not start instinctRL-C until the B-fix checklist passes. instinctRL-A is accepted only as B0 smoke-test / infrastructure baseline, not learning success. instinctRL-B is partial only, not fully accepted.
+
+**Rationale**: The handbook requires Observation / History Buffer acceptance to include MID360 range/mask/weights, timestamps, previous output, history, stable ray ordering, and tests. Current code has a real observation builder and hybrid PPO input, but active `env.py` still uses `patterns.BpearlPatternCfg`, the training path returns after B0 smoke when `instinctRL.enabled=true`, `prev_action` is not wired from the issued governor/controller output, and actor audit scans key names rather than `state_vec` provenance.
+
+**Consequence**: The current stage is `B-closeout / B-fix before instinctRL-C`. Any older devlog entry saying instinctRL-B is complete or "proceed to instinctRL-C" is superseded by this decision.
+
+---
+
 ## D-2026-07-04-001: B0 Minimal Governor (α=1, v_corr=0) in instinctRL-A
 
 **Decision**: Implement only the minimal B0 governor (α=1, v_corr=0, v_gov=v_cmd) in instinctRL-A. Defer trainable governor head (α, v_corr) to instinctRL-A2 or instinctRL-F.

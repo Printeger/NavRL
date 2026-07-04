@@ -1,11 +1,11 @@
 # instinctRL-A: Direct Velocity-Governor Baseline
 
-> **Ticket ID**: instinctRL-A  
-> **Status**: ✅ Complete — B0 smoke test PASSED (7/7 criteria, 2026-07-04 PM4)  
-> **Date**: 2026-07-04  
-> **Dependencies**: instinctRL-0 (all 5 blockers resolved)  
-> **Blocks**: instinctRL-B, instinctRL-C, instinctRL-D, instinctRL-E, instinctRL-F, instinctRL-G, instinctRL-H  
-> **Risk**: Medium  
+> **Ticket ID**: instinctRL-A
+> **Status**: PASS with open runtime verification item(s) — B0 smoke test baseline accepted, not learning success
+> **Date**: 2026-07-04
+> **Dependencies**: instinctRL-0 (all 5 blockers resolved)
+> **Blocks**: instinctRL-B, instinctRL-C, instinctRL-D, instinctRL-E, instinctRL-F, instinctRL-G, instinctRL-H
+> **Risk**: Medium
 > **Handbook**: `instinctRL_Development_Handbook_v1_1_platform_locked.tex` §Tickets
 
 ---
@@ -45,7 +45,7 @@ Establish the clean body-frame velocity command path with B0 (α=1, v_corr=0 pas
 | File | Purpose | Lines |
 |------|---------|:-----:|
 | `scripts/instinctRL/audit.py` | Staged audit: `check_platform_lock()`, `check_actor_input()`, `check_action_type()`, `run_audit()` | ~140 |
-| `scripts/instinctRL/command_adapter.py` | `BodyToWorldVelocityAdapter`: body→world transform via `quat_rotate_inverse` | ~55 |
+| `scripts/instinctRL/command_adapter.py` | `BodyToWorldVelocityAdapter`: body→world transform using forward quaternion rotation semantics | ~55 |
 | `scripts/instinctRL/governor.py` | `MinimalGovernor` (B0: α=1, v_corr=0) + `GovernorOutput` dataclass (future interface) | ~75 |
 | `docs/instinctRL_devlog/DEFERRED_REGISTER.md` | 8 deferred items (D-001 to D-008) with full metadata | ~120 |
 | `docs/instinctRL_devlog/DECISION_LOG.md` | 6 architectural decisions from grilling session | ~90 |
@@ -67,7 +67,7 @@ Establish the clean body-frame velocity command path with B0 (α=1, v_corr=0 pas
 
 ### 3. Body→World Adapter
 - `BodyToWorldVelocityAdapter.forward(body_vel, drone_quat)` → world_vel
-- Uses `quat_rotate_inverse` from OmniDrones
+- Uses body-to-world quaternion rotation semantics. The previous `quat_rotate_inverse` implementation was corrected during the B-fix pass because OmniDrones uses inverse rotation for world velocity -> body velocity.
 - Drone quaternion from privileged `info["drone_state"][...,3:7]`
 
 ### 4. v_cmd Production
@@ -119,7 +119,7 @@ Establish the clean body-frame velocity command path with B0 (α=1, v_corr=0 pas
 | A.4 Environment reset | ✅ | `Reset complete.` |
 | A.5 TASLAB_UAV spawn | ✅ | `TaslabUAV_0/base_link`, mass=1.1583kg |
 | A.6 MID360 attachment | ✅ | `[4, 1, 360, 59]`, 18.97% valid |
-| A.7 Body→World adapter | ✅ | B0 governor α=1.0, 500 steps no NaN |
+| A.7 Body→World adapter | Pure unit test passed; runtime smoke pending | `test_instinctrl_command_adapter.py` covers identity, yaw 90 deg, and roll/pitch cases |
 | A.8 VelController execution | ✅ | `4 articulations`, motor commands valid |
 | A.9 Smoke rollout stability | ✅ | `Completed 500/500 steps`, Exit 0 |
 | A.10 LiDAR statistics | ✅ | min ≥ 0, max ≤ 40m |
@@ -132,9 +132,10 @@ Establish the clean body-frame velocity command path with B0 (α=1, v_corr=0 pas
 
 1. **512-env scaling**: B0 smoke test hang with 512 envs (PhysX fabric memory). Works with ≤4 envs on RTX 4070 Ti SUPER (16GB).
 2. **Standard PPO mode**: Not tested with instinctRL.enabled=false after B changes.
+3. **Adapter runtime verification**: Body-to-world unit tests now pass. The adapter still needs to be exercised through the full Isaac smoke path after the local runtime dependency issues are fixed.
 
 ---
 
 ## Next Recommended Step
 
-✅ instinctRL-A complete. Proceeded to instinctRL-B (also verified in same run). Build MID360 r, m, w, timestamps, IMU cues, command, previous output, history buffer. Dependencies: instinctRL-A complete.
+instinctRL-A is accepted as B0 smoke-test / infrastructure baseline, not learning success. Do not proceed to instinctRL-C until the B validation checklist in `TEST_PLAN.md` passes.

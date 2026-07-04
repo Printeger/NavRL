@@ -44,12 +44,14 @@ def main(cfg):
              - cfg.sensor: 传感器配置（LiDAR）
     """
     instinct_enabled = bool(getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled)
+    instinct_mode = getattr(cfg.instinctRL, "mode", "smoke") if instinct_enabled else "off"
 
     if instinct_enabled:
         from instinctRL.audit import check_platform_lock
 
         print("\n" + "=" * 60, flush=True)
-        print("[instinctRL-A] B0 Smoke Test: Direct Velocity Pass-Through", flush=True)
+        print(f"[instinctRL] Mode: {instinct_mode}", flush=True)
+        print("[instinctRL-A/B] B0/B Observation Smoke Path", flush=True)
         print("=" * 60, flush=True)
         print("[instinctRL-A] Running pre-Isaac platform audit...", flush=True)
 
@@ -149,7 +151,7 @@ def main(cfg):
     # instinctRL-A: Platform audit + B0 smoke test
     # ============================================
     if instinct_enabled:
-        from instinctRL.audit import check_actor_input, check_action_type
+        from instinctRL.audit import check_actor_input, check_actor_schema, check_action_type
         from instinctRL.governor import MinimalGovernor
         from instinctRL.command_adapter import BodyToWorldVelocityAdapter
 
@@ -178,14 +180,23 @@ def main(cfg):
     # ============================================
     # instinctRL-A: B0 Smoke Test
     # ============================================
-    if instinct_enabled:
+    if instinct_enabled and instinct_mode == "smoke":
         smoke_steps = 500
-        print(f"[instinctRL-A] Running {smoke_steps} physics steps...", flush=True)
+        print(f"[instinctRL-B] Running {smoke_steps} physics steps...", flush=True)
 
         try:
             print("[instinctRL-A] Resetting transformed environment...", flush=True)
             td = transformed_env.reset()
             print("[instinctRL-A] Reset complete.", flush=True)
+            policy_smoke = PPO(
+                cfg.algo,
+                transformed_env.observation_spec,
+                transformed_env.action_spec,
+                cfg.device,
+            )
+            with torch.no_grad():
+                policy_smoke(td.clone())
+            print("[instinctRL-B] PPO hybrid forward smoke PASSED.", flush=True)
             for step in range(smoke_steps):
                 v_cmd_body = td["info", "v_cmd"]
 
@@ -195,10 +206,17 @@ def main(cfg):
                     print(f"[instinctRL audit] {actor_msg}", flush=True)
                     if not actor_ok:
                         raise RuntimeError(f"instinctRL actor audit FAILED: {actor_msg}")
+                    schema_ok, schema_msg = check_actor_schema(
+                        td, cfg.instinctRL.observation.history_len
+                    )
+                    print(f"[instinctRL audit] {schema_msg}", flush=True)
+                    if not schema_ok:
+                        raise RuntimeError(f"instinctRL actor schema audit FAILED: {schema_msg}")
 
                 # B0: v_cmd → governor (α=1, v_corr=0) → v_gov
                 gov_out = governor(v_cmd_body)
                 v_gov_body = gov_out.v_gov
+                env.set_prev_issued_action_body(v_gov_body)
 
                 # Body → world using privileged drone quaternion at controller boundary.
                 # The actor never receives this attitude/pose state.
@@ -238,7 +256,7 @@ def main(cfg):
             print(f"[instinctRL-A] LiDAR raw range: shape={lidar_range.shape}, "
                   f"valid={valid_ratio:.2%}", flush=True)
             print(f"\n[instinctRL-A] B0 Smoke Test PASSED ({smoke_steps} steps).", flush=True)
-            print("[instinctRL-A] Complete. Stopping before full PPO training.", flush=True)
+            print("[instinctRL-B] Observation smoke path PASSED.", flush=True)
         except Exception as exc:
             print(
                 f"[instinctRL-A] B0 Smoke Test FAILED: {type(exc).__name__}: {exc}",
@@ -248,11 +266,29 @@ def main(cfg):
         finally:
             sim_app.close()
         return
+    elif instinct_enabled and instinct_mode != "train":
+        sim_app.close()
+        raise ValueError(
+            f"Unsupported instinctRL.mode={instinct_mode!r}; expected 'smoke' or 'train'."
+        )
 
     # ============================================
     # 第 5 步：创建 PPO 策略网络（非 instinctRL 模式）
     # ============================================
     policy = PPO(cfg.algo, transformed_env.observation_spec, transformed_env.action_spec, cfg.device)
+    if instinct_enabled:
+        td = transformed_env.reset()
+        actor_ok, actor_msg = check_actor_input(td)
+        print(f"[instinctRL audit] {actor_msg}", flush=True)
+        if not actor_ok:
+            raise RuntimeError(f"instinctRL actor audit FAILED: {actor_msg}")
+        schema_ok, schema_msg = check_actor_schema(td, cfg.instinctRL.observation.history_len)
+        print(f"[instinctRL audit] {schema_msg}", flush=True)
+        if not schema_ok:
+            raise RuntimeError(f"instinctRL actor schema audit FAILED: {schema_msg}")
+        with torch.no_grad():
+            policy(td.clone())
+        print("[instinctRL-B] PPO hybrid forward smoke PASSED.", flush=True)
 
     # ============================================
     # 第 6 步：（可选）加载预训练模型

@@ -6,9 +6,10 @@
 #   audit:            Platform-lock and actor-input contract checks
 #   command_adapter:  Body-frame → world-frame velocity transform
 #   governor:         Velocity governor (B0: minimal pass-through)
+#   observation:      MID360 preprocessing and history buffer (instinctRL-B)
+#   mid360_pattern:   Orbit RayCaster adapter for Livox MID360 rays
 #
 # Future (deferred):
-#   observation:      MID360 preprocessing and history buffer (instinctRL-B)
 #   anchor:           Measurement-space anchor manager (instinctRL-C)
 #   ics:              ICS-inspired command attenuation (instinctRL-E)
 #   observability:    Range-Jacobian logger (instinctRL-D)

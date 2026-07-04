@@ -59,7 +59,6 @@ class MID360ObservationBuilder:
         self.device = device
         self._step_counter = 0
         self._last_frame_time = 0.0
-        self._prev_action: Optional[torch.Tensor] = None
         self._history: Optional[Dict[str, torch.Tensor]] = None
 
     # ------------------------------------------------------------------
@@ -85,7 +84,7 @@ class MID360ObservationBuilder:
             v_cmd:       Body-frame velocity command [N, 1, 3] or [N, 3]
             dt:          Physics timestep (seconds)
             num_envs:    Number of parallel environments
-            prev_action: Previous issued governor command [N, 3] (optional)
+            prev_action: Previous issued governor command [N, 3].
 
         Returns:
             Dict with: range, mask, weight, imu, v_cmd, prev_action,
@@ -112,15 +111,15 @@ class MID360ObservationBuilder:
 
         # --- 3. Staleness-weighted reliability w_t = m_t * exp(-age/tau) ---
         self._step_counter += 1
-        self._last_frame_time += dt
+        self._last_frame_time += max(float(dt), 0.0)
         if self._step_counter == 1:
             frame_age = torch.zeros(N, 1, device=self.device)
         else:
-            frame_age = torch.full((N, 1), dt, device=self.device)
+            frame_age = torch.full((N, 1), max(float(dt), 0.0), device=self.device)
 
         tau = max(self.cfg.tau_staleness, 0.01)
         staleness_factor = torch.exp(-frame_age / tau).reshape(N, 1, 1)
-        weight = mask * staleness_factor
+        weight = (mask * staleness_factor).clamp(0.0, 1.0)
 
         # --- 4. IMU cues: body angular velocity + gravity direction ---
         # These are allowed actor inputs — no position, linear velocity, or
@@ -141,15 +140,12 @@ class MID360ObservationBuilder:
 
         # --- 6. Previous action ---
         if prev_action is None:
-            prev_action = (
-                self._prev_action
-                if self._prev_action is not None
-                else torch.zeros(N, 3, device=self.device)
-            )
-        self._prev_action = prev_action.reshape(N, 3).clone()
+            raise ValueError("prev_action must be supplied by the controller/governor path")
+        prev_action = prev_action.reshape(N, 3)
 
         # --- 7. Sim time ---
         sim_time = torch.full((N, 1), self._last_frame_time, device=self.device)
+        is_stale = (self._step_counter > 1) and (dt <= 0.0)
 
         return {
             "range": raw_range,
@@ -160,6 +156,7 @@ class MID360ObservationBuilder:
             "prev_action": prev_action.reshape(N, 3),
             "frame_age": frame_age,
             "sim_time": sim_time,
+            "is_stale": torch.full((N, 1), is_stale, dtype=torch.bool, device=self.device),
         }
 
     # ------------------------------------------------------------------
@@ -229,9 +226,9 @@ class MID360ObservationBuilder:
             else:
                 for k in self._history:
                     self._history[k][env_ids] = 0.0
-        self._step_counter = 0
-        self._last_frame_time = 0.0
-        self._prev_action = None
+        if env_ids is None:
+            self._step_counter = 0
+            self._last_frame_time = 0.0
 
     # ------------------------------------------------------------------
     # Utility: world → body vector rotation

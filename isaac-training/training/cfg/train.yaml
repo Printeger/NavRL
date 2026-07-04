@@ -42,6 +42,7 @@ wandb:
 # ============================================
 instinctRL:
   enabled: true                        # Enable instinctRL mode
+  mode: "smoke"                        # smoke: B0/B observation smoke | train: PPO path
   baseline:
     id: "direct_velocity"             # B0: direct velocity pass-through
 

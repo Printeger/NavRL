@@ -1,7 +1,8 @@
 # instinctRL Development Status
 
-> **Last Updated**: 2026-07-04  
-> **Current Stage**: instinctRL-B (Observation / History Buffer)
+> **Last Updated**: 2026-07-04
+> **Current Stage**: B-closeout / B-runtime validation before instinctRL-C
+> **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
 
@@ -9,111 +10,72 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | instinctRL-B — Observation / History Buffer |
-| **Stage status** | ✅ Complete — Hybrid observation pipeline built + runtime verified |
-| **Active ticket** | instinctRL-B |
-| **Next ticket** | instinctRL-C — Measurement-Space Anchor |
-| **Method consistency** | ✅ Velocity-controller-based. Paper 1 route preserved. |
-| **Platform lock** | ✅ TASLAB_UAV runtime verified (4 envs, 500-step smoke test PASSED) |
-| **Sensor lock** | ✅ MID360 runtime verified: LiDAR [4,1,360,59], 18.97% valid returns |
-| **Actor input compliance** | ✅ Both `check_actor_input` and `check_action_type` PASSED at runtime |
+| **Current stage** | B-closeout / B-runtime validation before instinctRL-C |
+| **Active ticket** | instinctRL-B validation |
+| **Next ticket** | instinctRL-C only after B runtime/PPO validation passes |
+| **Final go/no-go** | instinctRL-C: NO-GO |
+| **instinctRL-A** | PASS with open runtime verification item(s) |
+| **instinctRL-B** | PARTIAL / NOT FULLY ACCEPTED |
 
 ---
 
-## Completed Tickets
+## Acceptance Status
 
-| Ticket | Title | Date | Notes |
-|--------|-------|------|-------|
-| instinctRL-0 | Platform and Sensor Infrastructure Audit | 2026-07-03 | Audit report produced. 5 blockers identified. |
-| instinctRL-0 | Blocker Fixes (all 5 resolved) | 2026-07-04 | env.py, ppo.py, CONTEXT.md updated. Asymmetric actor-critic. |
-| instinctRL-A | Direct Velocity-Governor Baseline (B0) | 2026-07-04 | Config namespace, governor, adapter, audit. B0 smoke test PASSED (7/7). |
-| instinctRL-B | Observation / History Buffer | 2026-07-04 | Hybrid observation: raw range, mask, weight, IMU, history. Runtime verified. |
-
----
-
-## Active Tickets
-
-| Ticket | Title | Status | Assigned |
-|--------|-------|--------|----------|
-| instinctRL-0 | Platform and Sensor Infrastructure Audit | ✅ Complete | — |
+| Ticket | Verdict | Notes |
+|--------|---------|-------|
+| instinctRL-0 | Accepted as prior platform audit baseline | Earlier audit remains useful context, but current B acceptance is judged against active code. |
+| instinctRL-A | PASS with open runtime verification item(s) | Accepted as B0 smoke-test / infrastructure baseline, not learning success. Adapter frame direction has a pure unit test; full runtime smoke must still run in a provisioned Isaac environment. |
+| instinctRL-B | PARTIAL / NOT FULLY ACCEPTED | Code blockers have been addressed, and pure tests pass. Full handbook acceptance is blocked by local inability to run Isaac runtime smoke and TorchRL PPO hybrid forward validation. |
+| instinctRL-C | NO-GO | Do not start until B validation checklist passes. |
 
 ---
 
-## Blocked Items
+## Current B-Fix State
 
-**None.** All 5 instinctRL-0 blockers resolved.
-
-### Blocker Resolution Details
-
-| # | Blocker | Resolution | File(s) |
-|---|---------|-----------|---------|
-| 1 | LiDAR prim path hardcoded | Dynamic prim discovery via `_resolve_base_link()` | `env.py` |
-| 2 | Actor velocity leak (`vel_g`) | Removed `state[5:8]` from actor obs | `env.py` |
-| 3 | Actor position leak (`rpos_clipped_g`, `distance`) | Removed `state[0:5]`, `direction` from actor obs | `env.py` |
-| 4 | Actor privileged obstacle state leak | Removed `dynamic_obstacle` from actor obs + dead code cleanup | `env.py`, `ppo.py` |
-| 5 | No body-frame command interface | Critic privileged branch added (asymmetric). Command adapter deferred to instinctRL-A. | `ppo.py`, `env.py` |
+| ID | Former blocker | Current code fact | Remaining acceptance requirement |
+|----|----------------|-------------------|----------------------------------|
+| B-FIX-001 | Active env RayCaster used `patterns.BpearlPatternCfg` | `env.py` now uses `instinctRL.mid360_pattern.create_mid360_pattern_cfg()` for the active instinctRL RayCaster path; local search found no `BpearlPatternCfg` use in `training/scripts/env.py`, `training/scripts/instinctRL`, or `training/cfg`. | Run Isaac runtime smoke proving active MID360 returns and stable ray layout in the real env. |
+| B-FIX-002 | Body-to-world adapter frame direction was wrong/unverified | `BodyToWorldVelocityAdapter` now uses body-to-world quaternion rotation; identity, yaw 90 deg, and roll/pitch unit tests pass. | Include adapter path in runtime smoke. |
+| B-FIX-003 | `instinctRL.enabled=true` returned after B0 smoke only | `instinctRL.mode` now separates `smoke` and `train`; train mode runs actor audit, schema audit, and PPO hybrid forward smoke before normal training. | Run `instinctRL.mode=smoke` runtime smoke and a minimal `instinctRL.mode=train` PPO initialization/forward smoke in a working environment. |
+| B-FIX-004 | `prev_action` was not fed from issued governor output | `env.set_prev_issued_action_body()` stores the previous issued body-frame command; `observation.py` now requires `prev_action` and unit tests verify feedback. | Confirm in runtime smoke across reset/step boundaries. |
+| B-FIX-005 | Actor audit scanned key names only | `audit.py` now includes `check_actor_schema()` for the hybrid actor input shape/key contract; pure actor schema tests pass. | Runtime actor audit must pass on real `TensorDict` from `NavigationEnv`. |
+| B-FIX-006 | B tests were missing | Pure tests for MID360 pattern, observation semantics, history/reset, previous action, actor schema, PPO hybrid smoke, and adapter frame convention were added. | Install/repair local test dependencies so `pytest`, TorchRL, and Isaac smoke can run normally. |
 
 ---
 
-## Upcoming Tickets
+## Actual Test Evidence
 
-| Ticket | Title | Dependencies | Risk |
-|--------|-------|-------------|:----:|
-| instinctRL-A | Direct Velocity-Governor Baseline | instinctRL-0 blockers resolved | Medium |
-| instinctRL-B | Observation / History Buffer | instinctRL-A | High |
-| instinctRL-C | Measurement-Space Anchor | instinctRL-B | High |
-| instinctRL-D | Observability Logger | instinctRL-C | Medium |
-| instinctRL-E | ICS-Inspired Attenuation | instinctRL-B | High |
-| instinctRL-F | Reward Integration and Training | instinctRL-B, C, E | High |
-| instinctRL-G | Baselines and Ablations | instinctRL-F | Medium |
-| instinctRL-H | Real-Robot Deployment Validation | instinctRL-F | High |
-
----
-
-## Known Risks
-
-| Risk | Probability | Impact | Status |
-|------|:----------:|:------:|--------|
-| Active RayCaster remains attached to Hummingbird path | Confirmed | High | 🔴 Must fix (blocker 1) |
-| MID360 helper exists but not wired into training | Confirmed | High | 🔴 Must fix (instinctRL-0) |
-| Low-level controller uses state internally | Acceptable | Low | ✅ Per handbook: controller internals are conventional stabilization |
-| Open-field unobservability | Inevitable | Medium | 🟡 Report as method limitation; use observability logger |
-| Range dropout and latency | Expected | Medium | 🟡 Use masks, weights, timestamps; defer to instinctRL-B |
-| Frame convention mismatch (body vs world) | High | High | 🔴 Must fix (blocker 5); add body→world adapter + tests |
-| Policy overuses ICS | Potential | Medium | 🟡 Penalize intervention usage; compare against B5 no-ICS baseline |
-| Reward hacking | Potential | Low | 🟡 Log component rewards; validate with baselines |
-| Sim-to-real gap | Expected | High | 🟡 Defer to instinctRL-H; keep TASLAB params and MID360 noise model |
-| Surface normals leak into deployed safety | Preventable | Medium | 🟡 Separate observability logger from ICS; add no-normal audit |
-| CONTEXT.md describes CTBR/CMDP (outdated) | Confirmed | Low | 🟡 v1.1 handbook overrides; update CONTEXT.md after instinctRL-A |
+| Command | Result |
+|---------|--------|
+| `python3 -m pytest isaac-training/training/unit_test/test_instinctrl_*.py` | Not runnable in base Python: `No module named pytest`. |
+| Manual pure unit-test runner under base Python | Passed all runnable tests; PPO hybrid test skipped because TorchRL/TensorDict unavailable. |
+| Manual pure unit-test runner under `/home/mint/miniconda3/envs/NavRL/bin/python` | Passed all runnable tests; PPO hybrid test skipped because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`. |
+| `python3 -m py_compile ...` for changed code/tests | Passed. |
+| `rg -n "BpearlPatternCfg|patterns\\." ...` | No matches in the inspected active instinctRL env/cfg paths. |
+| `python3 isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Not runnable in base Python: `No module named hydra`. |
+| `/home/mint/miniconda3/envs/NavRL/bin/python isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Not runnable locally: `No module named click` from `wandb`. |
 
 ---
 
-## Method Consistency Status
+## Clean Status Table
 
-| Aspect | Handbook (v1.1) | Current Code | Status |
-|--------|:---------------:|:------------:|:------:|
-| Action type | Body-frame velocity command | World-frame velocity via CNN+BetaActor | ⚠️ Needs change |
-| Actor input | MID360 $r_t, m_t, w_t$, IMU, $\vcmd$, history | `lidar` (danger-coded grid), `state` (vel+pos), `direction`, `dynamic_obstacle` | ❌ Non-compliant |
-| Controller | `VelController(LeePositionController)` with TASLAB gains | Same | ✅ Compliant |
-| Platform | TASLAB_UAV | `cfg.drone.model_name = "TaslabUAV"` | ⚠️ Config matches but not enforced |
-| Sensor | Livox MID360 | `BpearlPatternCfg` in env, MID360 helpers unused | ❌ Not wired |
-| Frame convention | Body/governor frame for commands | Goal-frame and world-frame used | ❌ Incorrect |
-| Actor architecture | Governor head $(\alpha_t, \vcorr)$ | BetaActor outputting raw velocity | ❌ Needs replacement |
-| Critic architecture | Critic-only privileged branch | Single critic, no privilege separation | ❌ Needs redesign |
-| Reward terms | Tracking, anchor, intervention, safety | Goal-navigation reward (vel·dir + log-clearance) | ❌ Needs redesign |
+| Component | Current fact | Status |
+|-----------|--------------|--------|
+| Config namespace | `instinctRL.enabled=true`, `instinctRL.mode=smoke`, `baseline.id=direct_velocity`, observation history config exists | Present |
+| B0 governor | `MinimalGovernor` implements alpha=1, v_corr=0 pass-through | Present |
+| Command adapter | Corrected body-to-world rotation and covered by pure unit tests | Present, runtime smoke pending |
+| Observation builder | Builds range/mask/weight/IMU/v_cmd/prev_action/history tensors; requires real `prev_action` | Present, pure tests pass |
+| Active sensor pattern | Active instinctRL env path uses MID360 helper wrapper, not `BpearlPatternCfg` | Present, runtime smoke pending |
+| PPO hybrid input | `ppo.py` consumes `lidar_grid` and `state_vec` | Present, local TorchRL validation blocked |
+| Actor audit | Key scan plus hybrid schema audit | Present, provenance remains by schema/code review rather than full taint proof |
+| Training path | Explicit smoke/train mode split | Present, runtime validation pending |
 
 ---
 
-## Environment Summary
+## Superseded Records
 
-| Component | Path | Status |
-|-----------|------|--------|
-| Simulator | Isaac Sim via OmniDrones + Orbit | ✅ Working |
-| Training env | `isaac-training/training/scripts/env.py` | ⚠️ Needs MID360 + actor input fixes |
-| Training entry | `isaac-training/training/scripts/train.py` | ✅ Working |
-| PPO policy | `isaac-training/training/scripts/ppo.py` | ⚠️ Needs governor head |
-| MID360 sim | `isaac-training/training/envs/livox_mid360.py` | ✅ Mature |
-| TASLAB model | `isaac-training/third_party/OmniDrones/.../taslab_uav.py` | ✅ Working |
-| Velocity ctrl | `VelController` + `LeePositionController` | ✅ Working |
-| ROS1 deploy | `ros1/navigation_runner/` | ❌ Non-compliant actor inputs |
-| ROS2 deploy | `ros2/navigation_runner/` | ❌ Non-compliant actor inputs |
+Earlier 2026-07-04 devlog entries that mark instinctRL-B as `Complete` or say to proceed to instinctRL-C remain superseded. The current truthful conclusion is:
+
+- `instinctRL-A`: PASS with open runtime verification item(s)
+- `instinctRL-B`: PARTIAL / NOT FULLY ACCEPTED
+- `instinctRL-C`: NO-GO until runtime/PPO validation passes

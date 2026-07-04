@@ -27,7 +27,7 @@ from omni_drones.robots.drone import MultirotorBase
 from omni.isaac.orbit.assets import AssetBaseCfg
 from omni.isaac.orbit.terrains import TerrainImporterCfg, TerrainImporter, TerrainGeneratorCfg, HfDiscreteObstaclesTerrainCfg
 from omni_drones.utils.torch import euler_to_quaternion, quat_axis
-from omni.isaac.orbit.sensors import RayCaster, RayCasterCfg, patterns
+from omni.isaac.orbit.sensors import RayCaster, RayCasterCfg
 from omni.isaac.core.utils.viewports import set_camera_view
 from utils import vec_to_new_frame, vec_to_world, construct_input
 import omni.isaac.core.utils.prims as prim_utils
@@ -142,24 +142,45 @@ class NavigationEnv(IsaacEnv):
         else:
             drone_prim_pattern = f"/World/envs/env_.*/{self.cfg.drone.model_name}_0"
         print(f"[instinctRL-0] LiDAR prim path pattern: {drone_prim_pattern}", flush=True)
+        if getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled:
+            from instinctRL.mid360_pattern import (
+                create_mid360_pattern_cfg,
+                mount_position,
+                mount_quat_wxyz,
+                ray_order_hash,
+            )
+
+            pattern_cfg = create_mid360_pattern_cfg(cfg.sensor)
+            ray_starts, ray_dirs = pattern_cfg.func(pattern_cfg, self.device)
+            offset_pos = mount_position(cfg.sensor)
+            offset_rot = mount_quat_wxyz(cfg.sensor)
+            self._mid360_ray_order_hash = ray_order_hash(ray_dirs)
+            print(
+                "[instinctRL-B] Active sensor pattern: LivoxMid360Pattern "
+                f"rays={pattern_cfg.num_rays} shape=({pattern_cfg.num_horizontal_rays}, "
+                f"{pattern_cfg.num_vertical_lines}) hash={self._mid360_ray_order_hash}",
+                flush=True,
+            )
+        else:
+            from instinctRL.mid360_pattern import create_mid360_pattern_cfg
+
+            pattern_cfg = create_mid360_pattern_cfg(cfg.sensor)
+            offset_pos = (0.0, 0.0, 0.0)
+            offset_rot = (1.0, 0.0, 0.0, 0.0)
+
         ray_caster_cfg = RayCasterCfg(
             # 绑定到无人机的 base_link（所有环境的所有无人机）
             prim_path=drone_prim_pattern,
             
-            # 传感器相对于 base_link 的偏移（这里是原点）
-            offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 0.0)),
+            offset=RayCasterCfg.OffsetCfg(pos=offset_pos, rot=offset_rot),
             
             # instinctRL-0: attach_yaw_only=False for solid-state MID360.
             # MID360 is a non-repetitive scanning LiDAR, not a spinning mirror.
             # This changes LiDAR data distribution vs old yaw-only policies.
             attach_yaw_only=False,
             
-            # 使用 Bpearl 激光雷达的扫描模式
-            pattern_cfg=patterns.BpearlPatternCfg(
-                horizontal_res=self.lidar_hres,  # 水平分辨率：10°
-                # 垂直角度：从 -10° 到 20°，均匀分布 4 条射线
-                vertical_ray_angles=torch.linspace(*self.lidar_vfov, self.lidar_vbeams) 
-            ),
+            pattern_cfg=pattern_cfg,
+            max_distance=self.lidar_range,
             
             debug_vis=False,  # 不可视化射线（提高性能）
             
@@ -206,6 +227,7 @@ class NavigationEnv(IsaacEnv):
             
             # 前一步的速度（用于计算平滑性奖励）
             self.prev_drone_vel_w = torch.zeros(self.num_envs, 1 , 3) 
+            self._prev_issued_action_body = torch.zeros(self.num_envs, 3)
 
 
     def _design_scene(self):
@@ -639,6 +661,10 @@ class NavigationEnv(IsaacEnv):
         self.drone.set_world_poses(pos, rot, env_ids)
         self.drone.set_velocities(self.init_vels[env_ids], env_ids)
         self.prev_drone_vel_w[env_ids] = 0.
+        if hasattr(self, "_prev_issued_action_body"):
+            self._prev_issued_action_body[env_ids] = 0.0
+        if hasattr(self, "_obs_builder"):
+            self._obs_builder.reset_history(env_ids)
         self.height_range[env_ids, 0, 0] = torch.min(pos[:, 0, 2], self.target_pos[env_ids, 0, 2])
         self.height_range[env_ids, 0, 1] = torch.max(pos[:, 0, 2], self.target_pos[env_ids, 0, 2])
 
@@ -652,6 +678,12 @@ class NavigationEnv(IsaacEnv):
         if (self.cfg.env_dyn.num_obstacles != 0):
             self.move_dynamic_obstacle()
         self.lidar.update(self.dt)
+
+    def set_prev_issued_action_body(self, action_body: torch.Tensor):
+        """Store the last body-frame command issued to the controller."""
+        if action_body.dim() == 3 and action_body.shape[1] == 1:
+            action_body = action_body.squeeze(1)
+        self._prev_issued_action_body[:] = action_body.reshape(self.num_envs, 3).detach()
     
     # ============================================
     # 计算观测和奖励（每步调用）
@@ -699,6 +731,7 @@ class NavigationEnv(IsaacEnv):
                 v_cmd=self._v_cmd,
                 dt=self.dt,
                 num_envs=self.num_envs,
+                prev_action=self._prev_issued_action_body,
             )
             obs_hist = self._obs_builder.build_history(obs_frame)
 

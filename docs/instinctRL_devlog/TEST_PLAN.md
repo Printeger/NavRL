@@ -1,11 +1,14 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
+> **Last Updated**: 2026-07-04 (B-fix implementation)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
 
 ## instinctRL-A: B0 Smoke Test
+
+**Closeout verdict**: PASS with open verification item(s). Accepted as B0 smoke-test / infrastructure baseline, not learning success.
 
 ### Test A.1: Platform Lock Audit
 - **Runtime result**: ✅ PASSED (2026-07-04)
@@ -38,8 +41,10 @@
 ### Test A.7: Body→World Velocity Adapter
 - **What**: Body-frame v_cmd correctly transformed to world-frame
 - **Where**: `BodyToWorldVelocityAdapter.forward()` during smoke test
-- **Pass**: Output shape matches input, no NaN, non-zero when input non-zero
-- **Fail**: NaN in output, zero output for non-zero input, shape mismatch
+- **Current status**: Pure unit test passed; runtime smoke still pending.
+- **Evidence**: `training/unit_test/test_instinctrl_command_adapter.py` covers identity, 90 deg yaw, and roll/pitch cases.
+- **Pass**: Known quaternion cases prove body -> world direction; integration smoke shows body X/Y/Z commands map to expected world motion.
+- **Fail**: Any yaw/roll/pitch case maps through inverse direction, or only shape/NaN checks are performed.
 
 ### Test A.8: VelController Execution
 - **What**: World-frame velocity → motor commands via `VelController(LeePositionController)`
@@ -57,17 +62,48 @@
 
 ## instinctRL-B: Observation / History Buffer
 
-### Test B.1: Raw Range Computation
+**Current verdict**: PARTIAL / NOT FULLY ACCEPTED. Code fixes and pure tests are in place, but full acceptance is blocked by missing runtime smoke and local TorchRL/PPO validation.
 
-### instinctRL-B: Observation / History Buffer
-- MID360 ray count stability
-- Ray ordering determinism
-- Valid-return mask correctness
-- Reliability weight bounds [0,1]
-- Timestamp monotonicity
-- History buffer rollover
-- Stale-frame detection
-- Actor input absence (re-check)
+### Required Before-C Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| B.1 Active MID360 pattern and ray ordering | Active `NavigationEnv` uses Livox MID360 ray ordering or a documented equivalent; no `BpearlPatternCfg` substitute in instinctRL training path | Code fixed; pure pattern count/order test passed; runtime RayCaster smoke pending |
+| B.2 Ray count and shape stability | Repeated reset/step preserves `[N, H, V]` ray layout and expected ray count | Pure MID360 helper test passed; runtime reset/step pending |
+| B.3 Raw range correctness | `r_i = ||ray_hit_i - lidar_pos||`, not danger-coded inverse range, with max-range handling | Pure observation test passed |
+| B.4 Valid-return mask | Mask derives from finite in-range returns and handles max-range/dropout explicitly | Pure observation test passed |
+| B.5 Reliability bounds | `w_t` stays in `[0, 1]`; stale/dropout returns are represented correctly | Pure observation test passed |
+| B.6 Timestamp monotonicity and frame age | Sim time is monotonic; repeated/stale frames are detectable | Pure observation test passed |
+| B.7 History rollover | Fixed window rolls exactly one frame per policy step and resets per env reset | Pure observation test passed |
+| B.8 Previous issued action feedback | `prev_action` slots equal prior governor/controller output, not default zeros | Code fixed; pure observation test passed; runtime smoke pending |
+| B.9 Actor input provenance | Audit proves `lidar_grid` and `state_vec` contain only allowed fields | Hybrid schema audit and actor absence test passed; full runtime TensorDict audit pending |
+| B.10 PPO/training-path smoke | `instinctRL.enabled=true` can run a short PPO collect/update path, or smoke-only mode is explicitly separated | Mode split implemented; local TorchRL/PPO validation blocked by dependency import error |
+
+### Added Test Files
+
+- `training/unit_test/test_instinctrl_command_adapter.py`
+- `training/unit_test/test_instinctrl_mid360_pattern.py`
+- `training/unit_test/test_instinctrl_observation.py`
+- `training/unit_test/test_instinctrl_actor_audit.py`
+- `training/unit_test/test_instinctrl_ppo_hybrid.py`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `python3 -m pytest isaac-training/training/unit_test/test_instinctrl_*.py` | Failed before collection because base Python has no `pytest`. |
+| Manual pure unit-test runner under base Python | Passed all runnable tests; PPO hybrid test skipped because TorchRL/TensorDict unavailable. |
+| Manual pure unit-test runner under `/home/mint/miniconda3/envs/NavRL/bin/python` | Passed all runnable tests; PPO hybrid test skipped because `tensordict/torchrl` import fails with `ImportError: cannot import name 'ForkingPickler' from torch.multiprocessing.reductions`. |
+| `python3 -m py_compile isaac-training/training/scripts/train.py isaac-training/training/scripts/env.py isaac-training/training/scripts/ppo.py isaac-training/training/scripts/instinctRL/audit.py isaac-training/training/scripts/instinctRL/command_adapter.py isaac-training/training/scripts/instinctRL/observation.py isaac-training/training/scripts/instinctRL/mid360_pattern.py isaac-training/training/unit_test/test_instinctrl_*.py` | Passed. |
+| `rg -n "BpearlPatternCfg|patterns\\." isaac-training/training/scripts/env.py isaac-training/training/scripts/instinctRL isaac-training/training/cfg -S` | No matches. |
+| `python3 isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: base Python lacks `hydra`. |
+| `/home/mint/miniconda3/envs/NavRL/bin/python isaac-training/training/scripts/train.py instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` | Failed before runtime: `wandb` import requires missing `click`. |
+
+### Remaining Required Validation Before C
+
+- Run the pure tests through `pytest` once `pytest` is available.
+- Run `instinctRL.mode=smoke env.num_envs=4 env_dyn.num_obstacles=0` in the Isaac runtime environment and confirm reset, step, multi-step history rollover, actor audit, no NaN, and MID360 valid returns.
+- Run minimal `instinctRL.mode=train` initialization/forward smoke after repairing the local TorchRL/TensorDict dependency issue.
 
 ### instinctRL-C: Measurement-Space Anchor
 - Null-command hysteresis (ε₀ < ε₁)

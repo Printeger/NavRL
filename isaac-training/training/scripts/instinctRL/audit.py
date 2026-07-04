@@ -21,6 +21,20 @@ FORBIDDEN_ACTOR_KEY_PATTERNS = [
 ]
 
 
+def _get_path(container, path, default=None):
+    try:
+        if hasattr(container, "get"):
+            value = container.get(path, None)
+            if value is not None:
+                return value
+        current = container
+        for key in path:
+            current = current[key]
+        return current
+    except Exception:
+        return default
+
+
 def check_platform_lock(cfg) -> Tuple[bool, str]:
     """
     Verify that the platform is locked to TASLAB_UAV + Livox MID360.
@@ -87,7 +101,7 @@ def check_actor_input(tensordict) -> Tuple[bool, str]:
 
     try:
         # Navigate to agents.observation
-        obs = tensordict.get(("agents", "observation"), None)
+        obs = _get_path(tensordict, ("agents", "observation"))
         if obs is not None:
             _scan_keys(obs, "agents.observation")
     except Exception as e:
@@ -96,6 +110,35 @@ def check_actor_input(tensordict) -> Tuple[bool, str]:
     if violations:
         return False, "ACTOR INPUT AUDIT FAIL:\n" + "\n".join(violations)
     return True, "ACTOR INPUT AUDIT PASS: no forbidden fields in actor observation"
+
+
+def check_actor_schema(tensordict, history_len: int) -> Tuple[bool, str]:
+    """Verify instinctRL-B actor observation keys and low-dimensional schema."""
+    try:
+        obs = _get_path(tensordict, ("agents", "observation"))
+        if obs is None:
+            return False, "ACTOR SCHEMA AUDIT FAIL: missing agents.observation"
+        keys = set(obs.keys())
+        expected = {"lidar_grid", "state_vec"}
+        if keys != expected:
+            return False, f"ACTOR SCHEMA AUDIT FAIL: keys={sorted(keys)}, expected={sorted(expected)}"
+        state_dim = obs["state_vec"].shape[-1]
+        expected_state_dim = history_len * 13
+        if state_dim != expected_state_dim:
+            return False, (
+                f"ACTOR SCHEMA AUDIT FAIL: state_vec dim={state_dim}, "
+                f"expected {expected_state_dim} (history * 13)"
+            )
+        lidar_channels = obs["lidar_grid"].shape[-3]
+        expected_channels = history_len * 3
+        if lidar_channels != expected_channels:
+            return False, (
+                f"ACTOR SCHEMA AUDIT FAIL: lidar_grid channels={lidar_channels}, "
+                f"expected {expected_channels} (history * range/mask/weight)"
+            )
+    except Exception as exc:
+        return False, f"ACTOR SCHEMA AUDIT FAIL: {exc}"
+    return True, "ACTOR SCHEMA AUDIT PASS: lidar_grid + state_vec only, expected history schema"
 
 
 def check_action_type(action: torch.Tensor, expected_dim: int = 3) -> Tuple[bool, str]:
