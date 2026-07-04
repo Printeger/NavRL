@@ -4,7 +4,26 @@
 
 ---
 
-## 2026-07-04 (PM2)
+## 2026-07-04 (PM3)
+
+### instinctRL-B: Observation / History Buffer
+
+**Status**: ✅ Complete
+
+- **New**: `instinctRL/observation.py` — `MID360ObservationBuilder` (220 lines)
+  - Raw MID360 range $r_t$ (true distance, not danger-coded)
+  - Valid-return mask $m_t$ (finite + in-range)
+  - Staleness-weighted reliability $w_t = m_t \cdot \exp(-age/\tau)$
+  - IMU cues: body ang_vel(3) + gravity_dir_body(3)
+  - v_cmd + prev_action tracking
+  - Fixed-size history buffer (L=4, configurable)
+- **Config**: `instinctRL.observation.*` (history_len, enable_noise, enable_dropout, tau_staleness)
+- **Env**: replaced danger-coded LiDAR with ObservationBuilder; hybrid obs spec (lidar_grid + state_vec)
+- **PPO**: multi-channel CNN + state vector encoder with CatTensors merge
+- **Deferred**: D-009 (noise/dropout curriculum), D-010 (neighbor-consistency weights), D-011 (longer history ablations)
+- **Resolved**: D-002 (Full MID360 preprocessing)
+
+---
 
 ### instinctRL-A: B0 Smoke Test Runtime
 

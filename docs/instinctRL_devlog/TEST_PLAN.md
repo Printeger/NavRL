@@ -69,7 +69,9 @@
 
 ---
 
-## Future Test Registries
+## instinctRL-B: Observation / History Buffer
+
+### Test B.1: Raw Range Computation
 
 ### instinctRL-B: Observation / History Buffer
 - MID360 ray count stability

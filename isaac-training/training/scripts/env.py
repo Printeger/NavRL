@@ -134,6 +134,24 @@ class NavigationEnv(IsaacEnv):
         self.lidar = RayCaster(ray_caster_cfg)
         self.lidar._initialize_impl()  # 初始化射线投射器
         self.lidar_resolution = (self.lidar_hbeams, self.lidar_vbeams)  # (36, 4)
+
+        # instinctRL-B: Create MID360 observation builder (actor-clean pipeline)
+        if getattr(cfg, "instinctRL", None) and cfg.instinctRL.enabled:
+            from instinctRL.observation import ObservationConfig, MID360ObservationBuilder
+            self._obs_builder = MID360ObservationBuilder(
+                ObservationConfig(
+                    history_len=cfg.instinctRL.observation.history_len,
+                    enable_noise=cfg.instinctRL.observation.enable_noise,
+                    enable_dropout=cfg.instinctRL.observation.enable_dropout,
+                    tau_staleness=cfg.instinctRL.observation.tau_staleness,
+                    lidar_hbeams=self.lidar_hbeams,
+                    lidar_vbeams=self.lidar_vbeams,
+                    lidar_range=cfg.sensor.lidar_range,
+                ),
+                device=self.device,
+            )
+            print("[instinctRL-B] MID360ObservationBuilder created "
+                  f"(history={cfg.instinctRL.observation.history_len})")
         
         # ============================================
         # 第 5 步：初始化目标和状态变量
@@ -450,19 +468,21 @@ class NavigationEnv(IsaacEnv):
 
 
     def _set_specs(self):
-        # instinctRL-0: Actor input contract — removed forbidden fields.
-        #   state[0:5]  (rpos_clipped_g, distance_2d/z): FORBIDDEN (position-derived)
-        #   state[5:8]  (vel_g):                       FORBIDDEN (explicit velocity)
-        #   direction   (goal-frame target direction):  FORBIDDEN (position-derived)
-        #   dynamic_obstacle (privileged pos/vel/size): FORBIDDEN (simulator state)
-        # Only lidar remains as the allowed raw sensor input.
-        # Additional allowed fields (v_cmd, masks, weights, IMU cues, history)
-        # will be added by instinctRL-A and instinctRL-B.
+        # instinctRL-B: Actor input contract — hybrid observation format.
+        #   lidar_grid: history-stacked range/mask/weight channels [N, L*3, H, V]
+        #   state_vec:  history-stacked IMU+v_cmd+prev_action+frame_age [N, L*13]
+        # No pose, odometry, explicit velocity, map, or privileged state.
+        lidar_channels = self.cfg.instinctRL.observation.history_len * 3
+        state_dim = self.cfg.instinctRL.observation.history_len * 13
         self.observation_spec = CompositeSpec({
             "agents": CompositeSpec({
                 "observation": CompositeSpec({
-                    "lidar": UnboundedContinuousTensorSpec(
-                        (1, self.lidar_hbeams, self.lidar_vbeams), device=self.device
+                    "lidar_grid": UnboundedContinuousTensorSpec(
+                        (lidar_channels, self.lidar_hbeams, self.lidar_vbeams),
+                        device=self.device
+                    ),
+                    "state_vec": UnboundedContinuousTensorSpec(
+                        (state_dim,), device=self.device
                     ),
                 }),
             }).expand(self.num_envs)
@@ -618,18 +638,46 @@ class NavigationEnv(IsaacEnv):
         self.info["drone_state"][:] = self.root_state[..., :13]  # 保存状态信息
 
         # ============================================
-        # 网络输入 I：LiDAR 数据 ⭐ 关键传感器
+        # 网络输入 I：MID360 LiDAR → observation builder
         # ============================================
-        # LiDAR 原始数据：射线击中点的世界坐标
-        # 我们需要计算：距离 = ||ray_hits - lidar_pos||
-        # 然后转换为："剩余距离" = lidar_range - 实际距离
-        # 作用：越近的障碍物值越大（便于网络学习）
-        self.lidar_scan = self.lidar_range - (
-            (self.lidar.data.ray_hits_w - self.lidar.data.pos_w.unsqueeze(1))
-            .norm(dim=-1)  # 计算距离
-            .clamp_max(self.lidar_range)  # 限制在最大范围内
-            .reshape(self.num_envs, 1, *self.lidar_resolution)  # [num_envs, 1, 36, 4]
-        )
+        # instinctRL-B: Use MID360ObservationBuilder for actor-clean pipeline.
+        # Produces: raw range r_t, mask m_t, staleness-weighted reliability w_t,
+        # IMU cues, v_cmd, prev_action, frame_age, sim_time, history buffer.
+        if hasattr(self, "_obs_builder"):
+            # Generate v_cmd (body-frame, simple bounded random)
+            if not hasattr(self, "_v_cmd_step_count"):
+                self._v_cmd_step_count = 0
+            self._v_cmd_step_count += 1
+            if self._v_cmd_step_count % 125 == 1:  # ~every 2s at 62.5Hz
+                self._v_cmd = (
+                    torch.rand(self.num_envs, 1, 3, device=self.device) * 2.0 - 1.0
+                ) * 0.5
+                self._v_cmd[..., 2] *= 0.3
+
+            # Build observation
+            obs_frame = self._obs_builder.build(
+                ray_hits_w=self.lidar.data.ray_hits_w,
+                lidar_pos_w=self.lidar.data.pos_w,
+                drone_state=self.root_state[..., :13],
+                v_cmd=self._v_cmd,
+                dt=self.dt,
+                num_envs=self.num_envs,
+            )
+            obs_hist = self._obs_builder.build_history(obs_frame)
+
+            # Raw range for reward computation (keep self.lidar_scan for backward compat)
+            self.lidar_scan = obs_frame["range"].unsqueeze(1)  # [N, 1, H, V]
+
+            # Store v_cmd in info for critic/debug
+            self.info["v_cmd"] = self._v_cmd.clone()
+        else:
+            # Fallback: danger-coded LiDAR (non-instinctRL mode)
+            self.lidar_scan = self.lidar_range - (
+                (self.lidar.data.ray_hits_w - self.lidar.data.pos_w.unsqueeze(1))
+                .norm(dim=-1)
+                .clamp_max(self.lidar_range)
+                .reshape(self.num_envs, 1, *self.lidar_resolution)
+            )
 
         # Optional render for LiDAR
         if self._should_render(0):
@@ -660,32 +708,13 @@ class NavigationEnv(IsaacEnv):
         self.info["target_rpos"][:] = rpos
         self.info["target_distance"][:] = distance
 
-        # instinctRL-A: Compute raw MID360 range (true distance, not danger-coded).
-        # B0 uses basic range; full preprocessing (masks, weights, timestamps)
-        # is deferred to instinctRL-B.
+        # instinctRL-A: Compute raw MID360 range for backward compat (lidar_raw_range)
         self.lidar_raw_range = (
             (self.lidar.data.ray_hits_w - self.lidar.data.pos_w.unsqueeze(1))
             .norm(dim=-1)
             .clamp_max(self.lidar_range)
             .reshape(self.num_envs, 1, *self.lidar_resolution)
         )
-
-        # instinctRL-A: Generate body-frame velocity command for B0 baseline.
-        # Fixed low-speed forward command: v_cmd = [0.5, 0.0, 0.0] m/s body-frame.
-        # Simple bounded random generator for short rollouts.
-        # Adversarial/aggressive commands deferred to instinctRL-E.
-        if not hasattr(self, "_v_cmd_step_count"):
-            self._v_cmd_step_count = 0
-        self._v_cmd_step_count += 1
-        # Regenerate command every 2 seconds (approx 125 steps at 62.5 Hz)
-        if self._v_cmd_step_count % 125 == 1:
-            # Simple bounded random body-frame velocity command
-            self._v_cmd = (
-                torch.rand(self.num_envs, 1, 3, device=self.device) * 2.0 - 1.0
-            ) * 0.5  # scale to [-0.5, 0.5] m/s per axis
-            self._v_cmd[..., 2] *= 0.3  # reduce vertical component
-        # Store v_cmd in info (critic-accessible, not actor observation)
-        self.info["v_cmd"] = self._v_cmd.clone()
         
         # b. 指向目标的单位方向向量（在目标坐标系下）
         # 为什么要坐标变换？
@@ -764,13 +793,19 @@ class NavigationEnv(IsaacEnv):
             dynamic_collision = torch.zeros(self.num_envs, 1, dtype=torch.bool, device=self.cfg.device)
             
         # -----------------Network Input Final--------------
-        # instinctRL-0: Actor input contract — only raw sensor input.
-        # Forbidden fields (drone_state, target_dir_2d, dyn_obs_states) are
-        # computed above for reward/collision/evaluation use only and must
-        # NOT enter the actor observation dict.
-        obs = {
-            "lidar": self.lidar_scan,
-        }
+        # instinctRL-B: Actor input contract — hybrid observation.
+        # lidar_grid: history-stacked range/mask/weight channels
+        # state_vec:  history-stacked IMU+v_cmd+prev_action+frame_age
+        # No pose, odometry, explicit velocity, map, or privileged state.
+        if hasattr(self, "_obs_builder"):
+            obs = {
+                "lidar_grid": obs_hist["lidar_grid"],
+                "state_vec": obs_hist["state_vec"],
+            }
+        else:
+            obs = {
+                "lidar": self.lidar_scan,
+            }
 
 
         # ============================================

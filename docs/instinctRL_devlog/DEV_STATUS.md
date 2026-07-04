@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-04  
-> **Current Stage**: instinctRL-A (Direct Velocity-Governor Baseline)
+> **Current Stage**: instinctRL-B (Observation / History Buffer)
 
 ---
 
@@ -9,10 +9,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | instinctRL-A — Direct Velocity-Governor Baseline (B0) |
-| **Stage status** | ✅ Complete — B0 smoke test path built, all audits defined |
-| **Active ticket** | instinctRL-A |
-| **Next ticket** | instinctRL-B — Observation / History Buffer |
+| **Current stage** | instinctRL-B — Observation / History Buffer |
+| **Stage status** | ✅ Complete — Hybrid observation pipeline built |
+| **Active ticket** | instinctRL-B |
+| **Next ticket** | instinctRL-C — Measurement-Space Anchor |
 | **Method consistency** | ✅ Velocity-controller-based (body-frame `\vgov = \alpha_t\vcmd + \vcorr`). Paper 1 route preserved. No CTBR, body-rate, or motor actions. |
 | **Platform lock** | ✅ TASLAB_UAV selected in `drone.yaml`. Prim path dynamically resolved via `_resolve_base_link()`. `attach_yaw_only=False` for MID360. |
 | **Sensor lock** | ✅ LiDAR prim path dynamically resolves to TASLAB_UAV base_link. MID360 simulation helpers ready for wiring in instinctRL-A. |
@@ -27,6 +27,7 @@
 | instinctRL-0 | Platform and Sensor Infrastructure Audit | 2026-07-03 | Audit report produced. 5 blockers identified. |
 | instinctRL-0 | Blocker Fixes (all 5 resolved) | 2026-07-04 | env.py, ppo.py, CONTEXT.md updated. Asymmetric actor-critic. |
 | instinctRL-A | Direct Velocity-Governor Baseline (B0) | 2026-07-04 | Config namespace, governor, adapter, audit, B0 smoke test. |
+| instinctRL-B | Observation / History Buffer | 2026-07-04 | Hybrid observation: raw range, mask, weight, IMU, history. |
 
 ---
 

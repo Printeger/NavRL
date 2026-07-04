@@ -44,4 +44,11 @@ instinctRL:
   enabled: true                        # Enable instinctRL mode
   baseline:
     id: "direct_velocity"             # B0: direct velocity pass-through
+
+  # instinctRL-B: Observation Configuration
+  observation:
+    history_len: 4                     # History buffer window size
+    enable_noise: false                # MID360 range noise (deferred)
+    enable_dropout: false              # MID360 random dropout (deferred)
+    tau_staleness: 0.5                 # Staleness time constant (seconds)
     # Options: direct_velocity, no_history, no_anchor, no_imu, no_ics, ...

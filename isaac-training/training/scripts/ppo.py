@@ -55,40 +55,42 @@ class PPO(TensorDictModuleBase):
         self.device = device
 
         # ============================================
-        # 1. LiDAR 特征提取器（CNN）— actor 和 critic 共享
+        # 1. LiDAR CNN encoder (multi-channel input)
         # ============================================
-        # 输入形状：[batch, 1, 36, 4] (36个水平角度 × 4个垂直角度)
-        # 输出：128 维特征向量
+        # instinctRL-B: Input is history-stacked grid [N, C, H, V]
+        # where C = history_len * 3 (range, mask, weight per frame).
+        # LazyConv2d adapts to channel count automatically.
         feature_extractor_network = nn.Sequential(
-            # 第1层卷积：提取局部特征 [batch, 1, 36, 4] -> [batch, 4, 36, 4]
-            nn.LazyConv2d(out_channels=4, kernel_size=[5, 3], padding=[2, 1]), 
-            nn.ELU(),  # 激活函数
-            
-            # 第2层卷积：降采样 [batch, 4, 36, 4] -> [batch, 16, 18, 4]
-            nn.LazyConv2d(out_channels=16, kernel_size=[5, 3], stride=[2, 1], padding=[2, 1]), 
+            nn.LazyConv2d(out_channels=4, kernel_size=[5, 3], padding=[2, 1]),
             nn.ELU(),
-            
-            # 第3层卷积：进一步降采样 [batch, 16, 18, 4] -> [batch, 16, 9, 2]
-            nn.LazyConv2d(out_channels=16, kernel_size=[5, 3], stride=[2, 2], padding=[2, 1]), 
+            nn.LazyConv2d(out_channels=16, kernel_size=[5, 3], stride=[2, 1], padding=[2, 1]),
             nn.ELU(),
-            
-            # 展平：[batch, 16, 9, 2] -> [batch, 288]
+            nn.LazyConv2d(out_channels=16, kernel_size=[5, 3], stride=[2, 2], padding=[2, 1]),
+            nn.ELU(),
             Rearrange("n c w h -> n (c w h)"),
-            
-            # 全连接层：[batch, 288] -> [batch, 128]
-            nn.LazyLinear(128), 
-            nn.LayerNorm(128),  # 层归一化，稳定训练
+            nn.LazyLinear(128),
+            nn.LayerNorm(128),
+        ).to(self.device)
+
+        # State vector encoder (IMU + v_cmd + prev_action + frame_age history)
+        state_encoder_network = nn.Sequential(
+            nn.LazyLinear(64),
+            nn.ELU(),
+            nn.LayerNorm(64),
         ).to(self.device)
 
         # ============================================
         # 2. Actor 特征提取器（LiDAR only — 无特权状态）
         # ============================================
-        # instinctRL-0: Actor receives only raw sensor input per the
-        # actor input contract. No pose, odometry, velocity, map, or
-        # privileged simulator state.
+        # instinctRL-B: Actor receives hybrid observation:
+        #   lidar_grid: history-stacked range/mask/weight channels [N, C, H, V]
+        #   state_vec:  history-stacked IMU+v_cmd+prev_action+age [N, D]
+        # No pose, odometry, explicit velocity, map, or privileged state.
         self.actor_feature_extractor = TensorDictSequential(
-            TensorDictModule(feature_extractor_network, [("agents", "observation", "lidar")], ["_cnn_feature"]),
-            TensorDictModule(make_mlp([128, 256]), ["_cnn_feature"], ["_actor_feature"]),
+            TensorDictModule(feature_extractor_network, [("agents", "observation", "lidar_grid")], ["_cnn_feature"]),
+            TensorDictModule(state_encoder_network, [("agents", "observation", "state_vec")], ["_state_feature"]),
+            CatTensors(["_cnn_feature", "_state_feature"], "_merged", del_keys=False),
+            TensorDictModule(make_mlp([192, 256]), ["_merged"], ["_actor_feature"]),
         ).to(self.device)
 
         # ============================================

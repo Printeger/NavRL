@@ -108,7 +108,44 @@
 
 ## Completed / Resolved Items
 
-*(None yet — all items are open.)*
+### D-002: Full MID360 Raw Range / Mask / Weight / History Preprocessing
+- **Resolved**: 2026-07-04 (instinctRL-B)
+- **Module**: `instinctRL/observation.py` — `MID360ObservationBuilder`
+
+---
+
+### D-009: Noise / Dropout Training Curriculum
+
+| Field | Value |
+|-------|-------|
+| **Deferred from** | instinctRL-B |
+| **Reason** | Config switches exist (`enable_noise`, `enable_dropout`) but default OFF. Noise/dropout curriculum requires training convergence first. |
+| **Target stage** | instinctRL-H or later robustness stage |
+| **Trigger condition** | Training pipeline stable; sim-to-real validation needed |
+| **Acceptance test** | Noise+dropout enabled training matches real MID360 statistics; policy transfers without degradation |
+| **Status** | ⬜ Open |
+
+### D-010: Neighbor-Consistency Reliability Weights
+
+| Field | Value |
+|-------|-------|
+| **Deferred from** | instinctRL-B |
+| **Reason** | Staleness-weighted binary mask is sufficient for initial implementation. Neighbor-consistency adds complexity without proven benefit at this stage. |
+| **Target stage** | instinctRL-C or later |
+| **Trigger condition** | Anchor manager requires high-quality weights |
+| **Acceptance test** | Neighbor-consistency weights improve anchor error vs binary mask baseline; compute 4-neighbor median deviation |
+| **Status** | ⬜ Open |
+
+### D-011: Longer History Ablations (8/16 frames)
+
+| Field | Value |
+|-------|-------|
+| **Deferred from** | instinctRL-B |
+| **Reason** | Config supports arbitrary history_len via Hydra; 4-frame default is the minimal viable. 8/16-frame ablations are evaluation experiments. |
+| **Target stage** | instinctRL-G (Baselines) |
+| **Trigger condition** | instinctRL-F training complete |
+| **Acceptance test** | B2 ablation runs with history_len=1,4,8,16; metrics logged per config |
+| **Status** | ⬜ Open |
 
 ---
 

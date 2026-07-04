@@ -8,7 +8,7 @@
 #   governor:         Velocity governor (B0: minimal pass-through)
 #
 # Future (deferred):
-#   observation:      History buffer and MID360 preprocessing (instinctRL-B)
+#   observation:      MID360 preprocessing and history buffer (instinctRL-B)
 #   anchor:           Measurement-space anchor manager (instinctRL-C)
 #   ics:              ICS-inspired command attenuation (instinctRL-E)
 #   observability:    Range-Jacobian logger (instinctRL-D)

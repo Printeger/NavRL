@@ -74,6 +74,62 @@
 
 ---
 
+## D-2026-07-04-007: Full MID360 Pattern Wiring in instinctRL-B
+
+**Decision**: Use full LivoxMid360Pattern / MID360 ray ordering. Do NOT use BpearlPatternCfg as a substitute.
+
+**Rationale**: B0 in instinctRL-A only needed basic MID360 availability. instinctRL-B must make the observation pipeline platform-correct.
+
+---
+
+## D-2026-07-04-008: Config-Gated Noise and Dropout
+
+**Decision**: Add `enable_noise` and `enable_dropout` config switches, default OFF. Defer noise/dropout training curriculum to later stage.
+
+**Rationale**: Deterministic mode needed for unit tests and initial evaluation. Noise adds realism but complicates debugging.
+
+**Registered as**: D-009
+
+---
+
+## D-2026-07-04-009: Staleness-Weighted Reliability
+
+**Decision**: Default reliability weights as $w_t = m_t \cdot \exp(-\text{age}/\tau)$. Fall back to binary $w_t=m_t$ if age unavailable. Defer neighbor-consistency weighting.
+
+**Rationale**: Staleness captures the most important reliability signal (fresh data is more trustworthy) without the complexity of neighbor comparison.
+
+**Registered as**: D-010
+
+---
+
+## D-2026-07-04-010: Configurable History Buffer (L=4 default)
+
+**Decision**: Default history_len=4, configurable via Hydra for 8/16-frame ablations.
+
+**Rationale**: 4 frames is minimal viable for short-term motion inference. Config allows ablation experiments without code changes.
+
+**Registered as**: D-011
+
+---
+
+## D-2026-07-04-011: IMU Cues from Drone State
+
+**Decision**: Derive allowed IMU cues (body angular velocity + gravity direction) from privileged drone_state. Defer real ROS IMU / simulated IMU sensor integration.
+
+**Rationale**: Drone state provides the same physical quantities an IMU would measure. Real sensor integration is a deployment concern.
+
+**Registered as**: D-012 in DEFERRED_REGISTER.md
+
+---
+
+## D-2026-07-04-012: Hybrid Observation Format
+
+**Decision**: Use hybrid format: `lidar_grid` [N, C, H, V] for spatial data + `state_vec` [N, D] for low-dimensional cues. Do NOT flatten grid into a single vector.
+
+**Rationale**: CNN processes spatial structure efficiently. State vector avoids tiling fake image channels.
+
+---
+
 ## D-2026-07-04-006: B0 Smoke Test Definition
 
 **Decision**: "B0 runs" means: env resets, TASLAB_UAV spawns, MID360 attaches, fixed v_cmd generated, governor + adapter produce valid world-frame velocity, VelController executes, simulator advances N steps without crash/NaN, all audits pass. It does NOT require training convergence, WandB logging, or performance metrics.
