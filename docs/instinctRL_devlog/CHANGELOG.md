@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-07-05 (instinctRL-D acceptance)
+
+### instinctRL-D: Observability Logger Complete
+
+**Status**: instinctRL-D full acceptance complete. instinctRL-E may start; instinctRL-F remains deferred.
+
+- Added `training/scripts/instinctRL/observability.py`:
+  - `ObservabilityConfig`, `ObservabilityOutput`, and `RangeJacobianObservabilityLogger`.
+  - Offline finite-difference Jacobian estimator.
+  - Offline surface-normal geometric approximation.
+  - Deployed-safe scan-geometry proxy mode, labeled with `observability_is_proxy`.
+  - SVD rank, singular values, condition number cap, weak direction cache, and drift projection diagnostics.
+- Integrated observability passively in `env.py`:
+  - Default config keeps `instinctRL.observability.enabled=false`.
+  - When enabled, env writes only scalar `observability_*` metrics to `info`.
+  - Dense Jacobian/SVD internals remain in `self.observability_outputs`.
+  - Actor observation remains `lidar_grid` + `state_vec`.
+- Added `training/unit_test/test_instinctrl_observability.py`.
+
+**Validation**:
+
+- `python -m pytest -q training/unit_test/test_instinctrl_observability.py` passed: `9 passed, 1 warning`.
+- A/B/C/D regression suite passed: `34 passed, 2 warnings`.
+- `py_compile` passed for changed D code/tests.
+- TorchRL int64 spec probe passed for `observability_mode_code`.
+
+**Final conclusion**:
+
+- `instinctRL-D`: COMPLETE
+- `instinctRL-E`: GO
+- `instinctRL-F`: NO-GO until E and reward prerequisites are complete
+
+---
+
 ## 2026-07-05 (instinctRL-C acceptance)
 
 ### instinctRL-C: Measurement-Space Anchor Manager Complete

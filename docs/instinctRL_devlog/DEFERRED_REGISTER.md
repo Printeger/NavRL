@@ -1,17 +1,17 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-C complete)
+> **Last Updated**: 2026-07-05 (instinctRL-D complete)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
 
 ---
 
-## Before-D Validation Blockers
+## Before-E Validation Blockers
 
-None. instinctRL-C acceptance blockers are cleared; instinctRL-D may start.
+None. instinctRL-D acceptance blockers are cleared; instinctRL-E may start.
 
-Completed C validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-C_measurement_space_anchor.md`, and `tests/instinctRL-C_test_report.md`.
+Completed D validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-D_observability_logger.md`, and `tests/instinctRL-D_test_report.md`.
 
 ---
 
@@ -64,8 +64,10 @@ Completed C validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinct
 | **Target stage** | instinctRL-D |
 | **Trigger condition** | instinctRL-C complete; anchor lifecycle available for drift correlation |
 | **Acceptance test** | Produces drift vs σ_min(J) plots; per-scenario drift ranking; weak-direction drift alignment; hardware proxy labeled as proxy (not exact J); no surface normals in deployed code |
-| **Status** | ⬜ Open |
+| **Status** | ✅ Complete |
 | **Module ref** | Handbook M5 (`instinctRL/observability.py`) |
+
+**Closeout correction**: D implements logger metrics and drift-correlation primitives. Plot generation is deferred to later evaluation/reporting work; D acceptance is the logger interface, scalar metrics, proxy labeling, actor cleanliness, and tests.
 
 ### D-005: ICS-Inspired Command Attenuation (β_t)
 

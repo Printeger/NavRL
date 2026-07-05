@@ -154,6 +154,7 @@ class NavigationEnv(IsaacEnv):
             ray_starts, ray_dirs = pattern_cfg.func(pattern_cfg, self.device)
             offset_pos = mount_position(cfg.sensor)
             offset_rot = mount_quat_wxyz(cfg.sensor)
+            self._mid360_ray_dirs_b = ray_dirs.clone()
             self._mid360_ray_order_hash = ray_order_hash(ray_dirs)
             print(
                 "[instinctRL-B] Active sensor pattern: LivoxMid360Pattern "
@@ -165,6 +166,8 @@ class NavigationEnv(IsaacEnv):
             from instinctRL.mid360_pattern import create_mid360_pattern_cfg
 
             pattern_cfg = create_mid360_pattern_cfg(cfg.sensor)
+            _, ray_dirs = pattern_cfg.func(pattern_cfg, self.device)
+            self._mid360_ray_dirs_b = ray_dirs.clone()
             offset_pos = (0.0, 0.0, 0.0)
             offset_rot = (1.0, 0.0, 0.0, 0.0)
 
@@ -225,6 +228,19 @@ class NavigationEnv(IsaacEnv):
                 )
                 self.anchor_outputs = {}
                 print("[instinctRL-C] MeasurementSpaceAnchorManager created")
+
+            observability_cfg = getattr(cfg.instinctRL, "observability", None)
+            if observability_cfg is not None and getattr(observability_cfg, "enabled", False):
+                from instinctRL.observability import (
+                    ObservabilityConfig,
+                    RangeJacobianObservabilityLogger,
+                )
+                self._observability_logger = RangeJacobianObservabilityLogger(
+                    ObservabilityConfig.from_namespace(observability_cfg),
+                    device=self.device,
+                )
+                self.observability_outputs = {}
+                print("[instinctRL-D] RangeJacobianObservabilityLogger created")
         
         # ============================================
         # 第 5 步：初始化目标和状态变量
@@ -619,6 +635,25 @@ class NavigationEnv(IsaacEnv):
                     (1,), dtype=torch.long, device=self.device
                 ),
             })
+        observability_cfg = getattr(getattr(self.cfg, "instinctRL", None), "observability", None)
+        if observability_cfg is not None and getattr(observability_cfg, "enabled", False):
+            info_spec_fields.update({
+                # instinctRL-D: Scalar observability diagnostics only. Dense
+                # Jacobians/SVD internals stay in self.observability_outputs.
+                "observability_valid_fraction": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_weighted_valid_fraction": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_rank": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_sigma_min": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_sigma_max": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_condition_number": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_score": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_drift_projection": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_drift_norm": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_is_proxy": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "observability_mode_code": UnboundedContinuousTensorSpec(
+                    (1,), dtype=torch.long, device=self.device
+                ),
+            })
         info_spec = CompositeSpec(info_spec_fields).expand(self.num_envs).to(self.device)
         self.observation_spec["stats"] = stats_spec
         self.observation_spec["info"] = info_spec
@@ -779,6 +814,17 @@ class NavigationEnv(IsaacEnv):
                 self.anchor_outputs = anchor_out.cache
                 for key, value in anchor_out.metrics.items():
                     self.info[key][:] = value
+
+            if hasattr(self, "_observability_logger"):
+                observability_out = self._observability_logger.compute(
+                    ray_directions_b=self._mid360_ray_dirs_b,
+                    valid_mask=obs_frame["mask"].reshape(self.num_envs, -1),
+                    reliability_weight=obs_frame["weight"].reshape(self.num_envs, -1),
+                )
+                self.observability_outputs = observability_out.cache
+                for key, value in observability_out.metrics.items():
+                    if key in self.info.keys():
+                        self.info[key][:] = value
 
             obs_hist = self._obs_builder.build_history(obs_frame)
 

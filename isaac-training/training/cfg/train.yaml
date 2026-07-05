@@ -62,3 +62,14 @@ instinctRL:
     min_valid_anchor_fraction: 0.10    # Invalid reset below this fixed-grid fraction
     huber_delta: 0.25                  # Per-beam Huber delta for anchor_loss
     reset_on_large_command: true       # Large command exits null-command anchor
+
+  # instinctRL-D: Evaluation-only observability logger
+  observability:
+    enabled: false                     # Passive logging only; no actor input changes
+    mode: "offline"                   # offline chooses FD/normals if supplied, else proxy
+    rank_tol: 0.0001                  # Singular-value threshold for rank estimate
+    condition_number_cap: 1000000.0   # Finite cap for singular/degenerate cases
+    min_valid_fraction: 0.01          # Logging threshold; does not affect actor input
+    log_interval: 50                  # Intended runtime logging interval
+    use_surface_normals: false        # Offline-only; never deployed actor/control input
+    use_finite_difference: true       # Offline estimator if FD samples are supplied

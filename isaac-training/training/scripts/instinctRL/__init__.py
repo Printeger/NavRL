@@ -9,8 +9,8 @@
 #   observation:      MID360 preprocessing and history buffer (instinctRL-B)
 #   mid360_pattern:   Orbit RayCaster adapter for Livox MID360 rays
 #   anchor:           Measurement-space anchor manager (instinctRL-C)
+#   observability:    Evaluation-only range-Jacobian logger (instinctRL-D)
 #
 # Future (deferred):
 #   ics:              ICS-inspired command attenuation (instinctRL-E)
-#   observability:    Range-Jacobian logger (instinctRL-D)
 #   rewards:          instinctRL reward terms (instinctRL-F)

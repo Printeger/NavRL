@@ -5,6 +5,33 @@
 
 ---
 
+## D-2026-07-05-002: instinctRL-D Observability Logger Boundary and Semantics
+
+**Decision**: Mark instinctRL-D complete as an evaluation-only range-Jacobian observability logger. The logger must not become a deployed control dependency and must not add observability features to actor input.
+
+**Public env boundary**:
+
+- Add only scalar `observability_*` diagnostics to `info` when `instinctRL.observability.enabled=true`.
+- Keep dense `jacobian_rows`, `weighted_jacobian_rows`, singular values, weak direction, normals, and finite-difference internals in cache/debug only.
+- Actor observation remains `lidar_grid` + `state_vec`.
+
+**Locked semantics**:
+
+- Canonical API uses flat ray layout: ray directions `[R,3]` or `[N,R,3]`, masks/weights `[N,R]`.
+- Mode codes: `0 proxy`, `1 normal`, `2 finite_difference`.
+- Proxy mode uses `J_i=-u_i^T` from normalized body-frame ray directions and sets `observability_is_proxy=1`.
+- Normal mode uses `J_i=-n_i^T` from normalized body-frame surface normals, with `sqrt(w_i)` row scaling.
+- Finite-difference mode solves `DeltaP @ j_i ~= Delta r_i` using `pinv(DeltaP) @ Delta r_i`, with no extra sign.
+- Offline mode priority is finite-difference, then normals, then proxy fallback. Malformed supplied FD/normals fail fast.
+- SVD uses one `torch.linalg.svd` per env on weighted effective rows; insufficient rows return rank 0, zero sigmas, capped condition, zero score, and zero weak direction.
+- Drift projection is absolute projection onto normalized weak direction; weak direction is cache-only.
+
+**Validation**: D unit tests and A/B/C/D regression tests pass in the activated NavRL conda environment.
+
+**Consequence**: instinctRL-E may start. instinctRL-F remains no-go until E and reward prerequisites are complete.
+
+---
+
 ## D-2026-07-05-001: instinctRL-C Anchor Manager Boundary and Semantics
 
 **Decision**: Mark instinctRL-C complete as an actor-clean measurement-space anchor manager with passive env diagnostics only. Do not implement reward integration, B3 ablation, observability logging, ICS, or training convergence in C.

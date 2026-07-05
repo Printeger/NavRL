@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-C complete)
+> **Last Updated**: 2026-07-05 (instinctRL-D complete)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -149,11 +149,42 @@
 - Complete in C: anchor lifecycle, masked error, robust loss helper, scalar diagnostics, passive env integration, tests.
 - Deferred beyond C: anchor reward integration, B3 ablation execution, observability logger, ICS attenuation, reward redesign, training convergence.
 
-### instinctRL-D: Observability Logger
-- Range-Jacobian rank estimation
-- σ_min(J) vs drift correlation plot
-- Per-scenario drift ranking
-- Hardware proxy labeled as proxy
+## instinctRL-D: Observability Logger
+
+**Current verdict**: COMPLETE. Observability logger unit tests and A/B/C/D regression tests pass in the activated NavRL conda environment. Env integration is passive and disabled by default. Actor observation remains `lidar_grid` + `state_vec`.
+
+### Required D Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| D.1 Config validation | Positive `rank_tol`, finite positive `condition_number_cap`, valid mode only | Pure observability test passed |
+| D.2 Proxy mode | `J_i=-normalized_ray_direction_i`; proxy labeled with `is_proxy=1`, `mode_code=0` | Pure observability test passed |
+| D.3 Normal mode | `J_i=-n_i`; normals normalized; invalid/near-zero normals excluded; `sqrt(w)` row scaling | Pure observability test passed |
+| D.4 Finite-difference mode | `pinv(DeltaP) @ Delta r_i`; K/rank validation; exact and overdetermined synthetic recovery | Pure observability test passed |
+| D.5 Mode precedence | Proxy always proxy; offline chooses FD, then normals, then proxy fallback; malformed supplied inputs fail fast | Pure observability test passed |
+| D.6 SVD/rank metrics | Full-rank, rank-2, rank-1, insufficient rows, finite capped condition number | Pure observability test passed |
+| D.7 Weak direction | Cache-only weak direction from `Vh[-1]`; zero for insufficient/rank-0 cases | Pure observability test passed |
+| D.8 Drift correlation helper | Missing drift zero; finite drift norm; absolute projection onto weak direction | Pure observability test passed |
+| D.9 Public metrics boundary | Scalar `[N,1]` metrics; dense J/SVD internals in cache only | Pure observability test passed |
+| D.10 Env actor contract | `env.py` actor obs block remains only `lidar_grid` and `state_vec`; no observability/J/normal/map/odom actor fields | Source-level env integration test passed |
+
+### Added Test File
+
+- `training/unit_test/test_instinctrl_observability.py`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observability.py` | Passed: `9 passed, 1 warning`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py` | Passed: `34 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/observability.py training/scripts/env.py training/unit_test/test_instinctrl_observability.py` | Passed. |
+| TorchRL int64 spec probe for `UnboundedContinuousTensorSpec((1,), dtype=torch.long)` | Passed for `observability_mode_code`. |
+
+### D Scope Boundary
+
+- Complete in D: range-Jacobian/proxy logger, scalar metrics, dense cache, drift projection primitive, passive env integration, tests.
+- Deferred beyond D: plot generation, full evaluation report matrix, ICS attenuation, reward integration, training convergence.
 
 ### instinctRL-E: ICS Attenuation
 - β_t monotonic with speed/clearance
