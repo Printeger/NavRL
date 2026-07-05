@@ -5,6 +5,34 @@
 
 ---
 
+## D-2026-07-05-003: instinctRL-E Attenuation Boundary and Semantics
+
+**Decision**: Mark instinctRL-E complete as a deployed-safe, actor-clean command attenuation layer. E attenuates the body-frame governor command and does not add rewards, training changes, actor observation fields, or offline observability plotting.
+
+**Public env boundary**:
+
+- Add only scalar `ics_*` diagnostics to `info` when `instinctRL.ics.enabled=true`.
+- Keep dense active masks, per-beam speeds, range-rate estimates, margins, and effective clearances in cache/debug only.
+- Actor observation remains `lidar_grid` + `state_vec`.
+
+**Locked semantics**:
+
+- Formula is `v_final_b = beta * v_gov_b + (1 - beta) * v_brake_b`.
+- E first pass accepts only `brake_mode="zero"`, so `v_brake_b=0` and unsupported brake modes fail config validation.
+- Diagnostics and beta use the unclipped `v_gov_b`; the final body command is norm-clipped to `velocity_limit`.
+- Inputs are limited to MID360 range/mask/weight history, body-frame ray directions, body-frame governor command, optional history dt, and config parameters.
+- Active beams require latest valid mask, reliability above threshold, closing evidence, and clearance within the active horizon.
+- Default closing evidence uses the governor-command approach component only.
+- Optional range-rate filter can activate/use negative range rate, but range-rate remains cache-only unless enabled.
+- Empty active set uses `empty_active_set_beta`, default 1.0.
+- Reliable emergency clearance below threshold forces beta 0.
+
+**Validation**: E unit tests and A/B/C/D/E regression tests pass in the activated NavRL conda environment. Runtime Isaac smoke with `instinctRL.ics.enabled=true` was skipped locally because CUDA/NVML is not visible here.
+
+**Consequence**: instinctRL-F may start for reward-design work. Training convergence remains not complete and must not be claimed from E acceptance.
+
+---
+
 ## D-2026-07-05-002: instinctRL-D Observability Logger Boundary and Semantics
 
 **Decision**: Mark instinctRL-D complete as an evaluation-only range-Jacobian observability logger. The logger must not become a deployed control dependency and must not add observability features to actor input.

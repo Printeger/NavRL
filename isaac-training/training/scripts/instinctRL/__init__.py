@@ -10,7 +10,7 @@
 #   mid360_pattern:   Orbit RayCaster adapter for Livox MID360 rays
 #   anchor:           Measurement-space anchor manager (instinctRL-C)
 #   observability:    Evaluation-only range-Jacobian logger (instinctRL-D)
+#   ics:              ICS-inspired command attenuation (instinctRL-E)
 #
 # Future (deferred):
-#   ics:              ICS-inspired command attenuation (instinctRL-E)
 #   rewards:          instinctRL reward terms (instinctRL-F)

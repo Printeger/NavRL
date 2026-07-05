@@ -165,6 +165,16 @@ def main(cfg):
             velocity_limit=gov_cfg.velocity_limit,
         ).to(cfg.device)
         adapter = BodyToWorldVelocityAdapter().to(cfg.device)
+        ics_attenuator = None
+        ics_cfg = getattr(cfg.instinctRL, "ics", None)
+        if ics_cfg is not None and getattr(ics_cfg, "enabled", False):
+            from instinctRL.ics import ICSConfig, RangeHistoryICSAttenuator
+
+            ics_attenuator = RangeHistoryICSAttenuator(
+                ICSConfig.from_namespace(ics_cfg),
+                device=cfg.device,
+            )
+            print("[instinctRL-E] ICS attenuation enabled (brake_mode=zero)", flush=True)
         print(f"[instinctRL-A] Governor: B0 (alpha={gov_cfg.alpha_fixed})", flush=True)
         print(f"[instinctRL-A] Baseline: {cfg.instinctRL.baseline.id}", flush=True)
 
@@ -217,21 +227,34 @@ def main(cfg):
                 # B0: v_cmd → governor (α=1, v_corr=0) → v_gov
                 gov_out = governor(v_cmd_body)
                 v_gov_body = gov_out.v_gov
-                env.set_prev_issued_action_body(v_gov_body)
+                v_final_body = v_gov_body
+                if ics_attenuator is not None:
+                    histories = env.get_instinctrl_range_history(copy=False)
+                    ics_out = ics_attenuator(
+                        histories["range_history"],
+                        histories["mask_history"],
+                        histories["weight_history"],
+                        env._mid360_ray_dirs_b,
+                        v_gov_body,
+                        dt=env.dt,
+                    )
+                    v_final_body = ics_out.v_final_b
+                    env.record_instinctrl_ics_output(ics_out)
+                env.set_prev_issued_action_body(v_final_body)
 
                 # Body → world using privileged drone quaternion at controller boundary.
                 # The actor never receives this attitude/pose state.
                 drone_quat = td["info", "drone_state"][..., 3:7]
-                v_gov_world = adapter(v_gov_body, drone_quat)
+                v_final_world = adapter(v_final_body, drone_quat)
 
                 # Audit 3: Action type check
                 if step == 0:
-                    action_ok, action_msg = check_action_type(v_gov_world, expected_dim=3)
+                    action_ok, action_msg = check_action_type(v_final_world, expected_dim=3)
                     print(f"[instinctRL audit] {action_msg}", flush=True)
                     if not action_ok:
                         raise RuntimeError(f"instinctRL action audit FAILED: {action_msg}")
 
-                action = v_gov_world.squeeze(1)
+                action = v_final_world.squeeze(1)
                 if torch.isnan(action).any():
                     raise RuntimeError(f"[instinctRL-A] NaN in action at step {step}!")
 

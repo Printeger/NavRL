@@ -4,6 +4,48 @@
 
 ---
 
+## 2026-07-05 (instinctRL-E acceptance)
+
+### instinctRL-E: ICS-Inspired Attenuation Complete
+
+**Status**: instinctRL-E unit and A/B/C/D/E regression acceptance complete. instinctRL-F may start for reward-design work; training convergence remains unproven.
+
+- Added `training/scripts/instinctRL/ics.py`:
+  - `ICSConfig`, `ICSOutput`, and `RangeHistoryICSAttenuator`.
+  - Deployed-safe attenuation: `v_final_b = beta * v_gov_b` with `brake_mode="zero"` only.
+  - MID360 range/mask/weight history inputs, body-frame ray directions, body-frame governor command, and config parameters only.
+  - Empty active set returns beta 1.0 by default.
+  - Emergency reliable-min-clearance bypass forces beta 0.
+  - Optional finite-difference range-rate filter is cached by default and only affects beta when enabled.
+  - Final body command is norm-clipped after beta computation.
+- Integrated E without actor-schema changes:
+  - `MID360ObservationBuilder.get_history(copy=True)` exposes range/mask/weight history in oldest-to-latest order.
+  - `NavigationEnv.get_instinctrl_range_history()` wraps the builder accessor.
+  - `env.py` adds scalar `ics_*` info specs when enabled and stores dense cache in `self.ics_outputs`.
+  - `train.py` applies ICS before `BodyToWorldVelocityAdapter` and stores `v_final_body` as previous issued action.
+- Added `instinctRL.ics.*` config in `training/cfg/train.yaml`, disabled by default.
+- Added `training/unit_test/test_instinctrl_ics.py`.
+
+**Validation**:
+
+- `python -m pytest -q training/unit_test/test_instinctrl_ics.py` passed: `10 passed, 1 warning`.
+- A/B/C/D/E regression suite passed: `44 passed, 2 warnings`.
+- `py_compile` passed for changed E code/tests.
+- Runtime Isaac smoke with `instinctRL.ics.enabled=true` was not run in this environment because CUDA/NVML is not visible here; earlier B smoke coverage remains the last live Isaac smoke evidence.
+
+**Scope boundary**:
+
+- No reward/training implementation was added.
+- Actor observation remains `lidar_grid` + `state_vec`.
+- E deployed path does not use surface normals, map, odometry, SLAM, pose, or dynamic-obstacle privileged state.
+
+**Final conclusion**:
+
+- `instinctRL-E`: COMPLETE
+- `instinctRL-F`: GO for reward-design work only; training convergence remains not complete
+
+---
+
 ## 2026-07-05 (instinctRL-D acceptance)
 
 ### instinctRL-D: Observability Logger Complete

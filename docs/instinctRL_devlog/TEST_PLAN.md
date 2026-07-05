@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-D complete)
+> **Last Updated**: 2026-07-05 (instinctRL-E complete)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -186,12 +186,45 @@
 - Complete in D: range-Jacobian/proxy logger, scalar metrics, dense cache, drift projection primitive, passive env integration, tests.
 - Deferred beyond D: plot generation, full evaluation report matrix, ICS attenuation, reward integration, training convergence.
 
-### instinctRL-E: ICS Attenuation
-- β_t monotonic with speed/clearance
-- Empty active set → β_t=1
-- Emergency bypass on min-clearance
-- No surface-normal imports in deployed ICS
-- No odometry/map access in ICS
+## instinctRL-E: ICS Attenuation
+
+**Current verdict**: COMPLETE. ICS attenuator unit tests and A/B/C/D/E regression tests pass in the activated NavRL conda environment. Env/train integration is disabled by default and preserves the actor-clean `lidar_grid` + `state_vec` contract.
+
+### Required E Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| E.1 Config validation | Positive `a_max` and `velocity_limit`; valid clearances; `0 < min_reliability <= 1`; `brake_mode="zero"` only | Pure ICS test passed |
+| E.2 Shape/device validation | Accept `[N,L,H,V]` and `[N,L,R]` histories; rays `[R,3]`/`[N,R,3]`; commands `[N,3]`/`[N,1,3]`; malformed inputs fail | Pure ICS test passed |
+| E.3 Empty active set | No valid/reliable/closing beams gives beta 1 and preserves command unless clipped | Pure ICS test passed |
+| E.4 Emergency bypass | Reliable latest clearance below threshold forces beta 0 and zero final command | Pure ICS test passed |
+| E.5 Monotonic beta | Lower clearance or higher speed does not increase beta | Pure ICS test passed |
+| E.6 Active set rules | Invalid, low-reliability, non-closing, outside-horizon beams inactive; inside-horizon beams active; ratios clamp to beta 1 | Pure ICS test passed |
+| E.7 Range-rate behavior | Finite-difference estimate cached; default flag does not affect beta; enabled flag can activate on negative rate | Pure ICS test passed |
+| E.8 Command clipping | Beta computed from unclipped command; final norm clipped; direction preserved; scalar speeds/clip ratio shaped `[N,1]` | Pure ICS test passed |
+| E.9 History accessors | Builder and env expose range/mask/weight history; copy protects internals; latest/previous ordering correct | Builder unit + env source-level test passed |
+| E.10 Source-level safety | `ics.py` has no privileged deployed dependencies; actor block remains `lidar_grid` + `state_vec`; `train.py` applies ICS before body-to-world adapter and stores `v_final_b` | Source-level integration test passed |
+
+### Added Test File
+
+- `training/unit_test/test_instinctrl_ics.py`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_ics.py` | Passed: `10 passed, 1 warning`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py` | Passed: `44 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/ics.py training/scripts/instinctRL/observation.py training/scripts/env.py training/scripts/train.py training/unit_test/test_instinctrl_ics.py` | Passed. |
+
+### Runtime Smoke
+
+No Isaac GPU runtime smoke was run for instinctRL-E in this environment. CUDA/NVML is not visible locally, so the optional command `python training/scripts/train.py instinctRL.mode=smoke instinctRL.ics.enabled=true env.num_envs=4 env_dyn.num_obstacles=0` is recorded as skipped here. A later GPU-side smoke should verify live `ics_*` info metrics and attenuated action execution.
+
+### E Scope Boundary
+
+- Complete in E: command attenuation, scalar diagnostics, cache-only dense internals, history accessors, smoke-path integration, and tests.
+- Not implemented in E: reward/training changes, actor observation changes, surface-normal/map/odom/SLAM/pose/dynamic-obstacle deployed dependencies, D plotting, training convergence.
 
 ### instinctRL-F: Reward Integration
 - Each term activates under intended condition

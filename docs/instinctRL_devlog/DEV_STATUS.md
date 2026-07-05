@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-05
-> **Current Stage**: instinctRL-E ready
+> **Current Stage**: instinctRL-E complete
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,14 +10,15 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | instinctRL-E ready |
-| **Active ticket** | instinctRL-D complete |
-| **Next ticket** | instinctRL-E ICS-inspired attenuation |
-| **Final go/no-go** | instinctRL-E: GO; instinctRL-F: NO-GO until E and reward prerequisites are complete |
+| **Current stage** | instinctRL-E complete |
+| **Active ticket** | instinctRL-E complete |
+| **Next ticket** | instinctRL-F reward prerequisites review |
+| **Final go/no-go** | instinctRL-E: COMPLETE; instinctRL-F: GO for reward-design work only, training convergence remains not complete |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
 | **instinctRL-C** | COMPLETE |
 | **instinctRL-D** | COMPLETE |
+| **instinctRL-E** | COMPLETE |
 
 ---
 
@@ -30,8 +31,8 @@
 | instinctRL-B | COMPLETE | MID360 observation/history, actor schema, previous-action feedback, PPO hybrid path, and B runtime smoke evidence are complete. |
 | instinctRL-C | COMPLETE | `MeasurementSpaceAnchorManager` is implemented with actor-clean inputs, null-command hysteresis, anchor capture/reset, masked error, fixed-denominator Huber loss, scalar info diagnostics, internal dense cache, and NavRL pytest coverage. |
 | instinctRL-D | COMPLETE | Evaluation-only observability logger exists with offline finite-difference, offline normal-mode, proxy mode, scalar metrics, cache-only dense internals, and NavRL pytest coverage. |
-| instinctRL-E | GO | D logger exists and actor contract remains clean. E may start as ICS-inspired attenuation scope only. |
-| instinctRL-F | NO-GO | Reward integration/training remains deferred until E and reward prerequisites are complete. |
+| instinctRL-E | COMPLETE | ICS-inspired attenuation exists, unit/regression tests pass, actor contract remains clean, no reward/training implementation added. |
+| instinctRL-F | GO for reward-design implementation | E attenuation exists and actor contract remains clean. Training convergence remains not complete and must not be claimed. |
 
 ---
 
@@ -50,6 +51,8 @@
 | Env anchor integration | `env.py` writes only scalar `anchor_*` diagnostics into `info`; dense cache is stored in `self.anchor_outputs`; actor obs remains `lidar_grid` + `state_vec` | Present |
 | Observability logger | `instinctRL/observability.py` computes proxy/normal/finite-difference observability metrics and keeps dense Jacobian/SVD internals in cache | Present |
 | Env observability integration | `env.py` writes only scalar `observability_*` diagnostics into `info` when enabled; dense cache is stored in `self.observability_outputs`; actor obs remains `lidar_grid` + `state_vec` | Present |
+| ICS attenuator | `instinctRL/ics.py` implements range-history command attenuation with zero brake mode, emergency bypass, range-rate cache, scalar metrics, and cache-only dense per-beam internals | Present |
+| Env/train ICS integration | `env.py` exposes MID360 history and scalar `ics_*` info specs; `train.py` applies ICS before body-to-world adaptation and stores `v_final_b` as previous issued action when enabled | Present |
 
 ---
 
@@ -65,6 +68,9 @@
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py` | Passed: `34 passed, 2 warnings`. |
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/observability.py training/scripts/env.py training/unit_test/test_instinctrl_observability.py` | Passed. |
 | TorchRL int64 spec probe for `observability_mode_code` | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_ics.py` | Passed: `10 passed, 1 warning`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py` | Passed: `44 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/ics.py training/scripts/instinctRL/observation.py training/scripts/env.py training/scripts/train.py training/unit_test/test_instinctrl_ics.py` | Passed. |
 
 ---
 
@@ -74,5 +80,5 @@
 - `instinctRL-B`: COMPLETE
 - `instinctRL-C`: COMPLETE
 - `instinctRL-D`: COMPLETE
-- `instinctRL-E`: GO
-- `instinctRL-F`: NO-GO
+- `instinctRL-E`: COMPLETE
+- `instinctRL-F`: GO for reward-design work only; training convergence remains not complete

@@ -73,3 +73,21 @@ instinctRL:
     log_interval: 50                  # Intended runtime logging interval
     use_surface_normals: false        # Offline-only; never deployed actor/control input
     use_finite_difference: true       # Offline estimator if FD samples are supplied
+
+  # instinctRL-E: ICS-inspired deployed-safe command attenuation
+  ics:
+    enabled: false
+    d_safe: 0.8
+    emergency_clearance: 0.25
+    active_horizon_margin: 0.5
+    a_max: 2.0
+    latency_sec: 0.0
+    clearance_margin: 0.0
+    min_reliability: 0.1
+    approach_eps: 0.001
+    range_rate_eps: 0.001
+    use_range_rate_filter: false
+    velocity_limit: 2.0
+    range_rate_mode: "finite_difference"
+    empty_active_set_beta: 1.0
+    brake_mode: "zero"

@@ -1,17 +1,19 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-D complete)
+> **Last Updated**: 2026-07-05 (instinctRL-E complete)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
 
 ---
 
-## Before-E Validation Blockers
+## Before-F Validation Blockers
 
-None. instinctRL-D acceptance blockers are cleared; instinctRL-E may start.
+None for starting reward-design implementation. instinctRL-E acceptance blockers are cleared.
 
-Completed D validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-D_observability_logger.md`, and `tests/instinctRL-D_test_report.md`.
+Completed E validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-E_ics_attenuation.md`, and `tests/instinctRL-E_test_report.md`.
+
+Training convergence is still not complete. Before claiming instinctRL-F/training success, resolve or explicitly stage D-001 trainable governor, D-007 reward integration, and any selected baseline/evaluation requirements.
 
 ---
 
@@ -78,8 +80,10 @@ Completed D validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinct
 | **Target stage** | instinctRL-E |
 | **Trigger condition** | instinctRL-B complete (history buffer with timestamps available) |
 | **Acceptance test** | Monotonic β_t with speed/clearance; empty active set → β_t=1; emergency bypass on min-clearance; no surface-normal imports; no odometry/map access; B5 ablation exists |
-| **Status** | ⬜ Open |
+| **Status** | ✅ Complete for attenuation implementation; B5 ablation remains evaluation work |
 | **Module ref** | Handbook M4 (`instinctRL/ics.py`) |
+
+**Closeout correction**: E implements the command attenuation layer and tests the safety/actor-boundary contract. It does not implement reward/training changes, D plotting, or B5/Baseline experiment execution.
 
 ### D-006: Aggressive / Adversarial Command Generator
 
@@ -126,6 +130,14 @@ Completed D validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinct
 - **Current fact**: `instinctRL/observation.py` provides `MID360ObservationBuilder`; active `env.py` uses the MID360 helper wrapper; `prev_action` is wired from the issued command; tests cover pattern/order, masks, weights, timestamps, history, reset, actor schema, PPO hybrid forward, and adapter frame convention.
 - **Runtime evidence**: User-side smoke completed 500/500 steps with MID360 raw range `[4, 1, 360, 59]`, valid returns `28.62%`, and `Observation smoke path PASSED`.
 - **Status**: ✅ Complete.
+
+---
+
+### D-005: ICS-Inspired Command Attenuation
+- **Closeout correction**: Accepted as of 2026-07-05 for the E attenuation layer. Baseline experiment execution remains later evaluation work.
+- **Current fact**: `instinctRL/ics.py` provides `RangeHistoryICSAttenuator`; `train.py` routes `v_gov_b -> ICS -> v_final_b -> BodyToWorldVelocityAdapter` when enabled; `env.py` exposes history and scalar `ics_*` info specs; actor obs remains `lidar_grid` + `state_vec`.
+- **Validation evidence**: E unit tests passed (`10 passed`), A/B/C/D/E regression suite passed (`44 passed`), and changed files compile.
+- **Status**: ✅ Complete for E implementation.
 
 ---
 

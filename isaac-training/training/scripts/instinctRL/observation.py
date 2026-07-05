@@ -215,6 +215,24 @@ class MID360ObservationBuilder:
 
         return {"lidar_grid": lidar_grid, "state_vec": state_vec_out}
 
+    def get_history(self, copy: bool = True) -> Dict[str, torch.Tensor]:
+        """
+        Return MID360 range/mask/weight history in oldest-to-latest order.
+
+        Shapes are [N, L, H, V]. With ``copy=True`` the returned tensors are
+        detached clones so callers cannot mutate the builder buffers.
+        """
+        if self._history is None:
+            raise RuntimeError("history is not initialized; call build_history first")
+        history = {
+            "range_history": self._history["range"],
+            "mask_history": self._history["mask"],
+            "weight_history": self._history["weight"],
+        }
+        if copy:
+            return {key: value.detach().clone() for key, value in history.items()}
+        return history
+
     # ------------------------------------------------------------------
     # Reset
     # ------------------------------------------------------------------

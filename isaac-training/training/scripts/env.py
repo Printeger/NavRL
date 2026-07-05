@@ -241,6 +241,10 @@ class NavigationEnv(IsaacEnv):
                 )
                 self.observability_outputs = {}
                 print("[instinctRL-D] RangeJacobianObservabilityLogger created")
+
+            ics_cfg = getattr(cfg.instinctRL, "ics", None)
+            if ics_cfg is not None and getattr(ics_cfg, "enabled", False):
+                self.ics_outputs = {}
         
         # ============================================
         # 第 5 步：初始化目标和状态变量
@@ -654,6 +658,21 @@ class NavigationEnv(IsaacEnv):
                     (1,), dtype=torch.long, device=self.device
                 ),
             })
+        ics_cfg = getattr(getattr(self.cfg, "instinctRL", None), "ics", None)
+        if ics_cfg is not None and getattr(ics_cfg, "enabled", False):
+            info_spec_fields.update({
+                # instinctRL-E: Scalar attenuation diagnostics only. Dense
+                # per-beam internals stay in self.ics_outputs.
+                "ics_beta": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_active_beam_count": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_min_clearance": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_worst_margin": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_emergency": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_command_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_brake_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_final_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_clip_ratio": UnboundedContinuousTensorSpec((1,), device=self.device),
+            })
         info_spec = CompositeSpec(info_spec_fields).expand(self.num_envs).to(self.device)
         self.observation_spec["stats"] = stats_spec
         self.observation_spec["info"] = info_spec
@@ -754,6 +773,19 @@ class NavigationEnv(IsaacEnv):
         if action_body.dim() == 3 and action_body.shape[1] == 1:
             action_body = action_body.squeeze(1)
         self._prev_issued_action_body[:] = action_body.reshape(self.num_envs, 3).detach()
+
+    def get_instinctrl_range_history(self, copy: bool = True):
+        """Return MID360 range/mask/weight history from the observation builder."""
+        if not hasattr(self, "_obs_builder"):
+            raise RuntimeError("instinctRL observation builder is not available")
+        return self._obs_builder.get_history(copy=copy)
+
+    def record_instinctrl_ics_output(self, ics_out):
+        """Store ICS scalar metrics in info and dense tensors internally."""
+        self.ics_outputs = ics_out.cache
+        for key, value in ics_out.metrics.items():
+            if key in self.info.keys():
+                self.info[key][:] = value
     
     # ============================================
     # 计算观测和奖励（每步调用）
