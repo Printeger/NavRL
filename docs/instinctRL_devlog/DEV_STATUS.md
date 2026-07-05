@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-05
-> **Current Stage**: instinctRL-F reward integration complete
+> **Current Stage**: instinctRL-F reward integration complete; minimal training smoke passed
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,10 +10,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | instinctRL-F reward integration complete |
-| **Active ticket** | instinctRL-F complete for reward integration/readiness |
+| **Current stage** | instinctRL-F reward integration complete; minimal train smoke passed |
+| **Active ticket** | instinctRL-F complete for reward integration/readiness plus train-smoke readiness follow-up |
 | **Next ticket** | instinctRL-G baseline/evaluation harness |
-| **Final go/no-go** | instinctRL-F: COMPLETE for reward integration; training convergence NOT PROVEN; instinctRL-G: GO for baseline/evaluation harness only |
+| **Final go/no-go** | instinctRL-F: COMPLETE for reward integration and minimal smoke readiness; training convergence NOT PROVEN; instinctRL-G: GO for baseline/evaluation harness only |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
 | **instinctRL-C** | COMPLETE |
@@ -33,7 +33,7 @@
 | instinctRL-C | COMPLETE | `MeasurementSpaceAnchorManager` is implemented with actor-clean inputs, null-command hysteresis, anchor capture/reset, masked error, fixed-denominator Huber loss, scalar info diagnostics, internal dense cache, and NavRL pytest coverage. |
 | instinctRL-D | COMPLETE | Evaluation-only observability logger exists with offline finite-difference, offline normal-mode, proxy mode, scalar metrics, cache-only dense internals, and NavRL pytest coverage. |
 | instinctRL-E | COMPLETE | ICS-inspired attenuation exists, unit/regression tests pass, actor contract remains clean, no reward/training implementation added. |
-| instinctRL-F | COMPLETE for reward integration/readiness | Reward path, component stats, actor contract tests, and regression tests pass. Training convergence remains not proven. |
+| instinctRL-F | COMPLETE for reward integration/readiness; minimal train smoke passed | Reward path, component stats, actor contract tests, regression tests, and a 16-frame GPU training smoke pass. Training convergence remains not proven. |
 | instinctRL-G | GO for baseline/evaluation harness only | Reward integration passes. Do not claim learned-policy success without training logs. |
 
 ---
@@ -57,6 +57,8 @@
 | Env/train ICS integration | `env.py` exposes MID360 history and scalar `ics_*` info specs; `train.py` applies ICS before body-to-world adaptation and stores `v_final_b` as previous issued action when enabled | Present |
 | Reward computer | `instinctRL/rewards.py` implements tracking, anchor, safety, ICS-compliance, intervention, smoothness, collision, and clipped total reward terms | Present |
 | Env reward integration | `env.py` uses F reward path when `instinctRL.reward.enabled=true`, preserves old NavRL reward when disabled, and writes reward components to `stats` | Present |
+| PPO train update smoke fix | `PPO._update()` recomputes critic features inside minibatch update instead of relying on cached `_critic_feature`; regression test covers missing-cache minibatches | Present |
+| instinctRL train smoke controls | `train.py` initializes wandb for `instinctRL.mode=train`, supports `eval_interval=0` and `save_interval=0`, and exits before `SimulationApp.close()` after successful instinctRL train completion to avoid Isaac Kit shutdown segfault | Present |
 | Trainable governor | `MinimalGovernor` remains the only governor; PPO train collector still does not implement learned `(alpha, v_corr)` governor action path | Open gap |
 
 ---
@@ -80,6 +82,8 @@
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `54 passed, 2 warnings`. |
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/rewards.py training/scripts/env.py training/scripts/instinctRL/__init__.py training/unit_test/test_instinctrl_rewards.py` | Passed. |
 | TorchRL spec probe for reward component stats insertion | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/train.py training/scripts/ppo.py && python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_ppo_hybrid.py` | Passed: `12 passed, 3 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true` | Passed with exit code 0. Logged `env_frames=16`, PPO loss scalars, actor/schema audits, reward component stats, and final checkpoint at `wandb/offline-run-20260705_191435-pyfkk0z2/files/checkpoint_final.pt`. |
 
 ---
 
@@ -90,6 +94,6 @@
 - `instinctRL-C`: COMPLETE
 - `instinctRL-D`: COMPLETE
 - `instinctRL-E`: COMPLETE
-- `instinctRL-F`: COMPLETE for reward integration/readiness
+- `instinctRL-F`: COMPLETE for reward integration/readiness; minimal 16-frame training smoke passed
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only

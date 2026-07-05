@@ -5,6 +5,31 @@
 
 ---
 
+## D-2026-07-05-005: instinctRL-F Minimal Training Smoke Readiness
+
+**Decision**: Accept the minimal `instinctRL.mode=train` smoke as training-readiness evidence after fixing PPO update and train-loop smoke controls. Do not treat it as convergence evidence or learned-governor success.
+
+**Locked smoke command**:
+
+`python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true`
+
+**Rationale**:
+
+- `algo.training_frame_num=2` with default minibatch count can create empty minibatches; tiny smoke runs must keep `env.num_envs * algo.training_frame_num >= algo.num_minibatches`.
+- PPO minibatch updates must recompute `_critic_feature`; cached rollout internals are not a valid dependency for update-time critic calls.
+- `eval_interval=0` is the accepted smoke setting because `i=0` otherwise triggers evaluation immediately and can allocate a long video rollout that is unrelated to the minimal training-step check.
+- `save_interval=0` disables periodic saves only; the final checkpoint still verifies checkpoint write.
+- Successful instinctRL train completion exits before `SimulationApp.close()` to avoid the known Isaac Kit shutdown segfault after a passed run.
+
+**Validation**:
+
+- Reward + PPO hybrid targeted tests pass: `12 passed, 3 warnings`.
+- GPU runtime smoke passed with exit code 0, `env_frames=16`, wandb offline summary, actor/schema audits, reward component stats, and final checkpoint at `wandb/offline-run-20260705_191435-pyfkk0z2/files/checkpoint_final.pt`.
+
+**Consequence**: The repo is ready for short training-scale-up experiments and instinctRL-G baseline/evaluation harness work. Training convergence, robust policy performance, and trainable-governor success remain open evidence items.
+
+---
+
 ## D-2026-07-05-004: instinctRL-F Reward Integration Boundary and Semantics
 
 **Decision**: Mark instinctRL-F complete for reward integration/readiness only. Do not claim trainable-governor readiness, stable training, or learned-policy success from this stage.

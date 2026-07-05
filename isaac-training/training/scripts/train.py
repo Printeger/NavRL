@@ -111,7 +111,8 @@ def main(cfg):
     
     # 将 Hydra 的 DictConfig 转换为普通字典，避免序列化错误
     run = None
-    if not instinct_enabled:
+    skip_wandb = instinct_enabled and instinct_mode == "smoke"
+    if not skip_wandb:
         wandb_config = OmegaConf.to_container(cfg, resolve=True)
         
         if (cfg.wandb.run_id is None):
@@ -402,7 +403,7 @@ def main(cfg):
             info.update(stats)
 
         # -------- 周期性评估策略 --------
-        if i % cfg.eval_interval == 0:
+        if cfg.eval_interval > 0 and i % cfg.eval_interval == 0:
             print("[NavRL]: start evaluating policy at training step: ", i)
             
             # 开启渲染（用于录制视频）
@@ -429,7 +430,7 @@ def main(cfg):
         run.log(info)
 
         # -------- 周期性保存模型 --------
-        if i % cfg.save_interval == 0:
+        if cfg.save_interval > 0 and i % cfg.save_interval == 0:
             ckpt_path = os.path.join(run.dir, f"checkpoint_{i}.pt")
             torch.save(policy.state_dict(), ckpt_path)
             print("[NavRL]: model saved at training step: ", i)
@@ -443,6 +444,15 @@ def main(cfg):
     
     # 关闭 WandB 和仿真器
     wandb.finish()
+    if instinct_enabled:
+        print(
+            "[instinctRL] Training smoke complete. Exiting before "
+            "SimulationApp.close() to avoid Isaac Kit shutdown segfault.",
+            flush=True,
+        )
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
     sim_app.close()
 
 if __name__ == "__main__":

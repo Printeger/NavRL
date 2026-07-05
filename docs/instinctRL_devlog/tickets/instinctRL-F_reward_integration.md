@@ -69,17 +69,21 @@ This ticket does not implement:
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `54 passed, 2 warnings`. |
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/rewards.py training/scripts/env.py training/scripts/instinctRL/__init__.py training/unit_test/test_instinctrl_rewards.py` | Passed. |
 | TorchRL spec probe for reward component stats insertion | Passed. |
-| CUDA availability probe | `torch.cuda.is_available() == False`, `torch.cuda.device_count() == 0`. |
+| Sandbox CUDA availability probe | `torch.cuda.is_available() == False`, `torch.cuda.device_count() == 0`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/train.py training/scripts/ppo.py && python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_ppo_hybrid.py` | Passed: `12 passed, 3 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true` | Passed with exit code 0; logged `env_frames=16`; wrote final checkpoint to `wandb/offline-run-20260705_191435-pyfkk0z2/files/checkpoint_final.pt`. |
 
 ---
 
 ## Runtime Smoke
 
-No Isaac GPU runtime smoke was run for instinctRL-F in this environment. CUDA/NVML is not visible locally. The optional command is:
+A minimal GPU train smoke passed with reward integration enabled:
 
-`python training/scripts/train.py instinctRL.mode=smoke instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0`
+`python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true`
 
-A later GPU-side smoke should verify live reward component stats and controller execution.
+The smoke validated rollout collection, PPO update, reward component stats, actor/schema audits, wandb offline logging, and final checkpoint write. It intentionally disables periodic evaluation with `eval_interval=0` because step-0 evaluation can run a long video rollout and exceed memory in a tiny smoke.
+
+This is training-readiness evidence, not convergence evidence.
 
 ---
 
@@ -94,6 +98,6 @@ A later GPU-side smoke should verify live reward component stats and controller 
 
 ## Final Verdict
 
-- `instinctRL-F`: COMPLETE for reward integration/readiness.
+- `instinctRL-F`: COMPLETE for reward integration/readiness and minimal train-smoke readiness.
 - Training convergence: NOT PROVEN.
 - `instinctRL-G`: GO for baseline/evaluation harness only.

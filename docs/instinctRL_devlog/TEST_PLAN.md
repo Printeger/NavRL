@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-E complete)
+> **Last Updated**: 2026-07-05 (instinctRL-F train-smoke readiness)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -260,10 +260,15 @@ No Isaac GPU runtime smoke was run for instinctRL-E in this environment. CUDA/NV
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `54 passed, 2 warnings`. |
 | `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/rewards.py training/scripts/env.py training/scripts/instinctRL/__init__.py training/unit_test/test_instinctrl_rewards.py` | Passed. |
 | TorchRL spec probe for reward component stats construction before spec expansion | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/train.py training/scripts/ppo.py && python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_ppo_hybrid.py` | Passed: `12 passed, 3 warnings`. Covers reward path and PPO minibatch critic-feature recomputation. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true` | Passed with exit code 0. Logged `env_frames=16`, PPO loss scalars, actor/schema audits, reward component stats, and final checkpoint at `wandb/offline-run-20260705_191435-pyfkk0z2/files/checkpoint_final.pt`. |
 
-### Runtime Smoke
+### Runtime Smoke Notes
 
-No Isaac GPU runtime smoke was run for instinctRL-F in this environment. CUDA/NVML is not visible locally, so the optional command `python training/scripts/train.py instinctRL.mode=smoke instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0` is recorded as skipped here. A GPU-side smoke should verify live reward component stats and controller execution.
+- The accepted minimal train smoke disables periodic evaluation with `eval_interval=0`; otherwise `i=0` evaluation runs immediately and can consume much more memory than the tiny training rollout.
+- The accepted minimal train smoke disables periodic checkpoint saves with `save_interval=0`; the final checkpoint is still saved.
+- The known Isaac Kit `SimulationApp.close()` shutdown segfault is avoided for successful instinctRL train completion by exiting after `wandb.finish()` and checkpoint write.
+- This smoke validates reward/PPO training readiness, not training convergence or learned-policy success.
 
 ### F Scope Boundary
 

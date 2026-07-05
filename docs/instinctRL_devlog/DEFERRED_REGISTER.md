@@ -1,7 +1,7 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-F reward integration complete)
+> **Last Updated**: 2026-07-05 (instinctRL-F reward integration and train-smoke readiness complete)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
 
@@ -9,11 +9,11 @@
 
 ## Before-G Validation Blockers
 
-None for starting baseline/evaluation harness work. instinctRL-F reward integration acceptance blockers are cleared.
+None for starting baseline/evaluation harness work. instinctRL-F reward integration acceptance blockers are cleared, and the minimal 16-frame `instinctRL.mode=train` GPU smoke has passed with reward integration enabled.
 
 Completed F validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-F_reward_integration.md`, and `tests/instinctRL-F_test_report.md`.
 
-Training convergence is still not complete. Before claiming learned-policy success, resolve or explicitly stage D-001 trainable governor and run actual training/evaluation with logs.
+Training convergence is still not complete. Before claiming learned-policy success, resolve or explicitly stage D-001 trainable governor as needed and run actual training/evaluation with logs.
 
 ---
 
@@ -102,11 +102,11 @@ Training convergence is still not complete. Before claiming learned-policy succe
 | Field | Value |
 |-------|-------|
 | **Deferred from** | instinctRL-A (out of scope) |
-| **Reason** | Reward redesign requires anchor manager and ICS β_t for full terms. Full learned-governor training also requires D-001, but F implemented command-consistency proxy reward integration without pretending learned governor exists. |
+| **Reason** | Reward redesign requires anchor manager and ICS β_t for full terms. Full learned-governor training also requires D-001, but F implemented command-consistency proxy reward integration and a minimal PPO train smoke without pretending learned governor exists. |
 | **Target stage** | instinctRL-F |
 | **Trigger condition** | Governor head (D-001), anchor (D-003), and ICS (D-005) available |
-| **Acceptance test** | Each reward term activates under intended condition; privileged quantities stay reward/critic/eval only; no actor leakage; first stable training run |
-| **Status** | ✅ Complete for reward integration/readiness; first stable training run remains open |
+| **Acceptance test** | Each reward term activates under intended condition; privileged quantities stay reward/critic/eval only; no actor leakage; minimal training smoke passes; first stable convergence run remains separate evidence |
+| **Status** | ✅ Complete for reward integration/readiness and minimal train-smoke readiness; convergence run remains open |
 | **Module ref** | Handbook M6 (`instinctRL/rewards.py` or gated path in `env.py`) |
 
 **Closeout correction**: F implements reward terms, config, stats logging, disabled-module defaults, and actor/privileged-boundary tests. It does not implement the trainable governor head or prove convergence.
@@ -144,10 +144,10 @@ Training convergence is still not complete. Before claiming learned-policy succe
 ---
 
 ### D-007: Reward Integration
-- **Closeout correction**: Accepted as of 2026-07-05 for reward integration/readiness. Stable training remains separate evidence and is not claimed.
+- **Closeout correction**: Accepted as of 2026-07-05 for reward integration/readiness and minimal train-smoke readiness. Stable training remains separate evidence and is not claimed.
 - **Current fact**: `instinctRL/rewards.py` provides `InstinctRLRewardComputer`; `env.py` gates the F reward path with `instinctRL.reward.enabled`, writes component stats, and preserves the old reward path when disabled.
-- **Validation evidence**: F unit tests passed (`10 passed`), A/B/C/D/E/F regression suite passed (`54 passed`), changed files compile, and reward component stats spec probe passed.
-- **Status**: ✅ Complete for F reward integration.
+- **Validation evidence**: F unit tests passed (`10 passed`), A/B/C/D/E/F regression suite passed (`54 passed`), changed files compile, reward component stats spec probe passed, targeted reward/PPO tests passed (`12 passed`), and minimal GPU train smoke passed with `env_frames=16`.
+- **Status**: ✅ Complete for F reward integration and minimal train-smoke readiness.
 
 ---
 

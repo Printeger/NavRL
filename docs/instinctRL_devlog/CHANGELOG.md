@@ -4,6 +4,40 @@
 
 ---
 
+## 2026-07-05 (instinctRL-F train-smoke readiness follow-up)
+
+### instinctRL-F: Minimal Training Smoke Path Now Passes
+
+**Status**: reward integration remains complete; the minimal PPO training smoke now runs to completion. This is not a training-convergence claim.
+
+- Fixed PPO minibatch update path:
+  - `PPO._update()` now recomputes critic features from minibatch actor features and critic-only `info` fields before calling the critic.
+  - Added regression coverage for minibatches that do not carry cached `_critic_feature`.
+- Fixed instinctRL train-mode logging:
+  - `instinctRL.mode=train` now initializes wandb instead of leaving `run=None`.
+  - `instinctRL.mode=smoke` still skips wandb.
+- Added smoke-friendly train loop controls:
+  - `eval_interval=0` disables periodic evaluation.
+  - `save_interval=0` disables periodic checkpoint saves.
+  - Final checkpoint save remains active.
+- Added an instinctRL train completion exit path before `SimulationApp.close()` to avoid the known Isaac Kit shutdown segfault after successful validation.
+
+**Validation**:
+
+- `python -m py_compile training/scripts/train.py training/scripts/ppo.py && python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_ppo_hybrid.py` passed: `12 passed, 3 warnings`.
+- GPU runtime training smoke passed with exit code 0:
+  - `python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true`
+  - Logged `env_frames=16`, PPO loss scalars, actor/schema audits, reward component stats, and final checkpoint.
+  - Final checkpoint path: `wandb/offline-run-20260705_191435-pyfkk0z2/files/checkpoint_final.pt`.
+
+**Scope boundary**:
+
+- This validates the minimal reward/PPO training path, not policy convergence.
+- The PPO path still uses the current direct-velocity policy path; the trainable governor head remains open.
+- Actor observation remains `lidar_grid` + `state_vec`.
+
+---
+
 ## 2026-07-05 (instinctRL-F acceptance)
 
 ### instinctRL-F: Reward Integration Complete; Training Convergence Not Proven

@@ -414,6 +414,7 @@ class PPO(TensorDictModuleBase):
         # 目标：让 V(s) 接近真实回报 G_t
         b_value = tensordict["state_value"]  # 旧的价值估计
         ret = tensordict["ret"]  # 真实回报 G_t
+        self.critic_feature_extractor(tensordict)
         value = self.critic(tensordict)["state_value"]  # 新的价值估计
         
         # Value Clipping：限制价值函数的更新幅度
