@@ -245,6 +245,16 @@ class NavigationEnv(IsaacEnv):
             ics_cfg = getattr(cfg.instinctRL, "ics", None)
             if ics_cfg is not None and getattr(ics_cfg, "enabled", False):
                 self.ics_outputs = {}
+
+            # cfg.instinctRL.reward.enabled gates F reward integration/readiness.
+            reward_cfg = getattr(cfg.instinctRL, "reward", None)
+            if reward_cfg is not None and getattr(reward_cfg, "enabled", False):
+                from instinctRL.rewards import RewardConfig, InstinctRLRewardComputer
+                self._reward_computer = InstinctRLRewardComputer(
+                    RewardConfig.from_namespace(reward_cfg),
+                    device=self.device,
+                )
+                print("[instinctRL-F] Reward computer created")
         
         # ============================================
         # 第 5 步：初始化目标和状态变量
@@ -263,6 +273,8 @@ class NavigationEnv(IsaacEnv):
             # 前一步的速度（用于计算平滑性奖励）
             self.prev_drone_vel_w = torch.zeros(self.num_envs, 1 , 3) 
             self._prev_issued_action_body = torch.zeros(self.num_envs, 3)
+            self._has_prev_issued_action_body = torch.zeros(self.num_envs, 1, dtype=torch.bool)
+            self._reward_prev_v_final_body = torch.zeros(self.num_envs, 3)
 
 
     def _design_scene(self):
@@ -604,13 +616,26 @@ class NavigationEnv(IsaacEnv):
         }).expand(self.num_envs).to(self.device) 
 
 
-        stats_spec = CompositeSpec({
+        stats_spec_fields = {
             "return": UnboundedContinuousTensorSpec(1),
             "episode_len": UnboundedContinuousTensorSpec(1),
             "reach_goal": UnboundedContinuousTensorSpec(1),
             "collision": UnboundedContinuousTensorSpec(1),
             "truncated": UnboundedContinuousTensorSpec(1),
-        }).expand(self.num_envs).to(self.device)
+        }
+        reward_cfg = getattr(getattr(self.cfg, "instinctRL", None), "reward", None)
+        if reward_cfg is not None and getattr(reward_cfg, "enabled", False):
+            stats_spec_fields.update({
+                "reward_tracking": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_anchor": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_safety": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_ics_compliance": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_intervention": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_smoothness": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_collision": UnboundedContinuousTensorSpec(1, device=self.device),
+                "reward_total": UnboundedContinuousTensorSpec(1, device=self.device),
+            })
+        stats_spec = CompositeSpec(stats_spec_fields).expand(self.num_envs).to(self.device)
 
         # instinctRL-A: Add v_cmd to info spec (critic-accessible, not actor input).
         # Body-frame velocity command for B0 baseline.
@@ -749,6 +774,10 @@ class NavigationEnv(IsaacEnv):
         self.prev_drone_vel_w[env_ids] = 0.
         if hasattr(self, "_prev_issued_action_body"):
             self._prev_issued_action_body[env_ids] = 0.0
+        if hasattr(self, "_has_prev_issued_action_body"):
+            self._has_prev_issued_action_body[env_ids] = False
+        if hasattr(self, "_reward_prev_v_final_body"):
+            self._reward_prev_v_final_body[env_ids] = 0.0
         if hasattr(self, "_obs_builder"):
             self._obs_builder.reset_history(env_ids)
         if hasattr(self, "_anchor_manager"):
@@ -773,6 +802,7 @@ class NavigationEnv(IsaacEnv):
         if action_body.dim() == 3 and action_body.shape[1] == 1:
             action_body = action_body.squeeze(1)
         self._prev_issued_action_body[:] = action_body.reshape(self.num_envs, 3).detach()
+        self._has_prev_issued_action_body[:] = True
 
     def get_instinctrl_range_history(self, copy: bool = True):
         """Return MID360 range/mask/weight history from the observation builder."""
@@ -1045,7 +1075,10 @@ class NavigationEnv(IsaacEnv):
 
         # f. 碰撞检测
         # 静态碰撞：LiDAR 检测到距离 < 0.3m
-        static_collision = einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") > (self.lidar_range - 0.3)
+        if hasattr(self, "_obs_builder"):
+            static_collision = einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "min") < 0.3
+        else:
+            static_collision = einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") > (self.lidar_range - 0.3)
         collision = static_collision | dynamic_collision
         
         # ============================================
@@ -1056,10 +1089,62 @@ class NavigationEnv(IsaacEnv):
         #          + safety_dynamic * 1.0
         #          - smoothness * 0.1
         #          - height_penalty * 8.0
-        if (self.cfg.env_dyn.num_obstacles != 0):
-            self.reward = reward_vel + 1. + reward_safety_static * 1.0 + reward_safety_dynamic * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
+        if hasattr(self, "_reward_computer") and hasattr(self, "_obs_builder"):
+            v_cmd_b = self._v_cmd.reshape(self.num_envs, 3)
+            issued_v_final_b = torch.where(
+                self._has_prev_issued_action_body,
+                self._prev_issued_action_body,
+                v_cmd_b,
+            )
+            prev_v_final_b = torch.where(
+                self._has_prev_issued_action_body,
+                self._reward_prev_v_final_body,
+                issued_v_final_b,
+            )
+            flat_range = obs_frame["range"].reshape(self.num_envs, -1)
+            flat_mask = obs_frame["mask"].reshape(self.num_envs, -1) > 0
+            min_clearance = torch.where(
+                flat_mask,
+                flat_range,
+                torch.full_like(flat_range, float("inf")),
+            ).min(dim=1, keepdim=True).values
+            min_clearance = torch.where(
+                torch.isfinite(min_clearance),
+                min_clearance,
+                torch.full_like(min_clearance, self.lidar_range),
+            )
+
+            reward_terms = self._reward_computer.compute(
+                v_cmd_b=v_cmd_b,
+                v_final_b=issued_v_final_b,
+                prev_v_final_b=prev_v_final_b,
+                anchor_loss=self.info["anchor_loss"] if "anchor_loss" in self.info.keys() else None,
+                anchor_active=self.info["anchor_active"] if "anchor_active" in self.info.keys() else None,
+                anchor_valid_fraction=(
+                    self.info["anchor_valid_fraction"]
+                    if "anchor_valid_fraction" in self.info.keys()
+                    else None
+                ),
+                ics_beta=self.info["ics_beta"] if "ics_beta" in self.info.keys() else None,
+                ics_emergency=self.info["ics_emergency"] if "ics_emergency" in self.info.keys() else None,
+                ics_active_beam_count=(
+                    self.info["ics_active_beam_count"]
+                    if "ics_active_beam_count" in self.info.keys()
+                    else None
+                ),
+                min_clearance=min_clearance,
+                collision=collision,
+            )
+            self.reward = reward_terms.total
+            self.reward_outputs = reward_terms.cache
+            for key, value in reward_terms.components.items():
+                self.stats[key] += value
+            self._reward_prev_v_final_body[:] = issued_v_final_b.detach()
         else:
-            self.reward = reward_vel + 1. + reward_safety_static * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
+            if (self.cfg.env_dyn.num_obstacles != 0):
+                self.reward = reward_vel + 1. + reward_safety_static * 1.0 + reward_safety_dynamic * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
+            else:
+                self.reward = reward_vel + 1. + reward_safety_static * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
 
         # ============================================
         # 终止条件

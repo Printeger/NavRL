@@ -4,6 +4,51 @@
 
 ---
 
+## 2026-07-05 (instinctRL-F acceptance)
+
+### instinctRL-F: Reward Integration Complete; Training Convergence Not Proven
+
+**Status**: instinctRL-F reward integration/readiness is complete. This is not a learned-policy success or convergence claim.
+
+- Added `training/scripts/instinctRL/rewards.py`:
+  - `RewardConfig`, `RewardTerms`, and `InstinctRLRewardComputer`.
+  - Command-consistency tracking proxy, anchor term, MID360 clearance safety term, ICS compliance offset, intervention penalty, smoothness penalty, and collision penalty.
+  - Default reward path uses actor-clean/deployed-safe command and MID360 signals.
+  - Optional privileged actual velocity is supported only behind `use_privileged_velocity_for_reward=false` default.
+  - Reward totals and components remain finite and are clipped/scaled by `max_reward_abs`.
+- Integrated F in `env.py`:
+  - `instinctRL.reward.enabled=true` uses the new reward path.
+  - `instinctRL.reward.enabled=false` preserves the old NavRL reward path.
+  - Reward components are accumulated in `stats` for `EpisodeStats` logging.
+  - Actor observation remains `lidar_grid` + `state_vec`.
+  - Anchor/ICS disabled paths degrade gracefully.
+- Added `instinctRL.reward.*` config in `training/cfg/train.yaml`, enabled by default for instinctRL.
+- Added `training/unit_test/test_instinctrl_rewards.py`.
+- Updated `CONTEXT.md` with F glossary terms.
+
+**Validation**:
+
+- `python -m pytest -q training/unit_test/test_instinctrl_rewards.py` passed: `10 passed, 1 warning`.
+- A/B/C/D/E/F regression suite passed: `54 passed, 2 warnings`.
+- `py_compile` passed for changed F code/tests.
+- TorchRL spec probe passed for reward component stats insertion.
+- Runtime Isaac smoke with `instinctRL.reward.enabled=true` was not run in this environment because CUDA/NVML is not visible here.
+
+**Scope boundary**:
+
+- No trainable governor head was implemented.
+- No actor observation schema change was made.
+- No baseline matrix or real-robot deployment work was implemented.
+- Privileged simulator quantities remain reward/critic/eval/logging only.
+
+**Final conclusion**:
+
+- `instinctRL-F`: COMPLETE for reward integration/readiness
+- Training convergence: NOT PROVEN
+- `instinctRL-G`: GO for baseline/evaluation harness only, not learned-policy success claims
+
+---
+
 ## 2026-07-05 (instinctRL-E acceptance)
 
 ### instinctRL-E: ICS-Inspired Attenuation Complete

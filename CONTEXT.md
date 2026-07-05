@@ -62,6 +62,18 @@ This is the same phenomenon that defeats LiDAR odometry in feature-poor environm
 **Anchor reward (measurement-space regulation)**
 A reward term active only under null command: `r_anchor = -w_anchor · ||r_t - r_star||²`, where `r_star` is the range pattern frozen at the moment `v_cmd` became zero. This rewards "holding the same view" rather than "holding the same position," which is what station-keeping physically means without a position estimate. Strengthens drift suppression in the observable directions.
 
+**Reward integration**
+The Paper-1 stage that routes existing measurement-space signals into reward and logging while preserving the actor input contract. Reward integration is not the same as training convergence: it proves the reward terms are available, bounded, logged, and actor-clean, but it does not prove that a learned policy has converged.
+
+**Command-consistency tracking proxy**
+The default Paper-1 tracking reward signal used before the trainable governor path is complete. It compares the commanded body-frame velocity `v_cmd` with the final or issued body-frame command proxy `v_final`, instead of using privileged actual velocity. Actual velocity may be used only in explicitly reward-only evaluation/training variants.
+
+**Intervention penalty**
+A reward term that penalizes reliance on the ICS attenuation layer, typically through low `beta`. Its purpose is to discourage policies that repeatedly request unsafe commands and depend on the safety layer to fix them.
+
+**Training readiness**
+A narrower claim than training success. A system is training-ready when the observation, action, reward, logging, and audit paths can run without actor leakage and with test-covered semantics. It does not imply stable learning curves, convergence, or deployable policy performance.
+
 ---
 
 ## Architecture & Training

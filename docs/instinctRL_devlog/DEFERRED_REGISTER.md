@@ -1,19 +1,19 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-E complete)
+> **Last Updated**: 2026-07-05 (instinctRL-F reward integration complete)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
 
 ---
 
-## Before-F Validation Blockers
+## Before-G Validation Blockers
 
-None for starting reward-design implementation. instinctRL-E acceptance blockers are cleared.
+None for starting baseline/evaluation harness work. instinctRL-F reward integration acceptance blockers are cleared.
 
-Completed E validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-E_ics_attenuation.md`, and `tests/instinctRL-E_test_report.md`.
+Completed F validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-F_reward_integration.md`, and `tests/instinctRL-F_test_report.md`.
 
-Training convergence is still not complete. Before claiming instinctRL-F/training success, resolve or explicitly stage D-001 trainable governor, D-007 reward integration, and any selected baseline/evaluation requirements.
+Training convergence is still not complete. Before claiming learned-policy success, resolve or explicitly stage D-001 trainable governor and run actual training/evaluation with logs.
 
 ---
 
@@ -25,7 +25,7 @@ Training convergence is still not complete. Before claiming instinctRL-F/trainin
 |-------|-------|
 | **Deferred from** | instinctRL-A |
 | **Reason** | B0 minimal (α=1, v_corr=0) is sufficient for direct velocity pass-through baseline. Full trainable governor requires observation buffer (instinctRL-B) and reward integration (instinctRL-F) to be meaningful. |
-| **Target stage** | instinctRL-A2 or before instinctRL-F |
+| **Target stage** | instinctRL-A2, before learned-governor training success, or as a dedicated post-F task |
 | **Trigger condition** | Observation buffer (r, m, w, IMU, history) available; actor input schema stable |
 | **Acceptance test** | Governor outputs bounded α∈[0,1] and bounded v_corr; α+v_corr form deterministic v_gov; no critic-to-actor leakage; export-compatible; deterministic mean action |
 | **Status** | ⬜ Open |
@@ -102,12 +102,14 @@ Training convergence is still not complete. Before claiming instinctRL-F/trainin
 | Field | Value |
 |-------|-------|
 | **Deferred from** | instinctRL-A (out of scope) |
-| **Reason** | Reward redesign requires governor head output (α, v_corr), anchor manager, and ICS β_t to compute meaningful terms. B0 does not learn. |
+| **Reason** | Reward redesign requires anchor manager and ICS β_t for full terms. Full learned-governor training also requires D-001, but F implemented command-consistency proxy reward integration without pretending learned governor exists. |
 | **Target stage** | instinctRL-F |
 | **Trigger condition** | Governor head (D-001), anchor (D-003), and ICS (D-005) available |
 | **Acceptance test** | Each reward term activates under intended condition; privileged quantities stay reward/critic/eval only; no actor leakage; first stable training run |
-| **Status** | ⬜ Open |
+| **Status** | ✅ Complete for reward integration/readiness; first stable training run remains open |
 | **Module ref** | Handbook M6 (`instinctRL/rewards.py` or gated path in `env.py`) |
+
+**Closeout correction**: F implements reward terms, config, stats logging, disabled-module defaults, and actor/privileged-boundary tests. It does not implement the trainable governor head or prove convergence.
 
 ### D-008: Full Audit Hooks (Rollout, Evaluation, Checkpoint Export, ROS Inference)
 
@@ -138,6 +140,14 @@ Training convergence is still not complete. Before claiming instinctRL-F/trainin
 - **Current fact**: `instinctRL/ics.py` provides `RangeHistoryICSAttenuator`; `train.py` routes `v_gov_b -> ICS -> v_final_b -> BodyToWorldVelocityAdapter` when enabled; `env.py` exposes history and scalar `ics_*` info specs; actor obs remains `lidar_grid` + `state_vec`.
 - **Validation evidence**: E unit tests passed (`10 passed`), A/B/C/D/E regression suite passed (`44 passed`), and changed files compile.
 - **Status**: ✅ Complete for E implementation.
+
+---
+
+### D-007: Reward Integration
+- **Closeout correction**: Accepted as of 2026-07-05 for reward integration/readiness. Stable training remains separate evidence and is not claimed.
+- **Current fact**: `instinctRL/rewards.py` provides `InstinctRLRewardComputer`; `env.py` gates the F reward path with `instinctRL.reward.enabled`, writes component stats, and preserves the old reward path when disabled.
+- **Validation evidence**: F unit tests passed (`10 passed`), A/B/C/D/E/F regression suite passed (`54 passed`), changed files compile, and reward component stats spec probe passed.
+- **Status**: ✅ Complete for F reward integration.
 
 ---
 
@@ -172,7 +182,7 @@ Training convergence is still not complete. Before claiming instinctRL-F/trainin
 | **Deferred from** | instinctRL-B |
 | **Reason** | Config supports arbitrary history_len via Hydra; 4-frame default is the minimal viable. 8/16-frame ablations are evaluation experiments. |
 | **Target stage** | instinctRL-G (Baselines) |
-| **Trigger condition** | instinctRL-F training complete |
+| **Trigger condition** | instinctRL-F reward integration complete; actual training evidence required before performance claims |
 | **Acceptance test** | B2 ablation runs with history_len=1,4,8,16; metrics logged per config |
 | **Status** | ⬜ Open |
 

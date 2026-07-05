@@ -11,6 +11,6 @@
 #   anchor:           Measurement-space anchor manager (instinctRL-C)
 #   observability:    Evaluation-only range-Jacobian logger (instinctRL-D)
 #   ics:              ICS-inspired command attenuation (instinctRL-E)
+#   rewards:          Reward integration/readiness terms (instinctRL-F)
 #
 # Future (deferred):
-#   rewards:          instinctRL reward terms (instinctRL-F)

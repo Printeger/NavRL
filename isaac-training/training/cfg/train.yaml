@@ -91,3 +91,20 @@ instinctRL:
     range_rate_mode: "finite_difference"
     empty_active_set_beta: 1.0
     brake_mode: "zero"
+
+  # instinctRL-F: Reward integration/readiness, not convergence proof
+  reward:
+    enabled: true
+    tracking_weight: 1.0
+    anchor_weight: 0.5
+    safety_weight: 0.5
+    ics_compliance_weight: 1.0
+    intervention_weight: 0.05
+    smoothness_weight: 0.05
+    collision_weight: 10.0
+    clearance_safe: 0.8
+    clearance_margin: 0.2
+    max_reward_abs: 20.0
+    use_privileged_velocity_for_reward: false
+    min_anchor_valid_fraction: 0.1
+    tracking_beta_gate: true

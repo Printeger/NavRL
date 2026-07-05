@@ -5,6 +5,33 @@
 
 ---
 
+## D-2026-07-05-004: instinctRL-F Reward Integration Boundary and Semantics
+
+**Decision**: Mark instinctRL-F complete for reward integration/readiness only. Do not claim trainable-governor readiness, stable training, or learned-policy success from this stage.
+
+**Public env boundary**:
+
+- Add reward component accumulators to `stats`, not actor observation.
+- Preserve actor observation as `lidar_grid` + `state_vec`.
+- Keep privileged simulator quantities reward/critic/eval/logging only.
+- Preserve the old NavRL reward path when `instinctRL.reward.enabled=false`.
+
+**Locked semantics**:
+
+- Default tracking uses an actor-clean command-consistency proxy between `v_cmd_b` and the issued/final body command proxy.
+- Optional actual velocity is reward-only and disabled by default with `use_privileged_velocity_for_reward=false`.
+- Anchor reward is active only when anchor is active and `anchor_valid_fraction >= min_anchor_valid_fraction`.
+- Safety reward uses latest MID360 clearance, not map, odometry, SLAM, surface normals, or dynamic-obstacle privileged state.
+- ICS compliance offsets tracking penalty when beta/emergency says attenuation was necessary.
+- Intervention penalty discourages reliance on low beta.
+- Reward components are proportionally scaled when total clipping is active so logged components sum to `reward_total`.
+
+**Validation**: F reward unit tests and A/B/C/D/E/F regression tests pass in the activated NavRL conda environment. Runtime Isaac smoke with `instinctRL.reward.enabled=true` was skipped locally because CUDA/NVML is not visible here.
+
+**Consequence**: instinctRL-G may start for baseline/evaluation harness work. Training convergence and learned-governor success remain not proven.
+
+---
+
 ## D-2026-07-05-003: instinctRL-E Attenuation Boundary and Semantics
 
 **Decision**: Mark instinctRL-E complete as a deployed-safe, actor-clean command attenuation layer. E attenuates the body-frame governor command and does not add rewards, training changes, actor observation fields, or offline observability plotting.

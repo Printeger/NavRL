@@ -227,10 +227,48 @@ No Isaac GPU runtime smoke was run for instinctRL-E in this environment. CUDA/NV
 - Not implemented in E: reward/training changes, actor observation changes, surface-normal/map/odom/SLAM/pose/dynamic-obstacle deployed dependencies, D plotting, training convergence.
 
 ### instinctRL-F: Reward Integration
-- Each term activates under intended condition
-- Privileged quantities stay reward/critic/eval only
-- No actor leakage through reward path
-- First stable training run
+
+**Current verdict**: COMPLETE for reward integration/readiness. Training convergence is not proven. The trainable governor head remains pending, so F acceptance here is reward path integration and auditability, not learned-governor success.
+
+### Required F Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| F.1 Config validation | Finite non-negative weights, positive `max_reward_abs`, valid clearance thresholds and anchor valid fraction | Pure reward test passed |
+| F.2 Tracking reward | `v_final_b == v_cmd_b` is better than mismatch under command-consistency proxy | Pure reward test passed |
+| F.3 Beta/emergency gating | Low beta or emergency removes/reduces unsafe tracking penalty and emits ICS compliance offset | Pure reward test passed |
+| F.4 Anchor reward | Inactive anchor gives zero; active anchor penalizes anchor loss; low valid fraction masks term | Pure reward test passed |
+| F.5 Safety | Lower MID360 clearance gives worse reward; missing/invalid clearance remains finite | Pure reward test passed |
+| F.6 Intervention | Lower beta gives larger intervention penalty | Pure reward test passed |
+| F.7 Smoothness | Larger final-command jump is penalized | Pure reward test passed |
+| F.8 Collision | Collision flag adds large negative term | Pure reward test passed |
+| F.9 Total reward | Total equals sum of logged components after clipping/scaling and stays finite | Pure reward test passed |
+| F.10 Disabled modules | Anchor/ICS disabled paths use zero/default terms | Pure reward test passed |
+| F.11 Actor contract | Reward inputs are not added to actor obs; actor obs remains `lidar_grid` + `state_vec` | Source-level test passed |
+| F.12 Privileged boundary | Default config does not require actual velocity; optional actual velocity is labeled reward-only | Pure reward/source test passed |
+| F.13 Env integration | Reward components are accumulated in `stats`; old reward path remains when disabled | Source-level test passed |
+
+### Added Test File
+
+- `training/unit_test/test_instinctrl_rewards.py`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_rewards.py` | Passed: `10 passed, 1 warning`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `54 passed, 2 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/rewards.py training/scripts/env.py training/scripts/instinctRL/__init__.py training/unit_test/test_instinctrl_rewards.py` | Passed. |
+| TorchRL spec probe for reward component stats construction before spec expansion | Passed. |
+
+### Runtime Smoke
+
+No Isaac GPU runtime smoke was run for instinctRL-F in this environment. CUDA/NVML is not visible locally, so the optional command `python training/scripts/train.py instinctRL.mode=smoke instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0` is recorded as skipped here. A GPU-side smoke should verify live reward component stats and controller execution.
+
+### F Scope Boundary
+
+- Complete in F: reward computer, config, env reward switch, component stats logging, actor/privileged-boundary tests.
+- Not complete in F: trainable governor head, first stable learned-governor training run, G baseline matrix, H real-robot deployment.
 
 ### instinctRL-G: Baselines
 - B0–B8 config isolation
