@@ -310,6 +310,39 @@ Do not promote, do not run 1M, and do not run another config-only R5A sweep. Sta
 Stop condition:
 Hard gates unchanged; `training/scripts/instinctRL/gates.py` unchanged; no 1M/formal/warm-start run executed.
 
+## A2-R5B Height-Band / Vertical-Correction Diagnostics - 2026-07-13
+
+R5B entry decision:
+
+- R5A config-only tuning stopped because the best executed candidate, `r5_null_speed4`, reached only `9/14` gates and still had `termination_above_bound=0.1875`.
+- The R5A result is not promotable and does not qualify for a config-only micro-sweep because it is below `10/14` and still has a height termination.
+- R5A reward-only safety tuning is also stopped before another sweep because safety-margin variants kept ICS more than 2x above the `0.005` hard gate.
+
+Height interpretation:
+
+- Existing reward logic had `height_floor` and `height_floor_weight`, which only penalized low altitude.
+- Above-bound termination is currently triggered at world/root `z > 4.0`, but there was no explicit reward-side ceiling or height-band diagnostic to explain proximity to that termination.
+- R5B therefore starts with diagnostics and dormant reward config, not another sweep.
+
+Implemented R5B diagnostics/code readiness:
+
+- Added eval/logging-only height diagnostics for `height_world_z`, `height_floor_violation`, `height_ceiling_violation`, and `height_ceiling_margin`.
+- Added eval/logging-only vertical signal diagnostics for `v_cmd_z`, `v_final_b_z`, `governor_v_corr_z`, `governor_v_cmd_b_z`, `governor_v_gov_b_z`, and `governor_v_final_b_z`.
+- Split command amplification into horizontal and vertical diagnostics while keeping the original norm-level amplification gates unchanged.
+- Added dormant reward-only height-band config draft: `height_ceiling=4.0`, `height_ceiling_weight=0.0`, and `reward_height_ceiling`.
+- Confirmed these fields are `info`, stats, eval, or top-level diagnostic tensors only; actor observation remains `lidar_grid + state_vec`.
+
+Validation results:
+
+- `python -m py_compile training/scripts/env.py training/scripts/train.py training/scripts/eval.py training/scripts/ppo.py training/scripts/utils.py training/scripts/instinctRL/rewards.py training/scripts/instinctRL/task_metrics.py training/scripts/instinctRL/governor.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_task_metrics.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py`: passed, `39 passed, 4 warnings in 2.09s`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `105 passed, 11 warnings in 3.17s`.
+
+Next adjustment:
+
+- R5B sweep variants may be designed only after the diagnostics patch passes the full `training/unit_test/test_instinctrl_*.py` set and the first R5B diagnostic eval artifact is inspected.
+- Still do not run 1M, do not run a new sweep, do not warm-start a failed checkpoint, and do not modify hard gates.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:

@@ -31,6 +31,47 @@ from omegaconf import DictConfig, OmegaConf
 # ============================================
 FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cfg")
 
+
+class InstinctRLTrainPolicy(torch.nn.Module):
+    """Policy wrapper that converts learned governor body commands to controller actions."""
+
+    def __init__(self, policy, env, adapter, ics_attenuator=None):
+        super().__init__()
+        self.policy = policy
+        self.env = env
+        self.adapter = adapter
+        self.ics_attenuator = ics_attenuator
+
+    def forward(self, tensordict):
+        self.policy(tensordict)
+        if "governor_v_gov_b" not in tensordict.keys(True):
+            return tensordict
+
+        v_gov_body = tensordict["governor_v_gov_b"]
+        v_final_body = v_gov_body
+        if self.ics_attenuator is not None:
+            histories = self.env.get_instinctrl_range_history(copy=False)
+            ics_out = self.ics_attenuator(
+                histories["range_history"],
+                histories["mask_history"],
+                histories["weight_history"],
+                self.env._mid360_ray_dirs_b,
+                v_gov_body,
+                dt=self.env.dt,
+            )
+            v_final_body = ics_out.v_final_b
+            self.env.record_instinctrl_ics_output(ics_out)
+
+        self.env.set_prev_issued_action_body(v_final_body)
+        drone_quat = tensordict["info", "drone_state"][..., 3:7]
+        v_final_world = self.adapter(v_final_body, drone_quat)
+        if v_final_world.dim() == 3 and v_final_world.shape[-2] == 1:
+            v_final_world = v_final_world.squeeze(-2)
+        tensordict["governor_v_final_b"] = v_final_body
+        tensordict["governor_v_final_b_z"] = v_final_body[..., 2:3]
+        tensordict["agents", "action"] = v_final_world
+        return tensordict
+
 @hydra.main(config_path=FILE_PATH, config_name="train", version_base=None)
 def main(cfg):
     """
@@ -106,7 +147,7 @@ def main(cfg):
     # ============================================
     # WandB 用于记录和可视化训练过程：
     #   - 损失曲线（actor_loss, critic_loss）
-    #   - 训练指标（成功率、碰撞率、回报）
+    #   - 训练指标（tracking、safety、termination、回报）
     #   - 视频录制（评估时的无人机飞行）
     
     # 将 Hydra 的 DictConfig 转换为普通字典，避免序列化错误
@@ -153,11 +194,18 @@ def main(cfg):
     # instinctRL-A: Platform audit + B0 smoke test
     # ============================================
     if instinct_enabled:
-        from instinctRL.audit import check_actor_input, check_actor_schema, check_action_type
+        from instinctRL.audit import (
+            audit_checkpoint_file,
+            audit_policy_init,
+            audit_rollout_batch,
+            check_actor_input,
+            check_actor_schema,
+            check_action_type,
+        )
         from instinctRL.governor import MinimalGovernor
         from instinctRL.command_adapter import BodyToWorldVelocityAdapter
 
-        print("[instinctRL-A] Creating B0 governor and body-to-world adapter...", flush=True)
+        print("[instinctRL-A] Creating governor support and body-to-world adapter...", flush=True)
 
         # Create B0 governor and body→world adapter
         gov_cfg = cfg.algo.instinctRL.governor
@@ -176,7 +224,7 @@ def main(cfg):
                 device=cfg.device,
             )
             print("[instinctRL-E] ICS attenuation enabled (brake_mode=zero)", flush=True)
-        print(f"[instinctRL-A] Governor: B0 (alpha={gov_cfg.alpha_fixed})", flush=True)
+        print(f"[instinctRL-A] Governor mode: {gov_cfg.alpha_mode}", flush=True)
         print(f"[instinctRL-A] Baseline: {cfg.instinctRL.baseline.id}", flush=True)
 
     # ============================================
@@ -307,6 +355,15 @@ def main(cfg):
     # 第 5 步：创建 PPO 策略网络（非 instinctRL 模式）
     # ============================================
     policy = PPO(cfg.algo, transformed_env.observation_spec, transformed_env.action_spec, cfg.device)
+    collector_policy = policy
+    if instinct_enabled and instinct_mode == "train" and getattr(policy, "learned_governor", False):
+        collector_policy = InstinctRLTrainPolicy(
+            policy=policy,
+            env=env,
+            adapter=adapter,
+            ics_attenuator=ics_attenuator,
+        ).to(cfg.device)
+        print("[instinctRL-A2] Learned governor collector wrapper enabled.", flush=True)
     if instinct_enabled:
         td = transformed_env.reset()
         actor_ok, actor_msg = check_actor_input(td)
@@ -318,7 +375,8 @@ def main(cfg):
         if not schema_ok:
             raise RuntimeError(f"instinctRL actor schema audit FAILED: {schema_msg}")
         with torch.no_grad():
-            policy(td.clone())
+            audit_policy_init(policy, td.clone(), cfg)
+            collector_policy(td.clone())
         print("[instinctRL-B] PPO hybrid forward smoke PASSED.", flush=True)
 
     # ============================================
@@ -333,7 +391,7 @@ def main(cfg):
     # ============================================
     # EpisodeStats 用于跟踪每个 episode 的统计信息：
     #   - return: 累积奖励
-    #   - reach_goal: 是否到达目标
+    #   - legacy_reach_goal: legacy NavRL diagnostic only
     #   - collision: 是否发生碰撞
     #   - episode_len: episode 长度
     episode_stats_keys = [
@@ -349,14 +407,25 @@ def main(cfg):
     #   1. 让策略与环境交互，收集经验数据
     #   2. 每次收集 frames_per_batch 帧数据
     #   3. 自动重置完成的环境
+    collector_device_kwargs = {"device": cfg.device}
+    if isinstance(collector_policy, InstinctRLTrainPolicy):
+        # SyncDataCollector deep-copies policies when policy_device is set.
+        # The instinctRL wrapper intentionally holds an Isaac env reference for
+        # controller-boundary ICS/history access, so keep policy_device=None.
+        collector_device_kwargs = {
+            "device": None,
+            "storing_device": cfg.device,
+            "env_device": cfg.device,
+            "policy_device": None,
+        }
     collector = SyncDataCollector(
         transformed_env,
-        policy=policy, 
+        policy=collector_policy,
         frames_per_batch=cfg.env.num_envs * cfg.algo.training_frame_num,  # 每批数据量
         total_frames=cfg.max_frame_num,      # 总训练帧数（训练停止条件）
-        device=cfg.device,
         return_same_td=True,  # 原地更新，节省内存
         exploration_type=ExplorationType.RANDOM,  # 训练时使用随机探索
+        **collector_device_kwargs,
     )
 
     # ============================================
@@ -383,6 +452,9 @@ def main(cfg):
             "env_frames": collector._frames,  # 已训练的总帧数
             "rollout_fps": collector._fps      # 数据收集速度（帧/秒）
         }
+        if instinct_enabled and i == 0:
+            audit_rollout_batch(data, cfg)
+            print("[instinctRL audit] ROLLOUT BATCH AUDIT PASS.", flush=True)
 
         # -------- 训练策略网络 --------
         # policy.train() 执行：
@@ -413,10 +485,12 @@ def main(cfg):
             # 运行评估：使用确定性策略（MEAN），不随机探索
             eval_info = evaluate(
                 env=transformed_env, 
-                policy=policy,
+                policy=collector_policy,
                 seed=cfg.seed, 
                 cfg=cfg,
-                exploration_type=ExplorationType.MEAN  # 确定性动作
+                exploration_type=ExplorationType.MEAN,  # 确定性动作
+                streaming=True,
+                record_video=False,
             )
             
             # 恢复原来的渲染设置
@@ -440,6 +514,9 @@ def main(cfg):
     # ============================================
     ckpt_path = os.path.join(run.dir, "checkpoint_final.pt")
     torch.save(policy.state_dict(), ckpt_path)
+    if instinct_enabled:
+        audit_checkpoint_file(ckpt_path)
+        print("[instinctRL audit] CHECKPOINT AUDIT PASS.", flush=True)
     print(f"[NavRL]: Training complete! Final model saved to {ckpt_path}")
     
     # 关闭 WandB 和仿真器

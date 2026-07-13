@@ -59,6 +59,10 @@ Geometric configurations where `rank(J) < 3`, meaning some translational directi
 
 This is the same phenomenon that defeats LiDAR odometry in feature-poor environments. It places a fundamental limit on drift-free station-keeping: the policy cannot correct drift it cannot observe. Performance must be reported stratified by `rank(J)` or `σ_min(J)` (smallest singular value, a continuous measure of observability).
 
+**Observability proxy**
+An evaluation-only approximation of range-Jacobian observability computed from MID360 ray geometry and valid-return structure when exact normals or finite-difference range perturbations are not available. It must be labeled as a proxy and must not be used as actor input or deployed safety input.
+_Avoid_: exact Jacobian, deployed observability feature
+
 **Anchor reward (measurement-space regulation)**
 A reward term active only under null command: `r_anchor = -w_anchor · ||r_t - r_star||²`, where `r_star` is the range pattern frozen at the moment `v_cmd` became zero. This rewards "holding the same view" rather than "holding the same position," which is what station-keeping physically means without a position estimate. Strengthens drift suppression in the observable directions.
 
@@ -73,6 +77,64 @@ A reward term that penalizes reliance on the ICS attenuation layer, typically th
 
 **Training readiness**
 A narrower claim than training success. A system is training-ready when the observation, action, reward, logging, and audit paths can run without actor leakage and with test-covered semantics. It does not imply stable learning curves, convergence, or deployable policy performance.
+
+**Long-run training stability**
+The numerical property that a PPO run can continue for the declared acceptance horizon without producing non-finite actions, distribution parameters, losses, gradients, or model parameters. It is stricter than a short training smoke and weaker than convergence: a run can be numerically stable without learning a good policy.
+
+**Learned governor**
+The actor-clean policy component that transforms a commanded body-frame velocity into a governed body-frame velocity by choosing a command-preservation factor and a bounded corrective velocity. It is distinct from the controller action: the learned governor operates in body-frame command space, while the controller boundary converts the final command into the action consumed by the velocity controller.
+
+**Command-governor task**
+The active instinctRL training/evaluation task. Success is measured by actual body-frame command tracking, null-command station-keeping, clearance, collision, ICS intervention, and observability metrics; it is not measured by reaching a sampled NavRL target position.
+_Avoid_: goal-navigation success, reach-goal success
+
+**Actual-velocity tracking reward**
+The default formal-training tracking reward for command-governor runs. It compares privileged simulator actual body-frame velocity to `v_cmd_b` as reward-only/critic-only information, while the actor still receives only `lidar_grid + state_vec`.
+_Avoid_: command-proxy tracking as primary reward
+
+**Legacy reach-goal diagnostic**
+The old NavRL target-position arrival signal. It may remain in logs as `legacy_reach_goal` for debugging old task shells, but it is not an instinctRL success metric.
+_Avoid_: success rate
+
+**Command curriculum**
+A staged source of body-frame velocity commands that starts with normal/recovery hover-heavy commands and gradually increases aggressive, oscillatory, and adversarial command modes. The actor receives only the sampled `v_cmd_b`, not generator internals.
+_Avoid_: crazy command from frame zero
+
+**Station-first command curriculum**
+A command curriculum profile where recovery/null-command samples dominate early training until station-keeping is stable. It is the default formal-training profile after the 1M short diagnostic showed null-command drift.
+_Avoid_: mixed command curriculum as the first convergence gate
+
+**Null-command bias**
+The learned-governor failure mode where `v_cmd = 0` and the policy outputs a persistent nonzero command without an active measurement-space anchor need. It is an output bias, not a correction. It remains an objective/curriculum failure unless observability metrics show the scene is degenerate.
+_Avoid_: calling it an ICS failure, calling it tracking success
+
+**Station correction**
+A small learned-governor correction allowed under `v_cmd = 0` when the measurement-space anchor is active and anchor loss is high. A station correction is measurement-anchored: it should reduce range-anchor error and actual station drift, while `null_command_speed` still limits real vehicle motion. It is distinct from null-command bias.
+_Avoid_: hard-zeroing all null-command corrections, treating any nonzero null output as bias
+
+**Command amplification**
+The learned-governor failure mode where `||v_final_b|| > ||v_cmd_b||` under a safe nonzero command. It means the policy is not merely preserving and correcting the command; it is increasing command magnitude.
+_Avoid_: command preservation
+
+**Preservation band**
+The accepted magnitude-preservation interval for safe nonzero command tracking. Current A2-R3 defaults require `0.75 <= ||v_final_b|| / ||v_cmd_b|| <= 1.05` when ICS is not attenuating. Below-band slowdown and above-band amplification are both objective failures; ICS intervention is allowed to reduce speed for safety.
+_Avoid_: rewarding slowdown as safety when ICS did not intervene
+
+**Soft null-command correction prior**
+A decoder-level prior that attenuates learned `v_corr` when `||v_cmd||` is near zero, but retains a small correction floor for measurement-anchored station keeping. Current A2-R3 defaults use `null_vcorr_gate_min=0.25` and `null_vcorr_gate_eps=0.25`. The reward still punishes actual null-command motion and output bias when the anchor is inactive or low-loss.
+_Avoid_: relying only on reward to discover zero-output behavior, hard-zeroing observable station correction
+
+**Hard diagnostic gate**
+A pass/fail rule set over short diagnostic eval JSON, not over training reward alone. The current gate checks station drift, null-command actual speed, station anchor error, tracking RMSE, preservation band, amplification, clearance p05, collision, ICS violation, and termination reasons. `null_command_output_speed` is diagnostic-only in A2-R3 because a bounded anchor-aware station correction may legitimately output a small command. Collision rate alone is not a safety pass.
+_Avoid_: calling a checkpoint ready because `eval/stats.collision == 0`
+
+**Corrective sweep**
+A small automated 128k/256k experiment set used to rank objective/config candidates before any 1M/2M or formal run. The sweep must be evaluated by hard diagnostic gates and should default to dry-run command review before execution.
+_Avoid_: manual one-off 1M/2M trial-and-error
+
+**Short diagnostic eval suite**
+A two-pass handbook diagnostic evaluation: a zero-command station-keeping pass and a command-curriculum tracking pass, both under static MID360-visible geometry. It is stronger than a single rollout smoke and weaker than the full B0-B8 paper evaluation matrix.
+_Avoid_: paper-level benchmark, dynamic-obstacle robustness claim
 
 ---
 

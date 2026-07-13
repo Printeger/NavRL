@@ -1,14 +1,10 @@
 """
 instinctRL Audit Module
 =======================
-Staged platform, actor-input, and action-type audit checks.
-
-Runs at environment construction (instinctRL-A).
-Full rollout/eval/checkpoint/ROS hooks deferred to instinctRL-F.
-
-instinctRL-0 / instinctRL-A
+Platform, actor-input, rollout, and checkpoint audit checks.
 """
 
+import os
 import torch
 from typing import Dict, List, Tuple, Optional
 
@@ -168,6 +164,77 @@ def check_action_type(action: torch.Tensor, expected_dim: int = 3) -> Tuple[bool
             f"ACTION TYPE AUDIT FAIL: unexpected action dim={actual_dim}. "
             f"Expected {expected_dim}-dim velocity command."
         )
+
+
+def require_actor_contract(tensordict, history_len: int) -> None:
+    """Raise if actor observation schema or forbidden-key scan fails."""
+    actor_ok, actor_msg = check_actor_input(tensordict)
+    if not actor_ok:
+        raise RuntimeError(actor_msg)
+    schema_ok, schema_msg = check_actor_schema(tensordict, history_len)
+    if not schema_ok:
+        raise RuntimeError(schema_msg)
+
+
+def _require_finite(name: str, tensor: torch.Tensor) -> None:
+    if tensor is None:
+        raise RuntimeError(f"AUDIT FAIL: missing tensor {name}")
+    if not torch.isfinite(tensor).all():
+        raise RuntimeError(f"AUDIT FAIL: tensor {name} contains non-finite values")
+
+
+def audit_policy_init(policy, tensordict, cfg) -> Dict[str, bool]:
+    """Run policy initialization audit and fail hard on actor/governor violations."""
+    history_len = getattr(getattr(cfg, "instinctRL", None), "observation", None)
+    history_len = getattr(history_len, "history_len", 4)
+    require_actor_contract(tensordict, history_len)
+    with torch.no_grad():
+        out = policy(tensordict.clone())
+    _require_finite("agents.action", out["agents", "action"])
+    if getattr(policy, "learned_governor", False):
+        for key in ("governor_alpha", "governor_v_corr", "governor_v_gov_b"):
+            _require_finite(key, out[key])
+        alpha = out["governor_alpha"]
+        if not ((alpha >= 0.0).all() and (alpha <= 1.0).all()):
+            raise RuntimeError("AUDIT FAIL: governor_alpha outside [0, 1]")
+        action_normalized = out["agents", "action_normalized"]
+        if action_normalized.shape[-1] != 4:
+            raise RuntimeError(
+                f"AUDIT FAIL: learned governor action dim={action_normalized.shape[-1]}, expected 4"
+            )
+    return {"policy_init": True, "actor_contract": True}
+
+
+def audit_rollout_batch(data, cfg) -> Dict[str, bool]:
+    """Validate a collected rollout contains clean actor obs, finite rewards, and PPO keys."""
+    history_len = getattr(getattr(cfg, "instinctRL", None), "observation", None)
+    history_len = getattr(history_len, "history_len", 4)
+    require_actor_contract(data, history_len)
+    if "next" in data.keys():
+        require_actor_contract(data["next"], history_len)
+    for key in (("agents", "action_normalized"), ("sample_log_prob",), ("state_value",)):
+        _require_finite(str(key), _get_path(data, key))
+    _require_finite("next.agents.reward", _get_path(data, ("next", "agents", "reward")))
+    action_normalized = _get_path(data, ("agents", "action_normalized"))
+    gov_cfg = getattr(getattr(getattr(cfg, "algo", None), "instinctRL", None), "governor", None)
+    if getattr(gov_cfg, "alpha_mode", "fixed") == "learned" and action_normalized.shape[-1] != 4:
+        raise RuntimeError(
+            f"AUDIT FAIL: learned governor rollout action dim={action_normalized.shape[-1]}, expected 4"
+        )
+    return {"rollout_batch": True}
+
+
+def audit_checkpoint_file(path: str) -> Dict[str, bool]:
+    """Validate that a checkpoint file exists, is non-empty, and can be loaded by torch."""
+    if not os.path.exists(path):
+        raise RuntimeError(f"CHECKPOINT AUDIT FAIL: missing file {path}")
+    if os.path.getsize(path) <= 0:
+        raise RuntimeError(f"CHECKPOINT AUDIT FAIL: empty file {path}")
+    try:
+        torch.load(path, map_location="cpu")
+    except Exception as exc:
+        raise RuntimeError(f"CHECKPOINT AUDIT FAIL: torch.load failed: {exc}") from exc
+    return {"checkpoint_file": True}
 
 
 def run_audit(

@@ -21,21 +21,23 @@ from typing import Literal
 
 import carb
 import omni.client
-import omni.isaac.core.utils.nucleus as nucleus_utils
 
-# check nucleus connection
-if nucleus_utils.get_assets_root_path() is None:
-    msg = (
-        "Unable to perform Nucleus login on Omniverse. Assets root path is not set.\n"
-        "\tPlease check: https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/overview.html#omniverse-nucleus"
-    )
-    carb.log_error(msg)
-    raise RuntimeError(msg)
+settings = carb.settings.get_settings()
+_ASSETS_ROOT_PATH = (
+    settings.get("/persistent/isaac/asset_root/default")
+    or settings.get("/persistent/isaac/asset_root/cloud")
+    or "http://omniverse-content-production.s3-us-west-2.amazonaws.com/Assets/Isaac/2023.1.1"
+)
+carb.log_warn(
+    "Skipping blocking Isaac assets-root probe during Orbit import; "
+    f"using configured root {_ASSETS_ROOT_PATH}. "
+    "Remote asset checks still validate files at point of use."
+)
 
-NVIDIA_NUCLEUS_DIR = f"{nucleus_utils.get_assets_root_path()}/NVIDIA"
+NVIDIA_NUCLEUS_DIR = f"{_ASSETS_ROOT_PATH}/NVIDIA"
 """Path to the root directory on the NVIDIA Nucleus Server."""
 
-ISAAC_NUCLEUS_DIR = f"{nucleus_utils.get_assets_root_path()}/Isaac"
+ISAAC_NUCLEUS_DIR = f"{_ASSETS_ROOT_PATH}/Isaac"
 """Path to the `Isaac` directory on the NVIDIA Nucleus Server."""
 
 ISAAC_ORBIT_NUCLEUS_DIR = f"{ISAAC_NUCLEUS_DIR}/Samples/Orbit"

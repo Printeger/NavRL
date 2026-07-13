@@ -30,6 +30,19 @@ def _computer(**kwargs):
         "ics_compliance_weight": 1.0,
         "intervention_weight": 0.1,
         "smoothness_weight": 0.1,
+        "null_command_speed_weight": 0.0,
+        "null_command_output_weight": 0.0,
+        "null_output_anchor_loss_threshold": 0.05,
+        "proxy_tracking_weight": 0.0,
+        "preservation_low_weight": 0.0,
+        "preservation_high_weight": 0.0,
+        "preservation_lower": 0.75,
+        "preservation_upper": 1.05,
+        "command_amplification_weight": 0.0,
+        "height_floor": 0.5,
+        "height_floor_weight": 8.0,
+        "height_ceiling": 4.0,
+        "height_ceiling_weight": 0.0,
         "collision_weight": 10.0,
         "clearance_safe": 0.8,
         "clearance_margin": 0.2,
@@ -70,7 +83,14 @@ def test_config_validation():
         {"clearance_margin": -0.1},
         {"min_anchor_valid_fraction": -0.1},
         {"min_anchor_valid_fraction": 1.1},
+        {"preservation_low_weight": -0.1},
+        {"preservation_lower": -0.1},
+        {"preservation_lower": 1.1, "preservation_upper": 1.0},
         {"command_eps": 0.0},
+        {"height_floor": -0.1},
+        {"height_floor_weight": -0.1},
+        {"height_ceiling": 0.4},
+        {"height_ceiling_weight": -0.1},
     ]
     for kwargs in bad_kwargs:
         try:
@@ -132,6 +152,37 @@ def test_safety_lower_clearance_is_worse_and_invalid_is_finite():
     assert torch.isfinite(missing.total).all()
 
 
+def test_height_floor_penalty_is_quadratic_below_floor_only():
+    _, computer = _computer(height_floor=0.5, height_floor_weight=8.0)
+    at_floor = computer.compute(**_base_inputs(height_w=torch.tensor([[0.5]])))
+    above_floor = computer.compute(**_base_inputs(height_w=torch.tensor([[1.0]])))
+    below_floor = computer.compute(**_base_inputs(height_w=torch.tensor([[0.25]])))
+
+    assert at_floor.components["reward_height_floor"].item() == 0.0
+    assert above_floor.components["reward_height_floor"].item() == 0.0
+    assert abs(below_floor.components["reward_height_floor"].item() + 0.5) < 1e-6
+    assert abs(below_floor.cache["height_floor_violation"].item() - 0.25) < 1e-6
+    assert below_floor.total.item() < at_floor.total.item()
+
+
+def test_height_ceiling_penalty_is_dormant_by_default_and_quadratic_when_enabled():
+    _, dormant = _computer(height_ceiling=4.0, height_ceiling_weight=0.0)
+    above_ceiling = dormant.compute(**_base_inputs(height_w=torch.tensor([[4.25]])))
+    assert above_ceiling.components["reward_height_ceiling"].item() == 0.0
+    assert abs(above_ceiling.cache["height_ceiling_violation"].item() - 0.25) < 1e-6
+    assert abs(above_ceiling.cache["height_ceiling_margin"].item() + 0.25) < 1e-6
+
+    _, active = _computer(height_ceiling=4.0, height_ceiling_weight=8.0)
+    at_ceiling = active.compute(**_base_inputs(height_w=torch.tensor([[4.0]])))
+    below_ceiling = active.compute(**_base_inputs(height_w=torch.tensor([[3.5]])))
+    above_ceiling = active.compute(**_base_inputs(height_w=torch.tensor([[4.25]])))
+
+    assert at_ceiling.components["reward_height_ceiling"].item() == 0.0
+    assert below_ceiling.components["reward_height_ceiling"].item() == 0.0
+    assert abs(above_ceiling.components["reward_height_ceiling"].item() + 0.5) < 1e-6
+    assert above_ceiling.total.item() < at_ceiling.total.item()
+
+
 def test_intervention_smoothness_and_collision_terms():
     _, computer = _computer()
     beta_one = computer.compute(**_base_inputs(ics_beta=torch.ones(1, 1)))
@@ -148,6 +199,138 @@ def test_intervention_smoothness_and_collision_terms():
     assert beta_low.components["reward_intervention"].item() < beta_one.components["reward_intervention"].item()
     assert jump.components["reward_smoothness"].item() < smooth.components["reward_smoothness"].item()
     assert collision.components["reward_collision"].item() == -10.0
+
+
+def test_null_command_penalizes_motion_and_output_bias():
+    _, computer = _computer(
+        null_command_speed_weight=2.0,
+        null_command_output_weight=0.5,
+        command_eps=0.05,
+    )
+
+    stable = computer.compute(**_base_inputs(
+        v_cmd_b=torch.zeros(1, 3),
+        v_final_b=torch.zeros(1, 3),
+        prev_v_final_b=torch.zeros(1, 3),
+        actual_velocity_b=torch.zeros(1, 3),
+    ))
+    moving = computer.compute(**_base_inputs(
+        v_cmd_b=torch.zeros(1, 3),
+        v_final_b=torch.tensor([[0.4, 0.0, 0.0]]),
+        prev_v_final_b=torch.zeros(1, 3),
+        actual_velocity_b=torch.tensor([[0.3, 0.0, 0.0]]),
+    ))
+    nonzero_command = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[0.4, 0.0, 0.0]]),
+        prev_v_final_b=torch.zeros(1, 3),
+        actual_velocity_b=torch.tensor([[0.3, 0.0, 0.0]]),
+    ))
+
+    assert stable.components["reward_null_command_speed"].item() == 0.0
+    assert stable.components["reward_null_command_output"].item() == 0.0
+    assert abs(moving.components["reward_null_command_speed"].item() + 0.6) < 1e-6
+    assert abs(moving.components["reward_null_command_output"].item() + 0.2) < 1e-6
+    assert nonzero_command.components["reward_null_command_speed"].item() == 0.0
+    assert nonzero_command.components["reward_null_command_output"].item() == 0.0
+    assert moving.total.item() < stable.total.item()
+
+
+def test_null_command_output_penalty_is_anchor_aware():
+    _, computer = _computer(
+        null_command_speed_weight=0.0,
+        null_command_output_weight=0.5,
+        null_output_anchor_loss_threshold=0.05,
+        command_eps=0.05,
+    )
+
+    base = dict(
+        v_cmd_b=torch.zeros(1, 3),
+        v_final_b=torch.tensor([[0.4, 0.0, 0.0]]),
+        prev_v_final_b=torch.zeros(1, 3),
+        actual_velocity_b=torch.zeros(1, 3),
+        anchor_active=torch.ones(1, 1),
+        anchor_valid_fraction=torch.ones(1, 1),
+    )
+    low_loss = computer.compute(**_base_inputs(**base, anchor_loss=torch.tensor([[0.01]])))
+    high_loss = computer.compute(**_base_inputs(**base, anchor_loss=torch.tensor([[0.2]])))
+    inactive_base = dict(base)
+    inactive_base["anchor_active"] = torch.zeros(1, 1)
+    inactive_anchor = computer.compute(**_base_inputs(
+        **inactive_base,
+        anchor_loss=torch.tensor([[0.2]]),
+    ))
+
+    assert abs(low_loss.components["reward_null_command_output"].item() + 0.2) < 1e-6
+    assert high_loss.components["reward_null_command_output"].item() == 0.0
+    assert abs(inactive_anchor.components["reward_null_command_output"].item() + 0.2) < 1e-6
+    assert low_loss.cache["null_command_output_bias_gate"].item() == 1.0
+    assert high_loss.cache["null_command_output_bias_gate"].item() == 0.0
+
+
+def test_proxy_tracking_and_command_amplification_penalize_unsafe_governor_bias():
+    _, computer = _computer(
+        proxy_tracking_weight=0.25,
+        command_amplification_weight=0.5,
+    )
+    match = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        actual_velocity_b=torch.tensor([[1.0, 0.0, 0.0]]),
+    ))
+    amplified = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[1.5, 0.0, 0.0]]),
+        actual_velocity_b=torch.tensor([[1.0, 0.0, 0.0]]),
+    ))
+    attenuated_by_ics = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[0.2, 0.0, 0.0]]),
+        actual_velocity_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        ics_beta=torch.full((1, 1), 0.2),
+    ))
+
+    assert match.components["reward_proxy_tracking"].item() == 0.0
+    assert match.components["reward_command_amplification"].item() == 0.0
+    assert abs(amplified.components["reward_proxy_tracking"].item() + 0.125) < 1e-6
+    assert abs(amplified.components["reward_command_amplification"].item() + 0.25) < 1e-6
+    assert attenuated_by_ics.components["reward_proxy_tracking"].item() == 0.0
+    assert attenuated_by_ics.components["reward_command_amplification"].item() == 0.0
+    assert amplified.total.item() < match.total.item()
+
+
+def test_preservation_band_penalizes_command_loss_and_gain_only_when_ics_clear():
+    _, computer = _computer(
+        preservation_low_weight=2.0,
+        preservation_high_weight=3.0,
+        preservation_lower=0.75,
+        preservation_upper=1.05,
+    )
+
+    inside = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[0.9, 0.0, 0.0]]),
+    ))
+    too_slow = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[0.5, 0.0, 0.0]]),
+    ))
+    too_fast = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[1.2, 0.0, 0.0]]),
+    ))
+    attenuated_by_ics = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[0.5, 0.0, 0.0]]),
+        ics_beta=torch.full((1, 1), 0.2),
+    ))
+
+    assert inside.components["reward_preservation_low"].item() == 0.0
+    assert inside.components["reward_preservation_high"].item() == 0.0
+    assert abs(too_slow.components["reward_preservation_low"].item() + 0.5) < 1e-6
+    assert abs(too_fast.components["reward_preservation_high"].item() + 0.45) < 1e-6
+    assert attenuated_by_ics.components["reward_preservation_low"].item() == 0.0
+    assert too_slow.total.item() < inside.total.item()
 
 
 def test_total_is_component_sum_and_clipped_with_scaled_components():
@@ -204,13 +387,73 @@ def test_source_level_actor_privileged_and_env_integration_contracts():
     assert "cfg.instinctRL.reward.enabled" in env_source
     assert "for key, value in reward_terms.components.items()" in env_source
     assert "self.stats[key] += value" in env_source
+    assert "height_w=self.root_state[..., 2].reshape(self.num_envs, 1)" in env_source
     assert "reward_safety_static" in env_source
     assert "else:" in env_source
 
     reward_source = open(REWARD_PATH, encoding="utf-8").read()
     assert "use_privileged_velocity_for_reward: bool = False" in reward_source
     assert "actual_velocity_b" in reward_source
+    assert '"reward_height_floor"' in reward_source
 
     cfg_source = open(CFG_PATH, encoding="utf-8").read()
     assert "reward:" in cfg_source
     assert "enabled: true" in cfg_source
+    assert "height_floor: 0.5" in cfg_source
+    assert "height_floor_weight: 8.0" in cfg_source
+    assert "height_ceiling: 4.0" in cfg_source
+    assert "height_ceiling_weight: 0.0" in cfg_source
+
+
+def test_train_eval_semantics_are_handbook_aligned_by_default():
+    env_source = open(ENV_PATH, encoding="utf-8").read()
+    cfg_source = open(CFG_PATH, encoding="utf-8").read()
+
+    assert 'task: "command_governor"' in cfg_source
+    assert 'source: "curriculum_generator"' in cfg_source
+    assert "use_privileged_velocity_for_reward: true" in cfg_source
+    assert "curriculum_profile: \"station_first\"" in cfg_source
+    assert "anchor_weight: 4.0" in cfg_source
+    assert "null_command_speed_weight: 2.0" in cfg_source
+    assert "null_command_output_weight: 0.1" in cfg_source
+    assert "preservation_lower: 0.75" in cfg_source
+    assert "preservation_upper: 1.05" in cfg_source
+    assert "command_amplification_weight: 0.5" in cfg_source
+    assert "height_floor: 0.5" in cfg_source
+    assert "height_floor_weight: 8.0" in cfg_source
+    assert "height_ceiling: 4.0" in cfg_source
+    assert "height_ceiling_weight: 0.0" in cfg_source
+    assert "actual_velocity_b=actual_velocity_b" in env_source
+    assert "height_w=self.root_state[..., 2].reshape(self.num_envs, 1)" in env_source
+    assert "compute_termination_stats(" in env_source
+    assert "terminated_below_bound" in env_source
+    assert "truncated_timeout" in env_source
+
+    ics_block = cfg_source.split("  ics:", 1)[1].split("  # instinctRL-F", 1)[0]
+    assert "enabled: true" in ics_block
+
+
+def test_eval_summary_reports_handbook_metrics_not_reach_goal_as_success():
+    utils_path = os.path.join(SCRIPTS, "utils.py")
+    utils_source = open(utils_path, encoding="utf-8").read()
+
+    for key in [
+        "eval/handbook.tracking_rmse_actual_body_vs_v_cmd",
+        "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd",
+        "eval/handbook.command_preservation_ratio",
+        "eval/handbook.anchor_error_mean",
+        "eval/handbook.safety_min_clearance_p05",
+        "eval/handbook.ics_intervention_frequency",
+        "eval/handbook.termination_below_bound",
+        "eval/handbook.null_command_speed_mean",
+        "eval/handbook.null_command_output_speed_mean",
+        "eval/handbook.command_amplification_mean",
+        "eval/handbook.command_amplification_rate",
+        "eval/handbook.command_amplification_horizontal_mean",
+        "eval/handbook.command_amplification_vertical_mean",
+        "eval/handbook.height_world_z_mean",
+        "eval/handbook.height_ceiling_violation_mean",
+    ]:
+        assert key in utils_source
+
+    assert "eval/stats.reach_goal: success rate" not in utils_source

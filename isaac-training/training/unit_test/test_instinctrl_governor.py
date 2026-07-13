@@ -1,0 +1,113 @@
+import os
+import sys
+
+import pytest
+import torch
+
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+SCRIPTS = os.path.join(ROOT, "training", "scripts")
+if SCRIPTS not in sys.path:
+    sys.path.insert(0, SCRIPTS)
+
+from instinctRL.governor import (  # noqa: E402
+    MinimalGovernor,
+    TrainableGovernorDecoder,
+    extract_latest_prev_action_b,
+    extract_latest_v_cmd_b,
+)
+
+
+def _state_vec(v_cmd, prev_action=None, history_len=4):
+    n = v_cmd.shape[0]
+    if prev_action is None:
+        prev_action = torch.zeros_like(v_cmd)
+    state = torch.zeros(n, history_len * 13)
+    state[:, -7:-4] = v_cmd
+    state[:, -4:-1] = prev_action
+    return state
+
+
+def test_trainable_governor_bounds_formula_and_clip():
+    decoder = TrainableGovernorDecoder(v_corr_limit=0.5, velocity_limit=1.0)
+    v_cmd = torch.tensor([[2.0, 0.0, 0.0], [0.0, 0.5, 0.0]])
+    action = torch.tensor([
+        [0.5, 1.0, 0.5, 0.5],
+        [0.25, 0.5, 1.0, 0.5],
+    ])
+
+    out = decoder(action, _state_vec(v_cmd))
+
+    assert torch.all((out.alpha >= 0.0) & (out.alpha <= 1.0))
+    assert torch.all(out.v_corr <= 0.5 + 1e-6)
+    assert torch.all(out.v_corr >= -0.5 - 1e-6)
+    raw = out.alpha * v_cmd + out.v_corr
+    expected = raw / torch.linalg.norm(raw, dim=-1, keepdim=True).clamp_min(1.0)
+    assert torch.allclose(out.v_gov, expected, atol=1e-6)
+    assert torch.all(torch.linalg.norm(out.v_gov, dim=-1) <= 1.0 + 1e-6)
+
+
+def test_trainable_governor_smoothing_uses_actor_clean_prev_action():
+    decoder = TrainableGovernorDecoder(
+        v_corr_limit=0.0,
+        velocity_limit=2.0,
+        smoothing_tau=0.25,
+    )
+    v_cmd = torch.tensor([[1.0, 0.0, 0.0]])
+    prev = torch.tensor([[0.0, 1.0, 0.0]])
+    action = torch.tensor([[1.0, 0.5, 0.5, 0.5]])
+
+    out = decoder(action, _state_vec(v_cmd, prev))
+
+    assert torch.allclose(out.v_gov, torch.tensor([[0.75, 0.25, 0.0]]))
+
+
+def test_trainable_governor_null_command_gate_allows_soft_station_correction():
+    decoder = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        velocity_limit=2.0,
+        null_vcorr_gate_enabled=True,
+        null_vcorr_gate_eps=0.2,
+        null_vcorr_gate_min=0.25,
+    )
+    action = torch.tensor([[1.0, 1.0, 0.5, 0.5]])
+
+    null_out = decoder(action, _state_vec(torch.zeros(1, 3)))
+    ramp_out = decoder(action, _state_vec(torch.tensor([[0.1, 0.0, 0.0]])))
+    active_out = decoder(action, _state_vec(torch.tensor([[0.3, 0.0, 0.0]])))
+
+    assert torch.allclose(null_out.v_corr, torch.tensor([[0.125, 0.0, 0.0]]))
+    assert torch.allclose(null_out.v_gov, torch.tensor([[0.125, 0.0, 0.0]]))
+    assert torch.allclose(ramp_out.v_corr, torch.tensor([[0.25, 0.0, 0.0]]))
+    assert torch.allclose(active_out.v_corr, torch.tensor([[0.5, 0.0, 0.0]]))
+
+
+def test_trainable_governor_null_command_gate_validation():
+    with pytest.raises(ValueError, match="null_vcorr_gate_eps"):
+        TrainableGovernorDecoder(null_vcorr_gate_eps=0.0)
+    with pytest.raises(ValueError, match="null_vcorr_gate_min"):
+        TrainableGovernorDecoder(null_vcorr_gate_min=1.5)
+
+
+def test_trainable_governor_extractors_and_shape_validation():
+    v_cmd = torch.tensor([[0.1, 0.2, 0.3]])
+    prev = torch.tensor([[0.4, 0.5, 0.6]])
+    state = _state_vec(v_cmd, prev)
+
+    assert torch.allclose(extract_latest_v_cmd_b(state), v_cmd)
+    assert torch.allclose(extract_latest_prev_action_b(state), prev)
+
+    decoder = TrainableGovernorDecoder()
+    with pytest.raises(ValueError, match="dim 4"):
+        decoder(torch.zeros(1, 3), state)
+    with pytest.raises(ValueError, match="state_vec"):
+        decoder(torch.zeros(1, 4), torch.zeros(1, 12))
+
+
+def test_minimal_governor_preserves_direction_with_norm_clip():
+    governor = MinimalGovernor(velocity_limit=1.0)
+    out = governor(torch.tensor([[2.0, 0.0, 0.0]]))
+
+    assert torch.allclose(out.alpha, torch.ones(1, 1))
+    assert torch.allclose(out.v_corr, torch.zeros(1, 3))
+    assert torch.allclose(out.v_gov, torch.tensor([[1.0, 0.0, 0.0]]))

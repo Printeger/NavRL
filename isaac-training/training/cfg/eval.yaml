@@ -4,9 +4,11 @@ defaults:
   - ppo
   - sim
 
-headless: False
+headless: True
 device: "cuda:0"
 seed: 0
+checkpoint_path: ""
+result_path: ""
 
 # Total Training Length
 max_frame_num: 10000 # max frame 
@@ -21,7 +23,7 @@ env:
   num_obstacles: 350
 
 env_dyn:
-  num_obstacles: 80 # set to zero if static env is needed
+  num_obstacles: 0 # diagnostic eval stays static until dynamic obstacles are MID360-visible
   vel_range: [0.5, 1.5]
   local_range: [5.0, 5.0, 4.5]
 
@@ -34,5 +36,101 @@ wandb:
   project: test_NavRL
   name: navigation_training
   entity: printeger
-  mode: online # online
+  mode: offline # online
   run_id: #kw9xf9k9
+
+# ============================================
+# instinctRL Configuration
+# ============================================
+instinctRL:
+  enabled: true
+  mode: "train"
+  task: "command_governor"
+  baseline:
+    id: "direct_velocity"
+
+  command:
+    source: "curriculum_generator"
+    max_vel: 1.0
+    curriculum_profile: "station_first"
+
+  eval:
+    suite: "short_diagnostic"          # short_diagnostic | single_rollout
+    require_static_mid360: true        # fail fast if dynamic obstacles are requested
+    scenario_id: "static_mid360_short_diag"
+    scenario_id_code: 1
+    station_command_source: "scripted_eval"
+    station_curriculum_profile: "station_first"
+    tracking_command_source: "curriculum_generator"
+    tracking_curriculum_profile: "diagnostic_mixed"
+    tracking_curriculum_frame: 600000
+
+  observation:
+    history_len: 4
+    enable_noise: false
+    enable_dropout: false
+    tau_staleness: 0.5
+
+  anchor:
+    enabled: true
+    eps_enter: 0.05
+    eps_exit: 0.15
+    min_valid_anchor_fraction: 0.10
+    huber_delta: 0.25
+    reset_on_large_command: true
+
+  observability:
+    enabled: true
+    mode: "proxy"
+    rank_tol: 0.0001
+    condition_number_cap: 1000000.0
+    min_valid_fraction: 0.01
+    log_interval: 50
+    use_surface_normals: false
+    use_finite_difference: true
+
+  ics:
+    enabled: true
+    d_safe: 0.8
+    emergency_clearance: 0.25
+    active_horizon_margin: 0.5
+    a_max: 2.0
+    latency_sec: 0.0
+    clearance_margin: 0.0
+    min_reliability: 0.1
+    approach_eps: 0.001
+    range_rate_eps: 0.001
+    use_range_rate_filter: false
+    velocity_limit: 2.0
+    range_rate_mode: "finite_difference"
+    empty_active_set_beta: 1.0
+    brake_mode: "zero"
+
+  reward:
+    enabled: true
+    tracking_weight: 1.0
+    anchor_weight: 4.0
+    safety_weight: 0.5
+    ics_compliance_weight: 1.0
+    intervention_weight: 0.05
+    smoothness_weight: 0.05
+    null_command_speed_weight: 2.0
+    null_command_output_weight: 0.1
+    null_output_anchor_loss_threshold: 0.05
+    proxy_tracking_weight: 0.25
+    preservation_low_weight: 0.5
+    preservation_high_weight: 0.5
+    preservation_lower: 0.75
+    preservation_upper: 1.05
+    command_amplification_weight: 0.5
+    height_floor: 0.5
+    height_floor_weight: 8.0
+    height_ceiling: 4.0
+    height_ceiling_weight: 0.0
+    collision_weight: 10.0
+    clearance_safe: 0.8
+    clearance_margin: 0.2
+    max_reward_abs: 20.0
+    use_privileged_velocity_for_reward: true
+    min_anchor_valid_fraction: 0.1
+    tracking_beta_gate: true

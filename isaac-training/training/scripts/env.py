@@ -35,6 +35,15 @@ import omni.isaac.orbit.sim as sim_utils
 import omni.isaac.orbit.utils.math as math_utils
 from omni.isaac.orbit.assets import RigidObject, RigidObjectCfg
 import time
+from instinctRL.task_metrics import (
+    COMMAND_MODE_NORMAL,
+    COMMAND_MODE_RECOVERY,
+    command_curriculum_probabilities,
+    compute_handbook_step_metrics,
+    compute_termination_stats,
+    nearest_obstacle_vector_from_scan,
+    world_to_body_velocity,
+)
 
 
 def _load_isaac_env_base():
@@ -255,6 +264,27 @@ class NavigationEnv(IsaacEnv):
                     device=self.device,
                 )
                 print("[instinctRL-F] Reward computer created")
+
+            command_cfg = getattr(cfg.instinctRL, "command", None)
+            self._instinctrl_task = getattr(cfg.instinctRL, "task", "command_governor")
+            self._command_source = getattr(command_cfg, "source", "basic_random")
+            self._command_max_vel = float(getattr(command_cfg, "max_vel", 1.0))
+            self._command_curriculum_profile = str(
+                getattr(command_cfg, "curriculum_profile", "default")
+            )
+            self._command_frame_count = 0
+            eval_cfg = getattr(cfg.instinctRL, "eval", None)
+            self._instinctrl_eval_scenario_id_code = int(
+                getattr(eval_cfg, "scenario_id_code", 0)
+            )
+            self._v_cmd = torch.zeros(self.num_envs, 1, 3, device=self.device)
+            self._nearest_obstacle_vector_b = torch.zeros(self.num_envs, 3, device=self.device)
+            self._nearest_obstacle_vector_b[:, 0] = 1.0
+            if self._command_source == "curriculum_generator":
+                self._ensure_command_generator()
+                print("[instinctRL] Command source: curriculum_generator")
+            elif self._command_source not in {"basic_random", "scripted_eval"}:
+                raise ValueError(f"Unsupported instinctRL.command.source={self._command_source!r}")
         
         # ============================================
         # 第 5 步：初始化目标和状态变量
@@ -275,6 +305,7 @@ class NavigationEnv(IsaacEnv):
             self._prev_issued_action_body = torch.zeros(self.num_envs, 3)
             self._has_prev_issued_action_body = torch.zeros(self.num_envs, 1, dtype=torch.bool)
             self._reward_prev_v_final_body = torch.zeros(self.num_envs, 3)
+            self._station_origin_pos_w = torch.zeros(self.num_envs, 3)
 
 
     def _design_scene(self):
@@ -332,11 +363,9 @@ class NavigationEnv(IsaacEnv):
         # ============================================
         # 3. 创建地面
         # ============================================
-        cfg_ground = sim_utils.GroundPlaneCfg(
-            color=(0.1, 0.1, 0.1),  # 深灰色
-            size=(300., 300.)  # 300m × 300m
-        )
-        cfg_ground.func("/World/defaultGroundPlane", cfg_ground, translation=(0, 0, 0.01))
+        # The Orbit GroundPlaneCfg references a remote Isaac USD asset. Keep the
+        # training path independent from Nucleus/S3; the generated terrain below
+        # supplies the physical ground used by this environment.
 
         # ============================================
         # 4. 生成静态障碍物地形
@@ -382,7 +411,7 @@ class NavigationEnv(IsaacEnv):
             visual_material = None,
             max_init_terrain_level=None,
             collision_group=-1,  # 碰撞组（-1表示与所有物体碰撞）
-            debug_vis=True,  # 显示调试可视化
+            debug_vis=False,  # avoid remote marker USD assets during headless training
         )
         terrain_importer = TerrainImporter(terrain_cfg)  # 导入地形
 
@@ -619,21 +648,22 @@ class NavigationEnv(IsaacEnv):
         stats_spec_fields = {
             "return": UnboundedContinuousTensorSpec(1),
             "episode_len": UnboundedContinuousTensorSpec(1),
-            "reach_goal": UnboundedContinuousTensorSpec(1),
+            "legacy_reach_goal": UnboundedContinuousTensorSpec(1),
             "collision": UnboundedContinuousTensorSpec(1),
             "truncated": UnboundedContinuousTensorSpec(1),
+            "terminated_below_bound": UnboundedContinuousTensorSpec(1),
+            "terminated_above_bound": UnboundedContinuousTensorSpec(1),
+            "terminated_collision": UnboundedContinuousTensorSpec(1),
+            "truncated_timeout": UnboundedContinuousTensorSpec(1),
+            "termination_reason_code": UnboundedContinuousTensorSpec(1, dtype=torch.long),
         }
         reward_cfg = getattr(getattr(self.cfg, "instinctRL", None), "reward", None)
         if reward_cfg is not None and getattr(reward_cfg, "enabled", False):
+            from instinctRL.rewards import REWARD_COMPONENT_KEYS
+
             stats_spec_fields.update({
-                "reward_tracking": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_anchor": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_safety": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_ics_compliance": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_intervention": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_smoothness": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_collision": UnboundedContinuousTensorSpec(1, device=self.device),
-                "reward_total": UnboundedContinuousTensorSpec(1, device=self.device),
+                key: UnboundedContinuousTensorSpec(1, device=self.device)
+                for key in REWARD_COMPONENT_KEYS
             })
         stats_spec = CompositeSpec(stats_spec_fields).expand(self.num_envs).to(self.device)
 
@@ -641,12 +671,36 @@ class NavigationEnv(IsaacEnv):
         # Body-frame velocity command for B0 baseline.
         info_spec_fields = {
             "drone_state": UnboundedContinuousTensorSpec((self.drone.n, 13), device=self.device),
-            # instinctRL-0: Critic-only privileged fields (never seen by actor).
-            # These are used by the critic feature extractor for value estimation.
-            "target_rpos": UnboundedContinuousTensorSpec((1, 3), device=self.device),
-            "target_distance": UnboundedContinuousTensorSpec((1, 1), device=self.device),
             # instinctRL-A: Body-frame velocity command (critic-accessible).
             "v_cmd": UnboundedContinuousTensorSpec((1, 3), device=self.device),
+            # Command-governor task fields. These are reward/critic/eval-only;
+            # the actor observation remains lidar_grid + state_vec.
+            "actual_velocity_b": UnboundedContinuousTensorSpec((1, 3), device=self.device),
+            "min_clearance": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_mode_code": UnboundedContinuousTensorSpec((1,), dtype=torch.long, device=self.device),
+            "command_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "tracking_actual_error_sq": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "tracking_proxy_error_sq": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_preservation_ratio": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "null_command_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "null_command_output_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_amplification": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_amplification_active": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_amplification_horizontal": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_amplification_horizontal_active": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_amplification_vertical": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "command_amplification_vertical_active": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "height_world_z": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "height_floor_violation": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "height_ceiling_violation": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "height_ceiling_margin": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "v_cmd_z": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "v_final_b_z": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "station_keeping_drift": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "safety_min_clearance": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "safety_collision": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "ics_intervention": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "ics_violation": UnboundedContinuousTensorSpec((1,), device=self.device),
         }
         anchor_cfg = getattr(getattr(self.cfg, "instinctRL", None), "anchor", None)
         if anchor_cfg is not None and getattr(anchor_cfg, "enabled", False):
@@ -680,6 +734,9 @@ class NavigationEnv(IsaacEnv):
                 "observability_drift_norm": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "observability_is_proxy": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "observability_mode_code": UnboundedContinuousTensorSpec(
+                    (1,), dtype=torch.long, device=self.device
+                ),
+                "observability_scenario_id": UnboundedContinuousTensorSpec(
                     (1,), dtype=torch.long, device=self.device
                 ),
             })
@@ -778,6 +835,19 @@ class NavigationEnv(IsaacEnv):
             self._has_prev_issued_action_body[env_ids] = False
         if hasattr(self, "_reward_prev_v_final_body"):
             self._reward_prev_v_final_body[env_ids] = 0.0
+        if hasattr(self, "_station_origin_pos_w"):
+            self._station_origin_pos_w[env_ids] = pos[:, 0, :].detach()
+        if hasattr(self, "_v_cmd"):
+            self._v_cmd[env_ids] = 0.0
+        if hasattr(self, "_nearest_obstacle_vector_b"):
+            self._nearest_obstacle_vector_b[env_ids] = torch.tensor(
+                [1.0, 0.0, 0.0],
+                dtype=self._nearest_obstacle_vector_b.dtype,
+                device=self.device,
+            )
+        if hasattr(self, "_command_generator"):
+            self._command_generator.timers[env_ids] = 0.0
+            self._command_generator.current_modes[env_ids] = COMMAND_MODE_RECOVERY
         if hasattr(self, "_obs_builder"):
             self._obs_builder.reset_history(env_ids)
         if hasattr(self, "_anchor_manager"):
@@ -786,7 +856,8 @@ class NavigationEnv(IsaacEnv):
         self.height_range[env_ids, 0, 0] = torch.min(pos[:, 0, 2], self.target_pos[env_ids, 0, 2])
         self.height_range[env_ids, 0, 1] = torch.max(pos[:, 0, 2], self.target_pos[env_ids, 0, 2])
 
-        self.stats[env_ids] = 0.  
+        for _, value in self.stats.items():
+            value[env_ids] = 0
         
     def _pre_sim_step(self, tensordict: TensorDictBase):
         actions = tensordict[("agents", "action")] 
@@ -796,6 +867,41 @@ class NavigationEnv(IsaacEnv):
         if (self.cfg.env_dyn.num_obstacles != 0):
             self.move_dynamic_obstacle()
         self.lidar.update(self.dt)
+
+    def _ensure_command_generator(self):
+        """Create the adversarial command generator if this run needs it."""
+        if hasattr(self, "_command_generator"):
+            return
+        from command_generator import AdversarialCommandGenerator
+
+        self._command_generator = AdversarialCommandGenerator(
+            self.num_envs,
+            torch.device(self.device),
+            max_vel=self._command_max_vel,
+            dt=self.dt,
+        )
+
+    def configure_instinctrl_eval_pass(
+        self,
+        *,
+        command_source: str | None = None,
+        command_frame_count: int | None = None,
+        command_curriculum_profile: str | None = None,
+        scenario_id_code: int | None = None,
+    ):
+        """Configure eval-only command/scenario controls before a rollout reset."""
+        if command_source is not None:
+            if command_source not in {"curriculum_generator", "basic_random", "scripted_eval"}:
+                raise ValueError(f"Unsupported eval command source={command_source!r}")
+            self._command_source = command_source
+            if command_source == "curriculum_generator":
+                self._ensure_command_generator()
+        if command_frame_count is not None:
+            self._command_frame_count = int(command_frame_count)
+        if command_curriculum_profile is not None:
+            self._command_curriculum_profile = str(command_curriculum_profile)
+        if scenario_id_code is not None:
+            self._instinctrl_eval_scenario_id_code = int(scenario_id_code)
 
     def set_prev_issued_action_body(self, action_body: torch.Tensor):
         """Store the last body-frame command issued to the controller."""
@@ -816,6 +922,43 @@ class NavigationEnv(IsaacEnv):
         for key, value in ics_out.metrics.items():
             if key in self.info.keys():
                 self.info[key][:] = value
+
+    def _update_instinctrl_command(self):
+        """Update body-frame command for the command-governor task."""
+        if self._command_source == "curriculum_generator":
+            self._command_frame_count += int(self.num_envs)
+            probabilities = command_curriculum_probabilities(
+                self._command_frame_count,
+                profile=getattr(self, "_command_curriculum_profile", "default"),
+            )
+            v_cmd = self._command_generator.update_commands(
+                self.root_state[..., :3].reshape(self.num_envs, 3),
+                self.root_state[..., 7:10].reshape(self.num_envs, 3),
+                self._nearest_obstacle_vector_b,
+                probabilities=probabilities,
+            )
+            self._v_cmd = v_cmd.reshape(self.num_envs, 1, 3)
+            if "command_mode_code" in self.info.keys():
+                self.info["command_mode_code"][:] = self._command_generator.current_modes.reshape(
+                    self.num_envs, 1
+                )
+        elif self._command_source == "scripted_eval":
+            self._v_cmd.zero_()
+            if "command_mode_code" in self.info.keys():
+                self.info["command_mode_code"].fill_(COMMAND_MODE_RECOVERY)
+        else:
+            if not hasattr(self, "_v_cmd_step_count"):
+                self._v_cmd_step_count = 0
+            self._v_cmd_step_count += 1
+            if self._v_cmd_step_count % 125 == 1:
+                self._v_cmd = (
+                    torch.rand(self.num_envs, 1, 3, device=self.device) * 2.0 - 1.0
+                ) * 0.5
+                self._v_cmd[..., 2] *= 0.3
+            if "command_mode_code" in self.info.keys():
+                self.info["command_mode_code"].fill_(COMMAND_MODE_NORMAL)
+        if "command_speed" in self.info.keys():
+            self.info["command_speed"][:] = self._v_cmd.norm(dim=-1)
     
     # ============================================
     # 计算观测和奖励（每步调用）
@@ -837,6 +980,16 @@ class NavigationEnv(IsaacEnv):
         # 包含：位置、姿态（四元数）、速度、角速度、朝向、上方向、电机推力
         self.root_state = self.drone.get_state(env_frame=False)
         self.info["drone_state"][:] = self.root_state[..., :13]  # 保存状态信息
+        root_flat = self.root_state[..., :13].reshape(self.num_envs, 13)
+        if hasattr(self, "_station_origin_pos_w"):
+            station_drift_w = root_flat[:, :3] - self._station_origin_pos_w
+            station_drift_b = world_to_body_velocity(station_drift_w, root_flat[:, 3:7])
+            if "station_keeping_drift" in self.info.keys():
+                self.info["station_keeping_drift"][:] = station_drift_w.norm(
+                    dim=-1, keepdim=True
+                )
+        else:
+            station_drift_b = None
 
         # ============================================
         # 网络输入 I：MID360 LiDAR → observation builder
@@ -845,15 +998,7 @@ class NavigationEnv(IsaacEnv):
         # Produces: raw range r_t, mask m_t, staleness-weighted reliability w_t,
         # IMU cues, v_cmd, prev_action, frame_age, sim_time, history buffer.
         if hasattr(self, "_obs_builder"):
-            # Generate v_cmd (body-frame, simple bounded random)
-            if not hasattr(self, "_v_cmd_step_count"):
-                self._v_cmd_step_count = 0
-            self._v_cmd_step_count += 1
-            if self._v_cmd_step_count % 125 == 1:  # ~every 2s at 62.5Hz
-                self._v_cmd = (
-                    torch.rand(self.num_envs, 1, 3, device=self.device) * 2.0 - 1.0
-                ) * 0.5
-                self._v_cmd[..., 2] *= 0.3
+            self._update_instinctrl_command()
 
             # Build observation
             obs_frame = self._obs_builder.build(
@@ -878,10 +1023,18 @@ class NavigationEnv(IsaacEnv):
                     self.info[key][:] = value
 
             if hasattr(self, "_observability_logger"):
+                scenario_id = torch.full(
+                    (self.num_envs,),
+                    int(getattr(self, "_instinctrl_eval_scenario_id_code", 0)),
+                    dtype=torch.long,
+                    device=self.device,
+                )
                 observability_out = self._observability_logger.compute(
                     ray_directions_b=self._mid360_ray_dirs_b,
                     valid_mask=obs_frame["mask"].reshape(self.num_envs, -1),
                     reliability_weight=obs_frame["weight"].reshape(self.num_envs, -1),
+                    drift_b=station_drift_b,
+                    scenario_id=scenario_id,
                 )
                 self.observability_outputs = observability_out.cache
                 for key, value in observability_out.metrics.items():
@@ -892,6 +1045,11 @@ class NavigationEnv(IsaacEnv):
 
             # Raw range for reward computation (keep self.lidar_scan for backward compat)
             self.lidar_scan = obs_frame["range"].unsqueeze(1)  # [N, 1, H, V]
+            self._nearest_obstacle_vector_b = nearest_obstacle_vector_from_scan(
+                ranges=obs_frame["range"],
+                mask=obs_frame["mask"],
+                ray_directions_b=self._mid360_ray_dirs_b,
+            ).detach()
 
             # Store v_cmd in info for critic/debug
             self.info["v_cmd"] = self._v_cmd.clone()
@@ -927,11 +1085,6 @@ class NavigationEnv(IsaacEnv):
         distance = rpos.norm(dim=-1, keepdim=True)  # 3D 距离
         distance_2d = rpos[..., :2].norm(dim=-1, keepdim=True)  # 水平距离
         distance_z = rpos[..., 2].unsqueeze(-1)  # 垂直距离（高度差）
-
-        # instinctRL-0: Store target-relative info for critic-only privileged branch.
-        # These fields go to info namespace; the actor never sees them.
-        self.info["target_rpos"][:] = rpos
-        self.info["target_distance"][:] = distance
 
         # instinctRL-A: Compute raw MID360 range for backward compat (lidar_raw_range)
         self.lidar_raw_range = (
@@ -1091,6 +1244,11 @@ class NavigationEnv(IsaacEnv):
         #          - height_penalty * 8.0
         if hasattr(self, "_reward_computer") and hasattr(self, "_obs_builder"):
             v_cmd_b = self._v_cmd.reshape(self.num_envs, 3)
+            actual_velocity_b = world_to_body_velocity(
+                self.root_state[..., 7:10].reshape(self.num_envs, 3),
+                self.root_state[..., 3:7].reshape(self.num_envs, 4),
+            )
+            self.info["actual_velocity_b"][:] = actual_velocity_b.reshape(self.num_envs, 1, 3)
             issued_v_final_b = torch.where(
                 self._has_prev_issued_action_body,
                 self._prev_issued_action_body,
@@ -1113,11 +1271,14 @@ class NavigationEnv(IsaacEnv):
                 min_clearance,
                 torch.full_like(min_clearance, self.lidar_range),
             )
+            self.info["min_clearance"][:] = min_clearance
 
             reward_terms = self._reward_computer.compute(
                 v_cmd_b=v_cmd_b,
                 v_final_b=issued_v_final_b,
                 prev_v_final_b=prev_v_final_b,
+                actual_velocity_b=actual_velocity_b,
+                height_w=self.root_state[..., 2].reshape(self.num_envs, 1),
                 anchor_loss=self.info["anchor_loss"] if "anchor_loss" in self.info.keys() else None,
                 anchor_active=self.info["anchor_active"] if "anchor_active" in self.info.keys() else None,
                 anchor_valid_fraction=(
@@ -1140,6 +1301,34 @@ class NavigationEnv(IsaacEnv):
             for key, value in reward_terms.components.items():
                 self.stats[key] += value
             self._reward_prev_v_final_body[:] = issued_v_final_b.detach()
+            reward_cfg = getattr(self.cfg.instinctRL, "reward", None)
+            handbook_metrics = compute_handbook_step_metrics(
+                v_cmd_b=v_cmd_b,
+                actual_velocity_b=actual_velocity_b,
+                v_final_b=issued_v_final_b,
+                min_clearance=min_clearance,
+                height_w=self.root_state[..., 2].reshape(self.num_envs, 1),
+                ics_beta=self.info["ics_beta"] if "ics_beta" in self.info.keys() else None,
+                ics_emergency=self.info["ics_emergency"] if "ics_emergency" in self.info.keys() else None,
+                anchor_active=self.info["anchor_active"] if "anchor_active" in self.info.keys() else None,
+                anchor_error_mean=(
+                    self.info["anchor_error_mean"] if "anchor_error_mean" in self.info.keys() else None
+                ),
+                anchor_error_max=(
+                    self.info["anchor_error_max"] if "anchor_error_max" in self.info.keys() else None
+                ),
+                anchor_loss=self.info["anchor_loss"] if "anchor_loss" in self.info.keys() else None,
+                collision=collision,
+                d_safe=float(getattr(getattr(self.cfg.instinctRL, "ics", None), "d_safe", 0.8)),
+                height_floor=float(getattr(reward_cfg, "height_floor", 0.5)),
+                height_ceiling=float(getattr(reward_cfg, "height_ceiling", 4.0)),
+                command_eps=float(
+                    getattr(reward_cfg, "command_eps", 1e-3)
+                ),
+            )
+            for key, value in handbook_metrics.items():
+                if key in self.info.keys():
+                    self.info[key][:] = value
         else:
             if (self.cfg.env_dyn.num_obstacles != 0):
                 self.reward = reward_vel + 1. + reward_safety_static * 1.0 + reward_safety_dynamic * 1.0 - penalty_smooth * 0.1 - penalty_height * 8.0
@@ -1166,9 +1355,17 @@ class NavigationEnv(IsaacEnv):
         # # -----------------Training Stats-----------------
         self.stats["return"] += self.reward
         self.stats["episode_len"][:] = self.progress_buf.unsqueeze(1)
-        self.stats["reach_goal"] = reach_goal.float()
+        self.stats["legacy_reach_goal"] = reach_goal.float()
         self.stats["collision"] = collision.float()
         self.stats["truncated"] = self.truncated.float()
+        termination_stats = compute_termination_stats(
+            below_bound=below_bound,
+            above_bound=above_bound,
+            collision=collision,
+            truncated=self.truncated,
+        )
+        for key, value in termination_stats.items():
+            self.stats[key] = value
 
         return TensorDict({
             "agents": TensorDict(

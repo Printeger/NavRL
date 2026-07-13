@@ -11,6 +11,7 @@
 这些工具是强化学习训练的基础组件。
 """
 
+import math
 import torch
 import torch.nn as nn
 import wandb
@@ -57,9 +58,9 @@ class ValueNorm(nn.Module):
         self.running_mean: torch.Tensor  # 滑动平均
         self.running_mean_sq: torch.Tensor  # 平方的滑动平均（用于计算方差）
         self.debiasing_term: torch.Tensor  # 去偏项
-        self.register_buffer("running_mean", torch.zeros(input_shape))
-        self.register_buffer("running_mean_sq", torch.zeros(input_shape))
-        self.register_buffer("debiasing_term", torch.tensor(0.0))
+        self.register_buffer("running_mean", torch.zeros(input_shape, dtype=torch.float64))
+        self.register_buffer("running_mean_sq", torch.zeros(input_shape, dtype=torch.float64))
+        self.register_buffer("debiasing_term", torch.tensor(0.0, dtype=torch.float64))
 
         self.reset_parameters()
 
@@ -87,30 +88,55 @@ class ValueNorm(nn.Module):
             input_vector: 一批回报值 G_t
         """
         assert input_vector.shape[-len(self.input_shape) :] == self.input_shape
+        if not torch.isfinite(input_vector).all():
+            raise ValueError("ValueNorm.update received non-finite returns")
         dim = tuple(range(input_vector.dim() - len(self.input_shape)))
-        batch_mean = input_vector.mean(dim=dim)
-        batch_sq_mean = (input_vector**2).mean(dim=dim)
+        input_fp64 = input_vector.to(dtype=torch.float64)
+        batch_mean = input_fp64.mean(dim=dim)
+        batch_sq_mean = input_fp64.square().mean(dim=dim)
+        if not torch.isfinite(batch_mean).all() or not torch.isfinite(batch_sq_mean).all():
+            raise ValueError("ValueNorm.update produced non-finite batch statistics")
 
         weight = self.beta  # 滑动平均权重
 
         # 指数移动平均：new = weight * old + (1 - weight) * new_sample
-        self.running_mean.mul_(weight).add_(batch_mean * (1.0 - weight))
-        self.running_mean_sq.mul_(weight).add_(batch_sq_mean * (1.0 - weight))
-        self.debiasing_term.mul_(weight).add_(1.0 * (1.0 - weight))
+        next_mean = self.running_mean * weight + batch_mean * (1.0 - weight)
+        next_mean_sq = self.running_mean_sq * weight + batch_sq_mean * (1.0 - weight)
+        next_debiasing = self.debiasing_term * weight + 1.0 * (1.0 - weight)
+        if (
+            not torch.isfinite(next_mean).all()
+            or not torch.isfinite(next_mean_sq).all()
+            or not torch.isfinite(next_debiasing).all()
+        ):
+            raise ValueError("ValueNorm.update would make running statistics non-finite")
+        self.running_mean.copy_(next_mean)
+        self.running_mean_sq.copy_(next_mean_sq)
+        self.debiasing_term.copy_(next_debiasing)
 
     def normalize(self, input_vector: torch.Tensor):
         """归一化：(x - mean) / std"""
         assert input_vector.shape[-len(self.input_shape) :] == self.input_shape
         mean, var = self.running_mean_var()
-        out = (input_vector - mean) / torch.sqrt(var)
-        return out
+        input_fp64 = input_vector.to(dtype=torch.float64)
+        out = (input_fp64 - mean.to(device=input_vector.device)) / torch.sqrt(
+            var.to(device=input_vector.device)
+        )
+        return out.to(dtype=input_vector.dtype)
 
-    def denormalize(self, input_vector: torch.Tensor):
+    def denormalize(self, input_vector: torch.Tensor, max_abs: float = None):
         """反归一化：x * std + mean"""
         assert input_vector.shape[-len(self.input_shape) :] == self.input_shape
         mean, var = self.running_mean_var()
-        out = input_vector * torch.sqrt(var) + mean
-        return out
+        input_fp64 = input_vector.to(dtype=torch.float64)
+        out = input_fp64 * torch.sqrt(var.to(device=input_vector.device)) + mean.to(
+            device=input_vector.device
+        )
+        if max_abs is not None:
+            max_abs = float(max_abs)
+            if max_abs <= 0:
+                raise ValueError(f"ValueNorm denormalize max_abs must be > 0, got {max_abs}")
+            out = out.clamp(-max_abs, max_abs)
+        return out.to(dtype=input_vector.dtype)
 
 # ============================================
 # MLP 构建器
@@ -231,13 +257,35 @@ class BetaActor(nn.Module):
     参数:
         action_dim: 动作维度
     """
-    def __init__(self, action_dim: int) -> None:
+    def __init__(
+        self,
+        action_dim: int,
+        alpha_min: float = 1.0,
+        alpha_max: float = 30.0,
+        beta_min: float = 1.0,
+        beta_max: float = 30.0,
+    ) -> None:
         super().__init__()
+        for name, value in {
+            "alpha_min": alpha_min,
+            "alpha_max": alpha_max,
+            "beta_min": beta_min,
+            "beta_max": beta_max,
+        }.items():
+            if not torch.isfinite(torch.tensor(float(value))):
+                raise ValueError(f"{name} must be finite")
+        if alpha_min <= 0 or beta_min <= 0:
+            raise ValueError("BetaActor concentration minimums must be > 0")
+        if alpha_max <= alpha_min:
+            raise ValueError("alpha_max must be > alpha_min")
+        if beta_max <= beta_min:
+            raise ValueError("beta_max must be > beta_min")
         self.alpha_layer = nn.LazyLinear(action_dim)  # 输出 α
         self.beta_layer = nn.LazyLinear(action_dim)   # 输出 β
-        # Softplus: 将 (-∞, +∞) 映射到 (0, +∞)，确保 α, β > 0
-        self.alpha_softplus = nn.Softplus()
-        self.beta_softplus = nn.Softplus()
+        self.alpha_min = float(alpha_min)
+        self.alpha_max = float(alpha_max)
+        self.beta_min = float(beta_min)
+        self.beta_max = float(beta_max)
     
     def forward(self, features: torch.Tensor):
         """
@@ -250,9 +298,20 @@ class BetaActor(nn.Module):
             alpha: Beta 分布参数 α (> 1)
             beta: Beta 分布参数 β (> 1)
         """
-        # 加 1 确保 α, β > 1，避免退化分布
-        alpha = 1. + self.alpha_softplus(self.alpha_layer(features)) + 1e-6
-        beta = 1. + self.beta_softplus(self.beta_layer(features)) + 1e-6
+        raw_alpha = self.alpha_layer(features)
+        raw_beta = self.beta_layer(features)
+        if not torch.isfinite(raw_alpha).all():
+            raise ValueError("BetaActor raw_alpha contains non-finite values")
+        if not torch.isfinite(raw_beta).all():
+            raise ValueError("BetaActor raw_beta contains non-finite values")
+        alpha = self.alpha_min + (self.alpha_max - self.alpha_min) * torch.sigmoid(raw_alpha)
+        beta = self.beta_min + (self.beta_max - self.beta_min) * torch.sigmoid(raw_beta)
+        if not torch.isfinite(alpha).all() or not torch.isfinite(beta).all():
+            raise ValueError("BetaActor concentration parameters contain non-finite values")
+        if (alpha < self.alpha_min).any() or (alpha > self.alpha_max).any():
+            raise ValueError("BetaActor alpha escaped configured bounds")
+        if (beta < self.beta_min).any() or (beta > self.beta_max).any():
+            raise ValueError("BetaActor beta escaped configured bounds")
         return alpha, beta
 
 # ============================================
@@ -346,10 +405,16 @@ def make_batch(tensordict: TensorDict, num_minibatches: int):
     """
     # 展平为一维
     tensordict = tensordict.reshape(-1) 
+    usable = (tensordict.shape[0] // num_minibatches) * num_minibatches
+    if usable <= 0:
+        raise ValueError(
+            "num_minibatches is larger than the collected PPO batch. "
+            f"batch={tensordict.shape[0]}, num_minibatches={num_minibatches}"
+        )
     
     # 随机打乱索引并分成 num_minibatches 组
     perm = torch.randperm(
-        (tensordict.shape[0] // num_minibatches) * num_minibatches,
+        usable,
         device=tensordict.device,
     ).reshape(num_minibatches, -1)
     
@@ -357,13 +422,707 @@ def make_batch(tensordict: TensorDict, num_minibatches: int):
     for indices in perm:
         yield tensordict[indices]
 
+def _json_safe_scalar(value):
+    if isinstance(value, torch.Tensor):
+        if value.numel() != 1:
+            raise ValueError("expected a scalar tensor")
+        value = value.detach().cpu().item()
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, (int, bool)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
+
+
+def _tensor_summary(value: torch.Tensor):
+    tensor = value.detach().float().cpu().reshape(-1)
+    count = int(tensor.numel())
+    finite = torch.isfinite(tensor)
+    finite_count = int(finite.sum().item())
+    summary = {
+        "count": count,
+        "finite_count": finite_count,
+    }
+    if finite_count == 0:
+        return summary
+
+    finite_tensor = tensor[finite]
+    summary.update({
+        "mean": float(finite_tensor.mean().item()),
+        "min": float(finite_tensor.min().item()),
+        "max": float(finite_tensor.max().item()),
+    })
+    summary["std"] = (
+        float(finite_tensor.std(unbiased=False).item())
+        if finite_count > 1
+        else 0.0
+    )
+    return summary
+
+
+def _get_optional_tensor(tensordict, candidates):
+    for key in candidates:
+        try:
+            value = tensordict.get(key)
+        except KeyError:
+            continue
+        if isinstance(value, torch.Tensor):
+            return value
+    return None
+
+
+def _json_safe_eval_summary(info, trajs):
+    summary = {
+        key: _json_safe_scalar(value)
+        for key, value in info.items()
+        if key != "recording"
+    }
+
+    optional_fields = {
+        "governor_alpha": ["governor_alpha", ("next", "governor_alpha")],
+        "governor_v_corr": ["governor_v_corr", ("next", "governor_v_corr")],
+        "governor_v_corr_z": ["governor_v_corr_z", ("next", "governor_v_corr_z")],
+        "governor_v_cmd_b": ["governor_v_cmd_b", ("next", "governor_v_cmd_b")],
+        "governor_v_cmd_b_z": ["governor_v_cmd_b_z", ("next", "governor_v_cmd_b_z")],
+        "governor_v_gov_b": ["governor_v_gov_b", ("next", "governor_v_gov_b")],
+        "governor_v_gov_b_z": ["governor_v_gov_b_z", ("next", "governor_v_gov_b_z")],
+        "governor_v_final_b": ["governor_v_final_b", ("next", "governor_v_final_b")],
+        "governor_v_final_b_z": ["governor_v_final_b_z", ("next", "governor_v_final_b_z")],
+        "ics_beta": [("info", "ics_beta"), ("next", "info", "ics_beta")],
+        "ics_command_speed": [
+            ("info", "ics_command_speed"),
+            ("next", "info", "ics_command_speed"),
+        ],
+        "ics_final_speed": [
+            ("info", "ics_final_speed"),
+            ("next", "info", "ics_final_speed"),
+        ],
+        "null_command_speed": [
+            ("info", "null_command_speed"),
+            ("next", "info", "null_command_speed"),
+        ],
+        "null_command_output_speed": [
+            ("info", "null_command_output_speed"),
+            ("next", "info", "null_command_output_speed"),
+        ],
+        "command_amplification": [
+            ("info", "command_amplification"),
+            ("next", "info", "command_amplification"),
+        ],
+        "command_amplification_active": [
+            ("info", "command_amplification_active"),
+            ("next", "info", "command_amplification_active"),
+        ],
+        "command_amplification_horizontal": [
+            ("info", "command_amplification_horizontal"),
+            ("next", "info", "command_amplification_horizontal"),
+        ],
+        "command_amplification_horizontal_active": [
+            ("info", "command_amplification_horizontal_active"),
+            ("next", "info", "command_amplification_horizontal_active"),
+        ],
+        "command_amplification_vertical": [
+            ("info", "command_amplification_vertical"),
+            ("next", "info", "command_amplification_vertical"),
+        ],
+        "command_amplification_vertical_active": [
+            ("info", "command_amplification_vertical_active"),
+            ("next", "info", "command_amplification_vertical_active"),
+        ],
+        "height_world_z": [("info", "height_world_z"), ("next", "info", "height_world_z")],
+        "height_floor_violation": [
+            ("info", "height_floor_violation"),
+            ("next", "info", "height_floor_violation"),
+        ],
+        "height_ceiling_violation": [
+            ("info", "height_ceiling_violation"),
+            ("next", "info", "height_ceiling_violation"),
+        ],
+        "height_ceiling_margin": [
+            ("info", "height_ceiling_margin"),
+            ("next", "info", "height_ceiling_margin"),
+        ],
+        "v_cmd_z": [("info", "v_cmd_z"), ("next", "info", "v_cmd_z")],
+        "v_final_b_z": [("info", "v_final_b_z"), ("next", "info", "v_final_b_z")],
+    }
+
+    absent_fields = []
+    for field_name, candidates in optional_fields.items():
+        value = _get_optional_tensor(trajs, candidates)
+        if value is None:
+            absent_fields.append(field_name)
+            continue
+        summary[f"eval/diagnostics.{field_name}"] = _tensor_summary(value)
+
+    reward = _get_optional_tensor(trajs, [("next", "agents", "reward")])
+    if reward is not None:
+        reward_summary = _tensor_summary(reward)
+        finite_reward = reward.detach().float().cpu().reshape(-1)
+        finite_reward = finite_reward[torch.isfinite(finite_reward)]
+        if finite_reward.numel() > 0:
+            reward_summary["sum"] = float(finite_reward.sum().item())
+        summary["eval/reward"] = reward_summary
+
+    if absent_fields:
+        summary["absent_optional_fields"] = absent_fields
+
+    return summary
+
+
+class _TensorSummaryAccumulator:
+    def __init__(self):
+        self.count = 0
+        self.finite_count = 0
+        self.sum = 0.0
+        self.sum_sq = 0.0
+        self.min = None
+        self.max = None
+        self._values = []
+
+    def add(self, value: torch.Tensor):
+        tensor = value.detach().float().cpu().reshape(-1)
+        self.count += int(tensor.numel())
+        finite = tensor[torch.isfinite(tensor)]
+        finite_count = int(finite.numel())
+        self.finite_count += finite_count
+        if finite_count == 0:
+            return
+        finite_sum = float(finite.sum().item())
+        finite_sum_sq = float(finite.square().sum().item())
+        finite_min = float(finite.min().item())
+        finite_max = float(finite.max().item())
+        self.sum += finite_sum
+        self.sum_sq += finite_sum_sq
+        self.min = finite_min if self.min is None else min(self.min, finite_min)
+        self.max = finite_max if self.max is None else max(self.max, finite_max)
+        self._values.append(finite)
+
+    def mean(self, default=None):
+        if self.finite_count == 0:
+            return default
+        return self.sum / self.finite_count
+
+    def quantile(self, q: float, default=None):
+        if self.finite_count == 0 or not self._values:
+            return default
+        values = torch.cat(self._values)
+        return float(torch.quantile(values, float(q)).item())
+
+    def summary(self):
+        result = {
+            "count": int(self.count),
+            "finite_count": int(self.finite_count),
+        }
+        if self.finite_count == 0:
+            return result
+        mean = self.sum / self.finite_count
+        variance = max((self.sum_sq / self.finite_count) - mean**2, 0.0)
+        result.update({
+            "mean": float(mean),
+            "min": float(self.min),
+            "max": float(self.max),
+            "std": float(math.sqrt(variance)),
+        })
+        return result
+
+
+def _make_optional_eval_field_candidates():
+    return {
+        "governor_alpha": ["governor_alpha", ("next", "governor_alpha")],
+        "governor_v_corr": ["governor_v_corr", ("next", "governor_v_corr")],
+        "governor_v_corr_z": ["governor_v_corr_z", ("next", "governor_v_corr_z")],
+        "governor_v_cmd_b": ["governor_v_cmd_b", ("next", "governor_v_cmd_b")],
+        "governor_v_cmd_b_z": ["governor_v_cmd_b_z", ("next", "governor_v_cmd_b_z")],
+        "governor_v_gov_b": ["governor_v_gov_b", ("next", "governor_v_gov_b")],
+        "governor_v_gov_b_z": ["governor_v_gov_b_z", ("next", "governor_v_gov_b_z")],
+        "governor_v_final_b": ["governor_v_final_b", ("next", "governor_v_final_b")],
+        "governor_v_final_b_z": ["governor_v_final_b_z", ("next", "governor_v_final_b_z")],
+        "tracking_actual_error_sq": [
+            ("info", "tracking_actual_error_sq"),
+            ("next", "info", "tracking_actual_error_sq"),
+        ],
+        "tracking_proxy_error_sq": [
+            ("info", "tracking_proxy_error_sq"),
+            ("next", "info", "tracking_proxy_error_sq"),
+        ],
+        "command_preservation_ratio": [
+            ("info", "command_preservation_ratio"),
+            ("next", "info", "command_preservation_ratio"),
+        ],
+        "null_command_speed": [
+            ("info", "null_command_speed"),
+            ("next", "info", "null_command_speed"),
+        ],
+        "null_command_output_speed": [
+            ("info", "null_command_output_speed"),
+            ("next", "info", "null_command_output_speed"),
+        ],
+        "command_amplification": [
+            ("info", "command_amplification"),
+            ("next", "info", "command_amplification"),
+        ],
+        "command_amplification_active": [
+            ("info", "command_amplification_active"),
+            ("next", "info", "command_amplification_active"),
+        ],
+        "command_amplification_horizontal": [
+            ("info", "command_amplification_horizontal"),
+            ("next", "info", "command_amplification_horizontal"),
+        ],
+        "command_amplification_horizontal_active": [
+            ("info", "command_amplification_horizontal_active"),
+            ("next", "info", "command_amplification_horizontal_active"),
+        ],
+        "command_amplification_vertical": [
+            ("info", "command_amplification_vertical"),
+            ("next", "info", "command_amplification_vertical"),
+        ],
+        "command_amplification_vertical_active": [
+            ("info", "command_amplification_vertical_active"),
+            ("next", "info", "command_amplification_vertical_active"),
+        ],
+        "height_world_z": [
+            ("info", "height_world_z"),
+            ("next", "info", "height_world_z"),
+        ],
+        "height_floor_violation": [
+            ("info", "height_floor_violation"),
+            ("next", "info", "height_floor_violation"),
+        ],
+        "height_ceiling_violation": [
+            ("info", "height_ceiling_violation"),
+            ("next", "info", "height_ceiling_violation"),
+        ],
+        "height_ceiling_margin": [
+            ("info", "height_ceiling_margin"),
+            ("next", "info", "height_ceiling_margin"),
+        ],
+        "v_cmd_z": [
+            ("info", "v_cmd_z"),
+            ("next", "info", "v_cmd_z"),
+        ],
+        "v_final_b_z": [
+            ("info", "v_final_b_z"),
+            ("next", "info", "v_final_b_z"),
+        ],
+        "command_mode_code": [
+            ("info", "command_mode_code"),
+            ("next", "info", "command_mode_code"),
+        ],
+        "station_keeping_drift": [
+            ("info", "station_keeping_drift"),
+            ("next", "info", "station_keeping_drift"),
+        ],
+        "anchor_active": [("info", "anchor_active"), ("next", "info", "anchor_active")],
+        "anchor_error_mean": [
+            ("info", "anchor_error_mean"),
+            ("next", "info", "anchor_error_mean"),
+        ],
+        "anchor_error_max": [
+            ("info", "anchor_error_max"),
+            ("next", "info", "anchor_error_max"),
+        ],
+        "anchor_loss": [("info", "anchor_loss"), ("next", "info", "anchor_loss")],
+        "safety_min_clearance": [
+            ("info", "safety_min_clearance"),
+            ("next", "info", "safety_min_clearance"),
+        ],
+        "safety_collision": [
+            ("info", "safety_collision"),
+            ("next", "info", "safety_collision"),
+        ],
+        "ics_beta": [("info", "ics_beta"), ("next", "info", "ics_beta")],
+        "ics_intervention": [
+            ("info", "ics_intervention"),
+            ("next", "info", "ics_intervention"),
+        ],
+        "ics_emergency": [("info", "ics_emergency"), ("next", "info", "ics_emergency")],
+        "ics_violation": [("info", "ics_violation"), ("next", "info", "ics_violation")],
+        "ics_command_speed": [
+            ("info", "ics_command_speed"),
+            ("next", "info", "ics_command_speed"),
+        ],
+        "ics_final_speed": [
+            ("info", "ics_final_speed"),
+            ("next", "info", "ics_final_speed"),
+        ],
+        "observability_valid_fraction": [
+            ("info", "observability_valid_fraction"),
+            ("next", "info", "observability_valid_fraction"),
+        ],
+        "observability_weighted_valid_fraction": [
+            ("info", "observability_weighted_valid_fraction"),
+            ("next", "info", "observability_weighted_valid_fraction"),
+        ],
+        "observability_rank": [
+            ("info", "observability_rank"),
+            ("next", "info", "observability_rank"),
+        ],
+        "observability_sigma_min": [
+            ("info", "observability_sigma_min"),
+            ("next", "info", "observability_sigma_min"),
+        ],
+        "observability_sigma_max": [
+            ("info", "observability_sigma_max"),
+            ("next", "info", "observability_sigma_max"),
+        ],
+        "observability_condition_number": [
+            ("info", "observability_condition_number"),
+            ("next", "info", "observability_condition_number"),
+        ],
+        "observability_score": [
+            ("info", "observability_score"),
+            ("next", "info", "observability_score"),
+        ],
+        "observability_drift_projection": [
+            ("info", "observability_drift_projection"),
+            ("next", "info", "observability_drift_projection"),
+        ],
+        "observability_drift_norm": [
+            ("info", "observability_drift_norm"),
+            ("next", "info", "observability_drift_norm"),
+        ],
+        "observability_is_proxy": [
+            ("info", "observability_is_proxy"),
+            ("next", "info", "observability_is_proxy"),
+        ],
+        "observability_mode_code": [
+            ("info", "observability_mode_code"),
+            ("next", "info", "observability_mode_code"),
+        ],
+        "observability_scenario_id": [
+            ("info", "observability_scenario_id"),
+            ("next", "info", "observability_scenario_id"),
+        ],
+    }
+
+
+def _categorical_fractions(accumulator: _TensorSummaryAccumulator, labels):
+    if accumulator.finite_count == 0 or not accumulator._values:
+        return {}
+    values = torch.cat(accumulator._values).round().long()
+    total = max(int(values.numel()), 1)
+    return {
+        label: float((values == int(code)).sum().item() / total)
+        for code, label in labels.items()
+    }
+
+
+@torch.no_grad()
+def _evaluate_streaming(
+    env,
+    policy,
+    cfg,
+    seed: int,
+    exploration_type: ExplorationType,
+    return_summary: bool,
+    record_video: bool,
+):
+    env.enable_render(record_video)
+    env.eval()
+    env.set_seed(seed)
+
+    render_callback = RenderCallback(interval=2) if record_video else None
+    td = env.reset()
+    num_envs = int(env.num_envs)
+    recorded = torch.zeros(num_envs, dtype=torch.bool, device=td.device)
+    first_episode_stats = {}
+    last_stats = None
+    optional_candidates = _make_optional_eval_field_candidates()
+    diagnostic_accumulators = {
+        field_name: _TensorSummaryAccumulator()
+        for field_name in optional_candidates
+    }
+    reward_accumulator = _TensorSummaryAccumulator()
+    reward_sum = 0.0
+
+    with set_exploration_type(exploration_type):
+        for _ in range(env.max_episode_length):
+            policy(td)
+            step_td, td = env.step_and_maybe_reset(td)
+            if render_callback is not None:
+                render_callback(env)
+
+            for field_name, candidates in optional_candidates.items():
+                value = _get_optional_tensor(step_td, candidates)
+                if value is not None:
+                    diagnostic_accumulators[field_name].add(value)
+
+            reward = _get_optional_tensor(step_td, [("next", "agents", "reward")])
+            if reward is not None:
+                reward_accumulator.add(reward)
+                finite_reward = reward.detach().float().cpu().reshape(-1)
+                finite_reward = finite_reward[torch.isfinite(finite_reward)]
+                if finite_reward.numel() > 0:
+                    reward_sum += float(finite_reward.sum().item())
+
+            next_stats = step_td["next", "stats"]
+            last_stats = {
+                key: value.detach().cpu()
+                for key, value in next_stats.items()
+            }
+            done = step_td["next", "done"].squeeze(-1).bool()
+            newly_done = done & ~recorded
+            if newly_done.any():
+                for key, value in next_stats.items():
+                    value_cpu = value.detach().cpu()
+                    if key not in first_episode_stats:
+                        first_episode_stats[key] = torch.zeros_like(value_cpu)
+                    first_episode_stats[key][newly_done.cpu()] = value_cpu[newly_done.cpu()]
+                recorded |= newly_done
+            if recorded.all():
+                break
+
+    if not recorded.all() and last_stats is not None:
+        missing = ~recorded
+        for key, value_cpu in last_stats.items():
+            if key not in first_episode_stats:
+                first_episode_stats[key] = torch.zeros_like(value_cpu)
+            first_episode_stats[key][missing.cpu()] = value_cpu[missing.cpu()]
+
+    env.enable_render(not cfg.headless)
+    env.reset()
+
+    info = {
+        "eval/stats." + key: torch.mean(value.float()).item()
+        for key, value in first_episode_stats.items()
+    }
+
+    if render_callback is not None:
+        info["recording"] = wandb.Video(
+            render_callback.get_video_array(axes="t c h w"),
+            fps=0.5 / (cfg.sim.dt * cfg.sim.substeps),
+            format="mp4",
+        )
+
+    env.train()
+
+    if not return_summary:
+        return info
+
+    summary = {
+        key: _json_safe_scalar(value)
+        for key, value in info.items()
+        if key != "recording"
+    }
+    absent_fields = []
+    for field_name, accumulator in diagnostic_accumulators.items():
+        if accumulator.count == 0:
+            absent_fields.append(field_name)
+            continue
+        summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+    actual_error = diagnostic_accumulators["tracking_actual_error_sq"].mean()
+    if actual_error is not None:
+        summary["eval/handbook.tracking_rmse_actual_body_vs_v_cmd"] = float(
+            math.sqrt(max(actual_error, 0.0))
+        )
+    proxy_error = diagnostic_accumulators["tracking_proxy_error_sq"].mean()
+    if proxy_error is not None:
+        summary["eval/handbook.tracking_rmse_v_final_body_vs_v_cmd"] = float(
+            math.sqrt(max(proxy_error, 0.0))
+        )
+    preservation = diagnostic_accumulators["command_preservation_ratio"].mean()
+    if preservation is not None:
+        summary["eval/handbook.command_preservation_ratio"] = float(preservation)
+    null_command_speed = diagnostic_accumulators["null_command_speed"].mean()
+    if null_command_speed is not None:
+        summary["eval/handbook.null_command_speed_mean"] = float(null_command_speed)
+    null_command_output = diagnostic_accumulators["null_command_output_speed"].mean()
+    if null_command_output is not None:
+        summary["eval/handbook.null_command_output_speed_mean"] = float(null_command_output)
+    command_amplification = diagnostic_accumulators["command_amplification"].mean()
+    if command_amplification is not None:
+        summary["eval/handbook.command_amplification_mean"] = float(command_amplification)
+    command_amplification_active = diagnostic_accumulators["command_amplification_active"].mean()
+    if command_amplification_active is not None:
+        summary["eval/handbook.command_amplification_rate"] = float(command_amplification_active)
+    command_amplification_horizontal = diagnostic_accumulators[
+        "command_amplification_horizontal"
+    ].mean()
+    if command_amplification_horizontal is not None:
+        summary["eval/handbook.command_amplification_horizontal_mean"] = float(
+            command_amplification_horizontal
+        )
+    command_amplification_horizontal_active = diagnostic_accumulators[
+        "command_amplification_horizontal_active"
+    ].mean()
+    if command_amplification_horizontal_active is not None:
+        summary["eval/handbook.command_amplification_horizontal_rate"] = float(
+            command_amplification_horizontal_active
+        )
+    command_amplification_vertical = diagnostic_accumulators[
+        "command_amplification_vertical"
+    ].mean()
+    if command_amplification_vertical is not None:
+        summary["eval/handbook.command_amplification_vertical_mean"] = float(
+            command_amplification_vertical
+        )
+    command_amplification_vertical_active = diagnostic_accumulators[
+        "command_amplification_vertical_active"
+    ].mean()
+    if command_amplification_vertical_active is not None:
+        summary["eval/handbook.command_amplification_vertical_rate"] = float(
+            command_amplification_vertical_active
+        )
+    height = diagnostic_accumulators["height_world_z"]
+    height_mean = height.mean()
+    if height_mean is not None:
+        height_summary = height.summary()
+        summary["eval/handbook.height_world_z_mean"] = float(height_mean)
+        summary["eval/handbook.height_world_z_p05"] = float(height.quantile(0.05))
+        summary["eval/handbook.height_world_z_p95"] = float(height.quantile(0.95))
+        summary["eval/handbook.height_world_z_min"] = float(
+            height_summary.get("min", height_mean)
+        )
+        summary["eval/handbook.height_world_z_max"] = float(
+            height_summary.get("max", height_mean)
+        )
+    floor_violation = diagnostic_accumulators["height_floor_violation"]
+    floor_violation_mean = floor_violation.mean()
+    if floor_violation_mean is not None:
+        floor_summary = floor_violation.summary()
+        summary["eval/handbook.height_floor_violation_mean"] = float(
+            floor_violation_mean
+        )
+        summary["eval/handbook.height_floor_violation_p95"] = float(
+            floor_violation.quantile(0.95)
+        )
+        summary["eval/handbook.height_floor_violation_max"] = float(
+            floor_summary.get("max", floor_violation_mean)
+        )
+    ceiling_violation = diagnostic_accumulators["height_ceiling_violation"]
+    ceiling_violation_mean = ceiling_violation.mean()
+    if ceiling_violation_mean is not None:
+        ceiling_summary = ceiling_violation.summary()
+        summary["eval/handbook.height_ceiling_violation_mean"] = float(
+            ceiling_violation_mean
+        )
+        summary["eval/handbook.height_ceiling_violation_p95"] = float(
+            ceiling_violation.quantile(0.95)
+        )
+        summary["eval/handbook.height_ceiling_violation_max"] = float(
+            ceiling_summary.get("max", ceiling_violation_mean)
+        )
+    ceiling_margin = diagnostic_accumulators["height_ceiling_margin"]
+    ceiling_margin_mean = ceiling_margin.mean()
+    if ceiling_margin_mean is not None:
+        margin_summary = ceiling_margin.summary()
+        summary["eval/handbook.height_ceiling_margin_mean"] = float(
+            ceiling_margin_mean
+        )
+        summary["eval/handbook.height_ceiling_margin_p05"] = float(
+            ceiling_margin.quantile(0.05)
+        )
+        summary["eval/handbook.height_ceiling_margin_min"] = float(
+            margin_summary.get("min", ceiling_margin_mean)
+        )
+    for label, fraction in _categorical_fractions(
+        diagnostic_accumulators["command_mode_code"],
+        {
+            0: "normal",
+            1: "aggressive",
+            2: "adversarial",
+            3: "oscillation",
+            4: "recovery",
+        },
+    ).items():
+        summary[f"eval/handbook.command_mode_fraction.{label}"] = fraction
+    station_drift = diagnostic_accumulators["station_keeping_drift"]
+    station_drift_mean = station_drift.mean()
+    if station_drift_mean is not None:
+        station_drift_summary = station_drift.summary()
+        summary["eval/handbook.station_keeping_drift_mean"] = float(station_drift_mean)
+        summary["eval/handbook.station_keeping_drift_max"] = float(
+            station_drift_summary.get("max", station_drift_mean)
+        )
+        station_drift_p95 = station_drift.quantile(0.95)
+        if station_drift_p95 is not None:
+            summary["eval/handbook.station_keeping_drift_p95"] = float(station_drift_p95)
+    anchor_active = diagnostic_accumulators["anchor_active"].mean()
+    if anchor_active is not None:
+        summary["eval/handbook.anchor_active_fraction"] = float(anchor_active)
+    anchor_error_mean = diagnostic_accumulators["anchor_error_mean"].mean()
+    if anchor_error_mean is not None:
+        summary["eval/handbook.anchor_error_mean"] = float(anchor_error_mean)
+    anchor_error_max = diagnostic_accumulators["anchor_error_max"].summary().get("max")
+    if anchor_error_max is not None:
+        summary["eval/handbook.anchor_error_max"] = float(anchor_error_max)
+    anchor_loss = diagnostic_accumulators["anchor_loss"].mean()
+    if anchor_loss is not None:
+        summary["eval/handbook.anchor_loss"] = float(anchor_loss)
+    clearance = diagnostic_accumulators["safety_min_clearance"]
+    clearance_mean = clearance.mean()
+    if clearance_mean is not None:
+        summary["eval/handbook.safety_min_clearance_mean"] = float(clearance_mean)
+        summary["eval/handbook.safety_min_clearance_p05"] = float(clearance.quantile(0.05))
+    collision_rate = diagnostic_accumulators["safety_collision"].mean()
+    if collision_rate is not None:
+        summary["eval/handbook.safety_collision_rate"] = float(collision_rate)
+    beta_mean = diagnostic_accumulators["ics_beta"].mean()
+    if beta_mean is not None:
+        summary["eval/handbook.ics_beta_mean"] = float(beta_mean)
+    intervention_frequency = diagnostic_accumulators["ics_intervention"].mean()
+    if intervention_frequency is not None:
+        summary["eval/handbook.ics_intervention_frequency"] = float(intervention_frequency)
+    emergency_rate = diagnostic_accumulators["ics_emergency"].mean()
+    if emergency_rate is not None:
+        summary["eval/handbook.ics_emergency_rate"] = float(emergency_rate)
+    violation_rate = diagnostic_accumulators["ics_violation"].mean()
+    if violation_rate is not None:
+        summary["eval/handbook.ics_violation_rate"] = float(violation_rate)
+    for field_name, handbook_name in (
+        ("observability_valid_fraction", "observability_valid_fraction_mean"),
+        ("observability_weighted_valid_fraction", "observability_weighted_valid_fraction_mean"),
+        ("observability_rank", "observability_rank_mean"),
+        ("observability_sigma_min", "observability_sigma_min_mean"),
+        ("observability_sigma_max", "observability_sigma_max_mean"),
+        ("observability_condition_number", "observability_condition_number_mean"),
+        ("observability_score", "observability_score_mean"),
+        ("observability_drift_projection", "observability_drift_projection_mean"),
+        ("observability_drift_norm", "observability_drift_norm_mean"),
+    ):
+        value = diagnostic_accumulators[field_name].mean()
+        if value is not None:
+            summary[f"eval/handbook.{handbook_name}"] = float(value)
+    observability_is_proxy = diagnostic_accumulators["observability_is_proxy"].mean()
+    if observability_is_proxy is not None:
+        summary["eval/handbook.observability_is_proxy"] = float(observability_is_proxy)
+    observability_mode_code = diagnostic_accumulators["observability_mode_code"].mean()
+    if observability_mode_code is not None:
+        summary["eval/handbook.observability_mode_code_mean"] = float(observability_mode_code)
+    for stats_key, handbook_key in (
+        ("terminated_below_bound", "eval/handbook.termination_below_bound"),
+        ("terminated_above_bound", "eval/handbook.termination_above_bound"),
+        ("terminated_collision", "eval/handbook.termination_collision"),
+        ("truncated_timeout", "eval/handbook.termination_timeout"),
+    ):
+        eval_key = f"eval/stats.{stats_key}"
+        if eval_key in summary:
+            summary[handbook_key] = summary[eval_key]
+    if reward_accumulator.count > 0:
+        reward_summary = reward_accumulator.summary()
+        reward_summary["sum"] = float(reward_sum)
+        summary["eval/reward"] = reward_summary
+    if absent_fields:
+        summary["absent_optional_fields"] = absent_fields
+    summary["eval/episodes_recorded"] = int(recorded.sum().item())
+    summary["eval/episodes_expected"] = num_envs
+
+    return info, summary
+
+
 @torch.no_grad()
 def evaluate(
     env,
     policy,
     cfg,
     seed: int=0, 
-    exploration_type: ExplorationType=ExplorationType.MEAN
+    exploration_type: ExplorationType=ExplorationType.MEAN,
+    return_summary: bool=False,
+    streaming: bool=False,
+    record_video: bool=True,
 ):
     """
     评估函数：测试训练好的策略
@@ -372,7 +1131,7 @@ def evaluate(
     1. 运行完整的 episode
     2. 使用确定性策略（或随机策略）
     3. 录制视频
-    4. 统计成功率、碰撞率等指标
+    4. 统计 tracking、safety、ICS、termination 等指标
     
     参数:
         env: 环境
@@ -386,10 +1145,22 @@ def evaluate(
     返回:
         dict: 评估统计信息
             - eval/stats.return: 平均回报
-            - eval/stats.reach_goal: 成功率
+            - eval/handbook.*: instinctRL command-governor metrics
+            - eval/stats.legacy_reach_goal: legacy NavRL diagnostic only
             - eval/stats.collision: 碰撞率
             - recording: WandB 视频对象
     """
+    if streaming:
+        return _evaluate_streaming(
+            env=env,
+            policy=policy,
+            cfg=cfg,
+            seed=seed,
+            exploration_type=exploration_type,
+            return_summary=return_summary,
+            record_video=record_video,
+        )
+
     # 开启渲染（用于录制视频）
     env.enable_render(True)
     env.eval()  # 评估模式
@@ -445,6 +1216,9 @@ def evaluate(
     )
     
     env.train()  # 恢复训练模式
+
+    if return_summary:
+        return info, _json_safe_eval_summary(info, trajs)
 
     return info
 
@@ -550,4 +1324,3 @@ def construct_input(start, end):
     for n in range(start, end):
         input.append(f"{n}")
     return "(" + "|".join(input) + ")"
-

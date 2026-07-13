@@ -1,0 +1,76 @@
+{
+  "absent_optional_fields": [
+    "ics_beta",
+    "ics_command_speed",
+    "ics_final_speed"
+  ],
+  "checkpoint_path": "/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260707_114333-piys3ctl/files/checkpoint_4000.pt",
+  "deterministic_exploration_type": "MEAN",
+  "env_dyn_num_obstacles": 0,
+  "env_max_episode_length": 2200,
+  "env_num_envs": 64,
+  "env_num_obstacles": 350,
+  "eval/diagnostics.governor_alpha": {
+    "count": 26688,
+    "finite_count": 26688,
+    "max": 0.7410301566123962,
+    "mean": 0.5372307169065773,
+    "min": 0.41693899035453796,
+    "std": 0.05546136920830958
+  },
+  "eval/diagnostics.governor_v_corr": {
+    "count": 80064,
+    "finite_count": 80064,
+    "max": 0.4633716344833374,
+    "mean": -0.11070654945646068,
+    "min": -0.46095141768455505,
+    "std": 0.36374111639863854
+  },
+  "eval/diagnostics.governor_v_final_b": {
+    "count": 80064,
+    "finite_count": 80064,
+    "max": 0.759685754776001,
+    "mean": -0.11029371017698857,
+    "min": -0.7877249717712402,
+    "std": 0.3888121884004643
+  },
+  "eval/diagnostics.governor_v_gov_b": {
+    "count": 80064,
+    "finite_count": 80064,
+    "max": 0.759685754776001,
+    "mean": -0.11029371017698857,
+    "min": -0.7877249717712402,
+    "std": 0.3888121884004643
+  },
+  "eval/episodes_expected": 64,
+  "eval/episodes_recorded": 64,
+  "eval/reward": {
+    "count": 26688,
+    "finite_count": 26688,
+    "max": -0.04178013652563095,
+    "mean": -0.7047582295872896,
+    "min": -1.5540258884429932,
+    "std": 0.1594908149448149,
+    "sum": -18808.587631225586
+  },
+  "eval/stats.collision": 0.0,
+  "eval/stats.episode_len": 351.25,
+  "eval/stats.reach_goal": 0.0,
+  "eval/stats.return": -270.98565673828125,
+  "eval/stats.reward_anchor": 0.0,
+  "eval/stats.reward_collision": 0.0,
+  "eval/stats.reward_ics_compliance": 0.0,
+  "eval/stats.reward_intervention": 0.0,
+  "eval/stats.reward_safety": -12.211363792419434,
+  "eval/stats.reward_smoothness": -0.5402786135673523,
+  "eval/stats.reward_total": -270.98565673828125,
+  "eval/stats.reward_tracking": -258.2340393066406,
+  "eval/stats.truncated": 0.0,
+  "headless": true,
+  "instinctRL_enabled": true,
+  "instinctRL_mode": "train",
+  "learned_governor": true,
+  "max_frame_num": 4096,
+  "result_path": "/home/mint/rl_dev/NavRL/isaac-training/../docs/instinctRL_devlog/tests/artifacts/20260707_215835_static_checkpoint_4000.json",
+  "wandb_mode": "offline"
+}

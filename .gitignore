@@ -25,6 +25,7 @@ pip-wheel-metadata/
 *.sqlite
 *.pkl
 *.h5
+isaac-training/ppo_diagnostics/
 
 # Test coverage reports
 htmlcov/

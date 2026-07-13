@@ -1,8 +1,257 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-F train-smoke readiness)
+> **Last Updated**: 2026-07-11 (A2-R3 station correction repair)
 > **Purpose**: Define verification procedures for each instinctRL stage.
+
+---
+
+## instinctRL-A2-R3: Station Correction Repair
+
+**Current verdict**: SOURCE/UNIT COMPLETE. A fresh 128k A2-R3 sweep is required before any 1M run.
+
+### Required A2-R3 Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| A2-R3.1 Soft null decoder gate | `v_cmd=0` scales `v_corr` by `null_vcorr_gate_min` instead of forcing zero | Passed |
+| A2-R3.2 Anchor-aware null output reward | High anchor loss under an active/valid anchor relaxes null output bias penalty | Passed |
+| A2-R3.3 Low-loss/null-anchor bias penalty | Low anchor loss or inactive anchor still penalizes null output bias | Passed |
+| A2-R3.4 Hard gate update | `null_command_output_speed_mean` is diagnostic-only and cannot fail the gate by itself | Passed |
+| A2-R3.5 Sweep variants | A2-R3 dry-run emits the six `r3_*` variants and no R2 warm-start assumption | Passed |
+| A2-R3.6 Runtime sweep | 128k A2-R3 candidates are trained, evaled, ranked, and screened before 1M | Pending |
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_gates.py` | Passed: `27 passed`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_*.py` | Passed: `101 passed, 11 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6` | Passed dry-run: emitted six `a2r3_sweep` jobs for the `r3_*` variants without launching training. |
+
+### A2-R3 Runtime Procedure
+
+1. Dry-run the A2-R3 sweep:
+
+```bash
+python training/scripts/instinctRL/sweep.py \
+  --frames 131072 \
+  --seeds 0 \
+  --limit 6
+```
+
+2. Execute only after dry-run review:
+
+```bash
+python training/scripts/instinctRL/sweep.py \
+  --execute \
+  --frames 131072 \
+  --seeds 0 \
+  --limit 6
+```
+
+3. Promote to 1M only if the candidate satisfies the A2-R3 screening gate:
+
+- `safety_collision_rate == 0`
+- `termination_collision == 0`
+- `termination_below_bound == 0`
+- `safety_min_clearance_p05 >= 1.0`
+- `station_keeping_drift_mean < 1.3`
+- `station_keeping_drift_p95 < 2.6`
+- `anchor_error_mean < 2.0`
+- `tracking_rmse_actual_body_vs_v_cmd <= 0.45`
+- `command_amplification_rate <= 0.15`
+
+---
+
+## instinctRL-A2-R2: Objective Hardening + Sweep Gate
+
+**Current verdict**: SOURCE/UNIT COMPLETE; superseded by A2-R3 after the `20260711_111713` sweep failed all six candidates.
+
+### Required A2-R2 Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| A2-R2.1 Null-command decoder prior | `v_corr` is forced/ramped toward zero when `||v_cmd||` is in the deadband | Passed |
+| A2-R2.2 Preservation low band | Safe nonzero command with `preservation < 0.75` is penalized | Passed |
+| A2-R2.3 Preservation high band | Safe nonzero command with `preservation > 1.05` is penalized | Passed |
+| A2-R2.4 ICS allowance | Preservation slowdown penalty is disabled when ICS attenuates | Passed |
+| A2-R2.5 Reward/spec sync | Env reward stats derive from `REWARD_COMPONENT_KEYS` | Passed by source/unit coverage |
+| A2-R2.6 Hard gate scorer | Eval JSON is classified by station/tracking/safety gates, not collision alone | Passed |
+| A2-R2.7 Sweep dry-run | Short-sweep commands are generated without launching training by default | Passed |
+| A2-R2.8 Runtime sweep | 128k/256k candidates are trained, evaled, and ranked automatically | Pending |
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/governor.py training/scripts/instinctRL/rewards.py training/scripts/instinctRL/gates.py training/scripts/instinctRL/sweep.py training/scripts/ppo.py training/scripts/env.py && python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_gates.py` | Passed: `25 passed`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_*.py` | Passed: `99 passed, 11 warnings`. |
+
+### Runtime Gate Source of Truth
+
+- Gate implementation: `training/scripts/instinctRL/gates.py`
+- Sweep implementation: `training/scripts/instinctRL/sweep.py`
+- A2-R2 gate included station drift, null-command speed/output, station anchor error, tracking RMSE, preservation band, amplification, clearance p05, collision, ICS violation, and termination reasons. A2-R3 removes null-command output speed from hard pass/fail because bounded anchor-aware correction is now allowed.
+- Dry-run command: `python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6`
+- Execution command: `python training/scripts/instinctRL/sweep.py --execute --frames 131072 --seeds 0 --limit 6`
+
+---
+
+## instinctRL-A2-R: Station Objective Repair
+
+**Current verdict**: SOURCE/UNIT COMPLETE. Runtime 1M station-first short diagnostic retrain remains pending.
+
+### Required A2-R Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| A2-R.1 Null-command speed reward | `v_cmd≈0` penalizes actual body velocity without actor leakage | Passed |
+| A2-R.2 Null-command output reward | `v_cmd≈0` penalizes nonzero final issued command | Passed |
+| A2-R.3 Command preservation | Safe nonzero commands penalize proxy tracking error and command amplification | Passed |
+| A2-R.4 Curriculum profile | `station_first` starts recovery-heavy; `diagnostic_mixed` remains fixed for eval comparability | Passed |
+| A2-R.5 Eval metrics | Eval exposes null-command and amplification handbook metrics | Passed |
+| A2-R.6 Runtime gate | New 1M static MID360 retrain passes A2-R go/no-go thresholds | Pending |
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_task_metrics.py` | Passed: `20 passed`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_task_metrics.py training/unit_test/test_instinctrl_eval_diagnostic.py` | Passed: `24 passed`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/rewards.py training/scripts/instinctRL/task_metrics.py training/scripts/env.py training/scripts/utils.py training/scripts/eval.py` | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_*.py` | Passed: `92 passed, 11 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.task=command_governor instinctRL.reward.enabled=true instinctRL.reward.use_privileged_velocity_for_reward=true instinctRL.ics.enabled=true instinctRL.command.source=curriculum_generator instinctRL.command.curriculum_profile=station_first env.num_envs=4 env.num_obstacles=20 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline wandb.name=instinctrl_a2r_smoke headless=true` | Passed with exit code 0; rollout and checkpoint audits passed. |
+
+### A2-R Go/No-Go Runtime Gate
+
+- `station_keeping_drift_mean <= 1.0 m`
+- `station_keeping_drift_p95 <= 2.0 m`
+- `anchor_error_mean <= 1.0`
+- `tracking_rmse_actual_body_vs_v_cmd <= 0.45 m/s`
+- `0.75 <= command_preservation_ratio <= 1.10`
+- `command_amplification_rate <= 0.10`
+- `safety_collision_rate == 0.0`
+- `safety_min_clearance_p05 >= 1.0 m`
+- `ics_violation_rate <= 0.005`
+
+---
+
+## Command-Governor Train/Eval Semantic Repair
+
+**Current verdict**: SOURCE/UNIT COMPLETE and corrected 16-frame GPU smoke PASSED. Short diagnostic retrain remains pending.
+
+### Required Semantic Repair Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| SR.1 Task metrics | Actual body velocity conversion, termination reason codes, curriculum schedule, and handbook step metrics are pure-tested | Passed |
+| SR.2 Reward target | Formal config uses actual body velocity reward-only tracking; env passes `actual_velocity_b` to reward computer | Passed |
+| SR.3 Command source | Default command source is staged `curriculum_generator`, not simple random | Passed |
+| SR.4 ICS default | Formal train/eval configs enable ICS by default | Passed |
+| SR.5 Eval metrics | Streaming eval exposes `eval/handbook.*` actual tracking, proxy tracking, command preservation, anchor, safety, ICS, and termination metrics | Passed |
+| SR.6 Critic semantics | PPO critic no longer consumes legacy `target_rpos` / `target_distance`; actor/governor remains independent of critic-only fields | Passed |
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_task_metrics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `16 passed`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_ppo_stability.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_governor.py` | Passed: `27 passed, 11 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/instinctRL/rewards.py training/scripts/env.py training/scripts/ppo.py training/scripts/utils.py training/scripts/train.py training/scripts/eval.py` | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ppo_stability.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_task_metrics.py` | Passed: `84 passed, 11 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.task=command_governor instinctRL.reward.enabled=true instinctRL.reward.use_privileged_velocity_for_reward=true instinctRL.ics.enabled=true instinctRL.command.source=curriculum_generator env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true` | Passed with exit code 0; wrote final checkpoint to `wandb/offline-run-20260709_155509-jqrryl8z/files/checkpoint_final.pt`; rollout and checkpoint audits passed. |
+
+### Scope Boundary
+
+- Complete: train/eval semantic repair source and unit coverage.
+- Pending: short diagnostic retrain.
+- Not complete: long 8M retrain, full G baseline matrix, paper-level acceptance thresholds.
+
+---
+
+## instinctRL-A2-S: PPO Numerical Stability
+
+**Current verdict**: SOURCE/UNIT READY. Runtime 1M-frame acceptance is pending because local Isaac failed before env import with missing Omniverse/Nucleus assets root.
+
+### Required A2-S Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| A2-S.1 Bounded Beta params | Alpha/beta concentration params finite and within configured min/max for extreme raw outputs | Pure stability test passed |
+| A2-S.2 Finite actor action | Random finite observations produce finite normalized actions within action epsilon bounds | Pure stability test passed |
+| A2-S.3 NaN actor output fail-fast | NaN raw actor output is caught before governor decoder and writes diagnostic snapshot | Pure stability test passed |
+| A2-S.4 Gradient audit | Non-finite gradients fail before optimizer step and write diagnostic snapshot | Pure stability test passed |
+| A2-S.5 Parameter audit | Non-finite parameters fail after optimizer step and write diagnostic snapshot | Pure stability test passed |
+| A2-S.6 Advantage normalization | Zero-std advantages normalize without NaN using `clamp_min(1e-6)` | Pure stability test passed |
+| A2-S.7 Grad clipping coverage | Actor, critic, actor feature extractor, and critic feature extractor are all clipped | Pure stability test passed |
+| A2-S.8 Target KL stop | Approximate KL above threshold stops remaining minibatches for the update | Pure stability test passed |
+| A2-S.9 No NaN sanitization | Training code does not replace NaN actions with zero | Source-level stability test passed |
+| A2-S.10 Runtime acceptance | Conservative learned-governor config completes at least 1,048,576 frames without non-finite action/distribution/loss/gradient/parameter | Pending; blocked locally by Isaac/Nucleus assets root |
+
+### Added / Updated Test Files
+
+- `training/unit_test/test_instinctrl_ppo_stability.py`
+- `training/scripts/instinctRL/ppo_stability.py`
+- `training/scripts/ppo.py`
+- `training/scripts/utils.py`
+- `training/cfg/ppo.yaml`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/ppo.py training/scripts/utils.py training/scripts/instinctRL/ppo_stability.py training/scripts/instinctRL/governor.py` | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_ppo_stability.py` | Passed: `9 passed, 8 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_ppo_stability.py training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_actor_audit.py` | Passed: `22 passed, 12 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ppo_stability.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `73 passed, 12 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true` | Failed before env import: `Unable to perform Nucleus login on Omniverse. Assets root path is not set.` |
+
+### A2-S Scope Boundary
+
+- Complete in A2-S source/unit: bounded Beta, finite audits, grad clipping, safe advantage normalization, target-KL stop, diagnostic snapshots, tests.
+- Pending in A2-S runtime: 1M-frame acceptance on a working Isaac/Nucleus setup.
+- Not complete in A2-S: convergence proof, G baseline matrix, H deployment.
+
+---
+
+## instinctRL-A2: Trainable Governor Head and Training Readiness
+
+**Current verdict**: COMPLETE for trainable-governor implementation. Formal long learned-governor training is on hold until A2-S runtime acceptance passes. Training convergence is not proven.
+
+### Required A2 Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| A2.1 Governor bounds | `alpha in [0,1]`, `v_corr` bounded by config, `v_gov_b` norm-clipped | Pure governor test passed |
+| A2.2 Governor formula | `v_gov_b = alpha * v_cmd_b + v_corr`, with actor-clean `state_vec` source | Pure governor + source tests passed |
+| A2.3 PPO learned forward | 4D `action_normalized`; scalar/vector governor outputs finite and bounded | PPO hybrid test passed |
+| A2.4 PPO update | Log-prob/update works on 4D normalized governor action | PPO update smoke passed |
+| A2.5 Actor/critic leakage | Perturbing critic-only privileged fields does not alter actor/governor output | PPO separation test passed |
+| A2.6 Deterministic action | Mean/deterministic policy output is stable | PPO deterministic test passed |
+| A2.7 Checkpoint sanity | Save/load preserves deterministic governor output | PPO checkpoint test and runtime checkpoint audit passed |
+| A2.8 Train smoke | Small `instinctRL.mode=train` completes rollout + update + reward stats + checkpoint | GPU smoke passed |
+| A2.9 Actor contract | Actor observation remains `lidar_grid + state_vec`; governor does not read privileged `info["v_cmd"]` | Actor audit/source tests passed |
+
+### Added / Updated Test Files
+
+- `training/unit_test/test_instinctrl_governor.py`
+- `training/unit_test/test_instinctrl_ppo_hybrid.py`
+- `training/unit_test/test_instinctrl_actor_audit.py`
+
+### Actual Commands and Results
+
+| Command | Result |
+|---------|--------|
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m py_compile training/scripts/ppo.py training/scripts/train.py training/scripts/env.py training/scripts/instinctRL/governor.py training/scripts/instinctRL/audit.py training/scripts/utils.py` | Passed. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_actor_audit.py` | Passed: `13 passed, 5 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_observation.py training/unit_test/test_instinctrl_command_adapter.py training/unit_test/test_instinctrl_mid360_pattern.py training/unit_test/test_instinctrl_anchor.py training/unit_test/test_instinctrl_observability.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py` | Passed: `64 passed, 5 warnings`. |
+| `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training && python training/scripts/train.py instinctRL.mode=train instinctRL.reward.enabled=true env.num_envs=4 env_dyn.num_obstacles=0 algo.training_frame_num=4 algo.num_minibatches=1 algo.training_epoch_num=1 max_frame_num=16 eval_interval=0 save_interval=0 wandb.mode=offline headless=true` | Passed with exit code 0. Logged learned-governor wrapper enabled, rollout batch audit pass, checkpoint audit pass, `env_frames=16`, and final checkpoint at `wandb/offline-run-20260705_203852-35lr9uce/files/checkpoint_final.pt`. |
+
+### A2 Scope Boundary
+
+- Complete in A2: trainable governor head, PPO 4D governor action path, train wrapper, training-readiness audit hooks, checkpoint sanity, smoke readiness.
+- Not complete in A2: convergence proof, full G baseline/evaluation matrix, adversarial curriculum integration, H real-robot deployment.
 
 ---
 

@@ -43,8 +43,16 @@ wandb:
 instinctRL:
   enabled: true                        # Enable instinctRL mode
   mode: "smoke"                        # smoke: B0/B observation smoke | train: PPO path
+  task: "command_governor"             # Active handbook task; legacy target-goal stats are diagnostics only
   baseline:
     id: "direct_velocity"             # B0: direct velocity pass-through
+
+  # instinctRL command curriculum. station_first keeps recovery/null-command
+  # samples dominant before mixed tracking/adversarial commands are introduced.
+  command:
+    source: "curriculum_generator"     # curriculum_generator | basic_random | scripted_eval
+    max_vel: 1.0
+    curriculum_profile: "station_first"
 
   # instinctRL-B: Observation Configuration
   observation:
@@ -76,7 +84,7 @@ instinctRL:
 
   # instinctRL-E: ICS-inspired deployed-safe command attenuation
   ics:
-    enabled: false
+    enabled: true
     d_safe: 0.8
     emergency_clearance: 0.25
     active_horizon_margin: 0.5
@@ -96,15 +104,28 @@ instinctRL:
   reward:
     enabled: true
     tracking_weight: 1.0
-    anchor_weight: 0.5
+    anchor_weight: 4.0
     safety_weight: 0.5
     ics_compliance_weight: 1.0
     intervention_weight: 0.05
     smoothness_weight: 0.05
+    null_command_speed_weight: 2.0
+    null_command_output_weight: 0.1
+    null_output_anchor_loss_threshold: 0.05
+    proxy_tracking_weight: 0.25
+    preservation_low_weight: 0.5
+    preservation_high_weight: 0.5
+    preservation_lower: 0.75
+    preservation_upper: 1.05
+    command_amplification_weight: 0.5
+    height_floor: 0.5
+    height_floor_weight: 8.0
+    height_ceiling: 4.0
+    height_ceiling_weight: 0.0
     collision_weight: 10.0
     clearance_safe: 0.8
     clearance_margin: 0.2
     max_reward_abs: 20.0
-    use_privileged_velocity_for_reward: false
+    use_privileged_velocity_for_reward: true
     min_anchor_valid_fraction: 0.1
     tracking_beta_gate: true

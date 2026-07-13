@@ -5,6 +5,206 @@
 
 ---
 
+## D-2026-07-11-001: A2-R3 Station Correction Repair
+
+**Decision**: Do not promote any `20260711_111713` A2-R2 sweep candidate to 1M or formal training. Replace the hard-zero null-command interpretation with a soft, measurement-anchored station-correction path and rerun a fresh 128k A2-R3 sweep.
+
+**Evidence**:
+
+- All six A2-R2 candidates had `passed=false` and `safety_passed=false`.
+- Best candidate was `r2_balanced` with `7/15` gates passed, but it still had `station_keeping_drift_mean=1.544`, `station_keeping_drift_p95=3.003`, `anchor_error_mean=3.243`, `null_command_speed_mean=0.196`, `command_amplification_rate=0.318`, and `termination_below_bound=0.25`.
+- The hard null decoder did produce `null_command_output_speed_mean=0.0`, so the remaining station failure is not solved by making `v_corr` even harder zero.
+
+**Locked semantics**:
+
+- Split null-command behavior into `null-command bias` and `station correction`.
+- Null-command bias remains penalized when the anchor is inactive or anchor loss is low.
+- Station correction is allowed when the anchor is active, valid, and anchor loss is high.
+- Keep the null-command actual-speed penalty; actual vehicle motion under `v_cmd=0` remains a station failure.
+- Use soft decoder defaults: `null_vcorr_gate_enabled=true`, `null_vcorr_gate_eps=0.25`, `null_vcorr_gate_min=0.25`.
+- Use A2-R3 reward defaults: `anchor_weight=4.0`, `null_command_output_weight=0.1`.
+- Remove `null_command_output_speed_mean` from hard pass/fail gates; keep it as a diagnostic metric.
+
+**A2-R3 short-sweep variants**:
+
+- `r3_soft_null_min025`
+- `r3_soft_null_min04`
+- `r3_anchor_strong`
+- `r3_anchor_strong_safety`
+- `r3_balanced_soft`
+- `r3_no_decoder_gate_reward_only`
+
+**Screening gate before 1M**:
+
+- `safety_collision_rate == 0`
+- `termination_collision == 0`
+- `termination_below_bound == 0`
+- `safety_min_clearance_p05 >= 1.0`
+- `station_keeping_drift_mean < 1.3`
+- `station_keeping_drift_p95 < 2.6`
+- `anchor_error_mean < 2.0`
+- `tracking_rmse_actual_body_vs_v_cmd <= 0.45`
+- `command_amplification_rate <= 0.15`
+
+**Consequence**: `r2_balanced` is reference evidence only, not a warm start. Formal learned-governor training remains HOLD until A2-R3 short sweep selects candidates, top 1M runs pass hard gates, and multi-seed stability is checked.
+
+---
+
+## D-2026-07-10-001: Objective Hardening and Automated Short Sweep Gate
+
+**Decision**: Do not continue direct 1M/2M or formal long training after the latest diagnostic failures. Harden the command-governor objective first, then use small automated 128k/256k sweeps and hard eval gates to select candidates.
+
+**Locked semantics**:
+
+- Safe nonzero commands must preserve command magnitude inside a band, default `0.75 <= ||v_final||/||v_cmd|| <= 1.05`.
+- Preservation penalties are disabled when ICS is actively attenuating or emergency handling is active; safety intervention is allowed to reduce speed.
+- Null-command behavior has a decoder-level prior: as `||v_cmd|| -> 0`, learned `v_corr -> 0` before command synthesis.
+- Safety readiness is a hard gate, not a collision-only summary. Clearance p05, ICS violation rate, termination/collision, station drift, null-command motion, preservation, and amplification must be checked together.
+- Sweep tooling must default to dry-run; `--execute` is required before launching train/eval jobs.
+
+**Go/no-go gate**:
+
+- `eval/station/handbook.station_keeping_drift_mean <= 1.0 m`
+- `eval/station/handbook.station_keeping_drift_p95 <= 2.0 m`
+- `eval/station/handbook.null_command_speed_mean <= 0.08 m/s`
+- `eval/station/handbook.null_command_output_speed_mean <= 0.08 m/s`
+- `eval/station/handbook.anchor_error_mean <= 1.0`
+- `eval/tracking/handbook.tracking_rmse_actual_body_vs_v_cmd <= 0.45 m/s`
+- `0.75 <= eval/tracking/handbook.command_preservation_ratio <= 1.05`
+- `eval/tracking/handbook.command_amplification_mean <= 0.05`
+- `eval/tracking/handbook.command_amplification_rate <= 0.10`
+- `eval/handbook.safety_collision_rate == 0.0`
+- `eval/handbook.safety_min_clearance_p05 >= 1.0 m`
+- `eval/handbook.ics_violation_rate <= 0.005`
+- below/above/collision terminations remain zero.
+
+**Consequence**: The next experiment is an automated short corrective sweep, not formal training. Only top 2-3 candidates by hard-gate score should move to 1M, and only 1M candidates that pass across multiple seeds should move to formal longer runs.
+
+---
+
+## D-2026-07-09-002: Handbook Diagnostic Eval Boundary
+
+**Decision**: Make formal short diagnostic eval a two-pass suite under static MID360-visible geometry: zero-command station keeping plus command-curriculum tracking. Enable proxy observability by default for this diagnostic suite, label it as proxy, and fail fast if dynamic obstacles are requested before they are MID360 RayCaster-visible.
+
+**Locked semantics**:
+
+- `env_dyn.num_obstacles=0` is required for `short_diagnostic` eval until dynamic obstacles are sensor-visible geometry.
+- Station metrics use eval-only simulator pose drift and measurement-space anchor/observability diagnostics; none of these enter actor observation or reward.
+- Tracking metrics use the command-governor path with curriculum probabilities initialized at the 600k-frame diagnostic stage.
+- Observability proxy metrics are valid diagnostic evidence but not exact finite-difference or surface-normal range-Jacobian evidence.
+- Eval success is reported through handbook metrics, not `legacy_reach_goal`.
+
+**Consequence**: Corrected short retrain checkpoints can be compared with a consistent diagnostic eval JSON. Paper-level claims still require the full scenario and B0-B8 baseline matrix.
+
+---
+
+## D-2026-07-09-003: Station-First Objective Repair Gate
+
+**Decision**: Treat the 1M static MID360 short diagnostic as a station-objective failure and repair reward/curriculum before any formal long training. Formal training now uses a station-first command curriculum, stronger measurement-space anchor weight, explicit null-command speed/output penalties, and command-amplification diagnostics.
+
+**Locked semantics**:
+
+- `v_corr` remains available under null command so the policy can correct observable drift, but biased null-command motion is penalized.
+- Null-command training uses actual body velocity and final issued command as reward-only signals; these do not enter actor observation.
+- Nonzero command training keeps actual-velocity tracking as the main reward and adds light proxy command-chain tracking plus command-amplification penalty when ICS is not attenuating.
+- Short diagnostic tracking uses `diagnostic_mixed` rather than the formal training curriculum, so retrain checkpoints remain comparable.
+- Long training remains HOLD until a new 1M static MID360 short diagnostic passes the A2-R gate.
+
+**Go/no-go gate**:
+
+- `station_keeping_drift_mean <= 1.0 m`
+- `station_keeping_drift_p95 <= 2.0 m`
+- `anchor_error_mean <= 1.0`
+- `tracking_rmse_actual_body_vs_v_cmd <= 0.45 m/s`
+- `0.75 <= command_preservation_ratio <= 1.10`
+- `command_amplification_rate <= 0.10`
+- `safety_collision_rate == 0.0`
+- `safety_min_clearance_p05 >= 1.0 m`
+- `ics_violation_rate <= 0.005`
+
+**Consequence**: The failed 1M checkpoint is retained as diagnostic evidence only. The next training run should be a new 1M station-first diagnostic retrain, not an 8M formal run.
+
+---
+
+## D-2026-07-09-001: Command-Governor Train/Eval Semantic Repair
+
+**Decision**: Classify the 8M run as a wrong-objective failed run for handbook purposes and repair train/eval semantics before any new long training. Formal instinctRL training now uses `instinctRL.task=command_governor`, actual body velocity as reward-only tracking signal, staged command curriculum, and ICS enabled by default.
+
+**Locked semantics**:
+
+- `reach_goal` is legacy NavRL target-navigation evidence only and is reported as `legacy_reach_goal`.
+- Primary tracking reward uses privileged actual body-frame velocity versus `v_cmd_b`; the actor still receives only `lidar_grid + state_vec`.
+- `v_final_b` versus `v_cmd_b` remains a command-chain diagnostic, not the primary reward objective.
+- `AdversarialCommandGenerator` is wired through a conservative curriculum before aggressive/adversarial commands dominate.
+- Formal method configs enable ICS attenuation by default; `no_ics` remains an ablation/debug setting.
+- Streaming eval must emit handbook metrics for actual tracking, command proxy tracking, command preservation, anchor, clearance, collision, ICS intervention, and termination reasons.
+
+**Consequence**: The next run should be a short diagnostic retrain, not another blind 8M run. Long training starts only after metrics are complete, termination reasons are interpretable, and actual tracking/anchor/safety signals are non-degenerate.
+
+---
+
+## D-2026-07-05-007: Learned-Governor PPO Stability Boundary
+
+**Decision**: Treat the observed non-finite learned-governor action around 563k frames as an upstream PPO numerical-stability blocker, not a governor decoder bug. Keep the governor decoder fail-fast behavior and harden PPO rather than replacing invalid actions with zeros.
+
+**Locked semantics**:
+
+- Beta policy concentration parameters are bounded by config using sigmoid-mapped raw outputs.
+- `("agents", "action_normalized")` must be finite before it reaches the governor decoder.
+- PPO finite-audits observations, distribution parameters, actions, log-probs, entropy, value predictions, returns, advantages, losses, PPO ratio, gradients, and parameters.
+- All PPO module groups are gradient-clipped with `algo.max_grad_norm`.
+- Advantage normalization uses `std.clamp_min(1e-6)`.
+- Target-KL early stop may skip remaining minibatches for the current update.
+- Non-finite failures save compact `.pt` diagnostic snapshots and then raise.
+- No training path may silently replace NaN actions with zero.
+
+**Validation**:
+
+- A2-S source/unit validation passes: py_compile, PPO stability tests, and A/B/C/D/E/F/A2 regression suite (`73 passed`).
+- Runtime 16-frame smoke was blocked before env import by local Omniverse/Nucleus assets-root configuration, so the 1M-frame acceptance run remains pending.
+
+**Consequence**: A2 remains complete for trainable-governor implementation. Formal long learned-governor training is on hold until the 1M-frame stability acceptance run passes. Training convergence remains unproven.
+
+---
+
+## D-2026-07-05-006: instinctRL-A2 Learned Governor Training Readiness
+
+**Decision**: Make `instinctRL.mode=train` default to the learned governor actor path. Keep B0 `MinimalGovernor` and fixed/direct PPO behavior available for smoke and explicit baseline use. Treat this as formal training readiness, not convergence evidence.
+
+**Locked semantics**:
+
+- Actor policy action is 4D normalized: `[alpha, v_corr_x, v_corr_y, v_corr_z]`.
+- `alpha` is bounded in `[0,1]`.
+- `v_corr = (2 * action[1:4] - 1) * v_corr_limit`, with default `v_corr_limit=0.5 m/s`.
+- `v_gov_b = alpha * v_cmd_b + v_corr`, then norm-clipped to `velocity_limit`.
+- `v_cmd_b` and previous issued body command are read from actor-clean `state_vec` latest frame.
+- PPO log-prob/update uses the 4D normalized governor action.
+- The controller action remains 3D world-frame velocity produced by a train wrapper at the controller boundary.
+
+**Boundary**:
+
+- Actor observation remains exactly `lidar_grid + state_vec`.
+- Actor/governor code does not read pose, odom, map, SLAM, explicit velocity, dynamic-obstacle privileged state, or `info["v_cmd"]`.
+- Critic may still use privileged `info` fields, but actor/learned-governor output must not change when critic-only fields are perturbed.
+- ICS remains disabled by default for the first formal learned-governor training; when enabled, it applies between `v_gov_b` and body-to-world controller adaptation.
+
+**Deferred classification**:
+
+- D-001 is resolved by A2.
+- D-008 is resolved for first formal training requirements; ROS/H deployment audit remains deferred.
+- D-006 is not a first formal training blocker and remains G/evaluation curriculum work.
+- D-009/D-010/D-011 remain deferred robustness/ablation work.
+
+**Validation**:
+
+- A2 target tests pass: `13 passed, 5 warnings`.
+- A/B/C/D/E/F+A2 regression suite passes: `64 passed, 5 warnings`.
+- GPU learned-governor train smoke passes with rollout and checkpoint audits, `env_frames=16`, and final checkpoint `wandb/offline-run-20260705_203852-35lr9uce/files/checkpoint_final.pt`.
+
+**Consequence**: A2 trainable-governor implementation is complete. This consequence is superseded for long training by D-2026-07-05-007: formal long learned-governor training is on hold until the 1M-frame stability acceptance passes. Training convergence and learned-policy success remain unproven until supported by actual training/evaluation logs.
+
+---
+
 ## D-2026-07-05-005: instinctRL-F Minimal Training Smoke Readiness
 
 **Decision**: Accept the minimal `instinctRL.mode=train` smoke as training-readiness evidence after fixing PPO update and train-loop smoke controls. Do not treat it as convergence evidence or learned-governor success.

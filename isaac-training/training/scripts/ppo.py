@@ -37,6 +37,18 @@ from einops.layers.torch import Rearrange  # 用于方便地重排张量维度
 from torchrl.modules import ProbabilisticActor
 from torchrl.envs.transforms import CatTensors
 from utils import ValueNorm, make_mlp, IndependentNormal, Actor, GAE, make_batch, IndependentBeta, BetaActor
+from instinctRL.governor import TrainableGovernorDecoder
+from instinctRL.ppo_stability import (
+    assert_module_gradients_finite,
+    assert_module_parameters_finite,
+    assert_finite_tensor,
+    safe_normalize_advantage,
+    save_diagnostic_snapshot,
+)
+
+
+def _cfg_get(namespace, name: str, default):
+    return getattr(namespace, name, default) if namespace is not None else default
 
 
 class PPO(TensorDictModuleBase):
@@ -53,6 +65,44 @@ class PPO(TensorDictModuleBase):
         super().__init__()
         self.cfg = cfg
         self.device = device
+        governor_cfg = getattr(getattr(cfg, "instinctRL", None), "governor", None)
+        self.governor_mode = getattr(governor_cfg, "alpha_mode", "fixed")
+        self.learned_governor = self.governor_mode == "learned"
+        if self.governor_mode not in ("fixed", "learned"):
+            raise ValueError(
+                f"Unsupported instinctRL governor alpha_mode={self.governor_mode!r}; "
+                "expected 'fixed' or 'learned'."
+            )
+        self.max_grad_norm = float(_cfg_get(cfg, "max_grad_norm", 0.5))
+        if self.max_grad_norm <= 0:
+            raise ValueError(f"algo.max_grad_norm must be > 0, got {self.max_grad_norm}")
+        self.target_kl = float(_cfg_get(cfg, "target_kl", 0.02))
+        if self.target_kl < 0:
+            raise ValueError(f"algo.target_kl must be >= 0, got {self.target_kl}")
+        self.finite_audit_enabled = bool(_cfg_get(cfg, "finite_audit", True))
+        self.diagnostic_dir = str(_cfg_get(cfg, "diagnostic_dir", "ppo_diagnostics"))
+        value_norm_cfg = getattr(cfg, "value_norm", None)
+        self.value_norm_max_abs_bootstrap = float(
+            _cfg_get(value_norm_cfg, "max_abs_bootstrap", 1000.0)
+        )
+        self.value_norm_max_abs_return = float(
+            _cfg_get(value_norm_cfg, "max_abs_return", 1000.0)
+        )
+        if self.value_norm_max_abs_bootstrap <= 0:
+            raise ValueError(
+                "algo.value_norm.max_abs_bootstrap must be > 0, "
+                f"got {self.value_norm_max_abs_bootstrap}"
+            )
+        if self.value_norm_max_abs_return <= 0:
+            raise ValueError(
+                "algo.value_norm.max_abs_return must be > 0, "
+                f"got {self.value_norm_max_abs_return}"
+            )
+        actor_cfg = getattr(cfg, "actor", None)
+        self.action_eps = float(_cfg_get(actor_cfg, "action_eps", 1e-6))
+        if not 0.0 < self.action_eps < 0.5:
+            raise ValueError(f"actor.action_eps must be in (0, 0.5), got {self.action_eps}")
+        self._update_index = 0
 
         # ============================================
         # 1. LiDAR CNN encoder (multi-channel input)
@@ -96,8 +146,7 @@ class PPO(TensorDictModuleBase):
         # ============================================
         # 3. Critic 特征提取器（actor 特征 + 特权状态）
         # ============================================
-        # instinctRL-0: Critic may use privileged drone_state,
-        # target_rpos, and target_distance from info namespace.
+        # instinctRL: Critic may use task-aligned privileged fields from info.
         # These fields are never seen by the actor.
         critic_input_network = nn.Sequential(
             nn.LazyLinear(256),
@@ -107,11 +156,12 @@ class PPO(TensorDictModuleBase):
         flatten_privileged = nn.Flatten(start_dim=1)
         self.critic_feature_extractor = TensorDictSequential(
             TensorDictModule(flatten_privileged, [("info", "drone_state")], ["_critic_drone_state"]),
-            TensorDictModule(flatten_privileged, [("info", "target_rpos")], ["_critic_target_rpos"]),
-            TensorDictModule(flatten_privileged, [("info", "target_distance")], ["_critic_target_distance"]),
+            TensorDictModule(flatten_privileged, [("info", "v_cmd")], ["_critic_v_cmd"]),
+            TensorDictModule(flatten_privileged, [("info", "actual_velocity_b")], ["_critic_actual_velocity_b"]),
+            TensorDictModule(flatten_privileged, [("info", "min_clearance")], ["_critic_min_clearance"]),
             CatTensors(
                 ["_actor_feature", "_critic_drone_state",
-                 "_critic_target_rpos", "_critic_target_distance"],
+                 "_critic_v_cmd", "_critic_actual_velocity_b", "_critic_min_clearance"],
                 "_critic_input", del_keys=False
             ),
             TensorDictModule(critic_input_network, ["_critic_input"], ["_critic_feature"]),
@@ -122,15 +172,45 @@ class PPO(TensorDictModuleBase):
         # ============================================
         # 输入：_actor_feature (LiDAR-derived, 256-dim)
         # 输出：Beta 分布的参数 (alpha, beta)
-        # 动作空间：3维速度指令 [vx, vy, vz]，范围 [0, 1]（后续会缩放）
-        self.n_agents, self.action_dim = action_spec.shape
+        # 动作空间：
+        #   fixed/direct: 3D normalized velocity action
+        #   learned governor: 4D normalized [alpha, v_corr_x, v_corr_y, v_corr_z]
+        self.n_agents, controller_action_dim = action_spec.shape
+        self.controller_action_dim = controller_action_dim
+        self.action_dim = (
+            TrainableGovernorDecoder.action_dim
+            if self.learned_governor
+            else controller_action_dim
+        )
         self.actor = ProbabilisticActor(
-            TensorDictModule(BetaActor(self.action_dim), ["_actor_feature"], ["alpha", "beta"]),
+            TensorDictModule(
+                BetaActor(
+                    self.action_dim,
+                    alpha_min=_cfg_get(actor_cfg, "beta_alpha_min", 1.0),
+                    alpha_max=_cfg_get(actor_cfg, "beta_alpha_max", 30.0),
+                    beta_min=_cfg_get(actor_cfg, "beta_beta_min", 1.0),
+                    beta_max=_cfg_get(actor_cfg, "beta_beta_max", 30.0),
+                ),
+                ["_actor_feature"],
+                ["alpha", "beta"],
+            ),
             in_keys=["alpha", "beta"],
             out_keys=[("agents", "action_normalized")],  # 输出在 [0, 1] 之间
             distribution_class=IndependentBeta,  # 使用 Beta 分布
             return_log_prob=True  # 返回对数概率（用于计算损失）
         ).to(self.device)
+        self.governor_decoder = None
+        if self.learned_governor:
+            self.governor_decoder = TrainableGovernorDecoder(
+                v_corr_limit=getattr(governor_cfg, "v_corr_limit", 0.5),
+                velocity_limit=getattr(governor_cfg, "velocity_limit", 2.0),
+                smoothing_tau=getattr(governor_cfg, "smoothing_tau", 0.0),
+                null_vcorr_gate_enabled=getattr(
+                    governor_cfg, "null_vcorr_gate_enabled", True
+                ),
+                null_vcorr_gate_eps=getattr(governor_cfg, "null_vcorr_gate_eps", 0.25),
+                null_vcorr_gate_min=getattr(governor_cfg, "null_vcorr_gate_min", 0.25),
+            ).to(self.device)
 
         # ============================================
         # 5. Critic 网络（价值网络）
@@ -169,7 +249,7 @@ class PPO(TensorDictModuleBase):
         )
         self.critic_optim = torch.optim.Adam(
             self.critic.parameters(), 
-            lr=cfg.actor.learning_rate
+            lr=_cfg_get(getattr(cfg, "critic", None), "learning_rate", cfg.actor.learning_rate)
         )
 
         # ============================================
@@ -195,8 +275,9 @@ class PPO(TensorDictModuleBase):
             tensordict: 包含观测的字典
                 - ("agents", "observation", "lidar"): LiDAR 数据 (actor input)
                 - ("info", "drone_state"): 无人机特权状态 (critic-only)
-                - ("info", "target_rpos"): 目标相对位置 (critic-only)
-                - ("info", "target_distance"): 目标距离 (critic-only)
+                - ("info", "v_cmd"): body-frame command (critic-only)
+                - ("info", "actual_velocity_b"): actual body velocity (critic-only)
+                - ("info", "min_clearance"): MID360 clearance (critic-only)
         
         返回:
             tensordict: 添加了动作和价值的字典
@@ -210,21 +291,231 @@ class PPO(TensorDictModuleBase):
         self.critic_feature_extractor(tensordict)
         
         # Actor 前向：生成动作分布并采样
-        # 输出：("agents", "action_normalized") ∈ [0, 1]^3
-        self.actor(tensordict)
+        # 输出：
+        #   fixed/direct: ("agents", "action_normalized") ∈ [0, 1]^3
+        #   learned governor: ("agents", "action_normalized") ∈ [0, 1]^4
+        self._sample_actor_action(tensordict, self._context("forward"))
         
         # Critic 前向：评估状态价值
         # 输出："state_value" ∈ R
         self.critic(tensordict)
+        self._audit_tensor("state_value", tensordict["state_value"], self._context("forward"), tensordict)
 
-        # ============================================
-        # 动作：直接输出世界坐标系速度（无 goal-frame 变换）
-        # ============================================
-        # instinctRL-0: No goal-frame transform — outputs world-frame velocity.
-        # instinctRL-A will replace this with body-frame governor output.
-        actions = (2 * tensordict["agents", "action_normalized"] * self.cfg.actor.action_limit) - self.cfg.actor.action_limit
-        tensordict["agents", "action"] = actions
+        self.decode_action(tensordict)
         
+        return tensordict
+
+    def _context(self, phase: str, epoch: int = -1, minibatch: int = -1) -> dict:
+        return {
+            "phase": phase,
+            "update_index": int(self._update_index),
+            "epoch": int(epoch),
+            "minibatch": int(minibatch),
+        }
+
+    def _diagnostic_modules(self) -> dict:
+        return {
+            "actor_feature_extractor": self.actor_feature_extractor,
+            "critic_feature_extractor": self.critic_feature_extractor,
+            "actor": self.actor,
+            "critic": self.critic,
+        }
+
+    def _diagnostic_tensors(self, tensordict: TensorDict = None, extra: dict = None) -> dict:
+        tensors = {}
+        if tensordict is not None:
+            candidate_keys = [
+                ("agents", "observation", "state_vec"),
+                ("agents", "observation", "lidar_grid"),
+                ("agents", "action_normalized"),
+                "sample_log_prob",
+                "alpha",
+                "beta",
+                "state_value",
+                "adv",
+                "ret",
+                ("next", "agents", "reward"),
+                ("next", "stats", "reward_tracking"),
+                ("next", "stats", "reward_anchor"),
+                ("next", "stats", "reward_safety"),
+                ("next", "stats", "reward_ics_compliance"),
+                ("next", "stats", "reward_intervention"),
+                ("next", "stats", "reward_smoothness"),
+                ("next", "stats", "reward_null_command_speed"),
+                ("next", "stats", "reward_null_command_output"),
+                ("next", "stats", "reward_proxy_tracking"),
+                ("next", "stats", "reward_preservation_low"),
+                ("next", "stats", "reward_preservation_high"),
+                ("next", "stats", "reward_command_amplification"),
+                ("next", "stats", "reward_height_floor"),
+                ("next", "stats", "reward_height_ceiling"),
+                ("next", "stats", "reward_collision"),
+                ("next", "stats", "reward_total"),
+                "governor_alpha",
+                "governor_v_corr",
+                "governor_v_corr_z",
+                "governor_v_cmd_b",
+                "governor_v_cmd_b_z",
+                "governor_v_gov_b",
+                "governor_v_gov_b_z",
+                "governor_v_final_b",
+                "governor_v_final_b_z",
+                ("info", "ics_beta"),
+                ("info", "ics_command_speed"),
+                ("info", "ics_final_speed"),
+            ]
+            for key in candidate_keys:
+                try:
+                    value = tensordict.get(key)
+                except Exception:
+                    value = None
+                if value is not None:
+                    tensors[str(key)] = value
+        if extra:
+            tensors.update(extra)
+        return tensors
+
+    def _save_diagnostic(
+        self,
+        reason: str,
+        context: dict,
+        tensordict: TensorDict = None,
+        extra_tensors: dict = None,
+    ) -> str:
+        return save_diagnostic_snapshot(
+            self.diagnostic_dir,
+            reason,
+            context,
+            tensors=self._diagnostic_tensors(tensordict, extra_tensors),
+            modules=self._diagnostic_modules(),
+        )
+
+    def _audit_tensor(
+        self,
+        name: str,
+        tensor: torch.Tensor,
+        context: dict,
+        tensordict: TensorDict = None,
+        extra_tensors: dict = None,
+    ) -> None:
+        if not self.finite_audit_enabled:
+            return
+        try:
+            assert_finite_tensor(name, tensor)
+        except ValueError as exc:
+            path = self._save_diagnostic(
+                f"nonfinite_{name}",
+                context,
+                tensordict,
+                extra_tensors={name: tensor, **(extra_tensors or {})},
+            )
+            raise ValueError(f"{exc}; diagnostic_snapshot={path}") from exc
+
+    def _audit_value_norm(self, context: dict, tensordict: TensorDict = None) -> None:
+        if not self.finite_audit_enabled:
+            return
+        buffers = {
+            f"value_norm_{name}": getattr(self.value_norm, name)
+            for name in ("running_mean", "running_mean_sq", "debiasing_term")
+        }
+        for name in ("running_mean", "running_mean_sq", "debiasing_term"):
+            tensor = getattr(self.value_norm, name)
+            self._audit_tensor(
+                f"value_norm_{name}",
+                tensor,
+                context,
+                tensordict,
+                extra_tensors=buffers,
+            )
+
+    def _clip_finite_tensor(
+        self,
+        name: str,
+        tensor: torch.Tensor,
+        max_abs: float,
+        context: dict,
+        tensordict: TensorDict = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        self._audit_tensor(name, tensor, context, tensordict, extra_tensors={name: tensor})
+        clipped = tensor.clamp(-max_abs, max_abs)
+        clipped_fraction = (tensor.abs() > max_abs).float().mean()
+        self._audit_tensor(
+            f"{name}_clipped",
+            clipped,
+            context,
+            tensordict,
+            extra_tensors={f"{name}_clipped": clipped, f"{name}_clipped_fraction": clipped_fraction},
+        )
+        return clipped, clipped_fraction
+
+    def _audit_module_gradients(self, name: str, module: nn.Module, context: dict, tensordict: TensorDict) -> None:
+        if not self.finite_audit_enabled:
+            return
+        try:
+            assert_module_gradients_finite(name, module)
+        except ValueError as exc:
+            path = self._save_diagnostic(f"nonfinite_gradients_{name}", context, tensordict)
+            raise ValueError(f"{exc}; diagnostic_snapshot={path}") from exc
+
+    def _audit_module_parameters(self, name: str, module: nn.Module, context: dict, tensordict: TensorDict) -> None:
+        if not self.finite_audit_enabled:
+            return
+        try:
+            assert_module_parameters_finite(name, module)
+        except ValueError as exc:
+            path = self._save_diagnostic(f"nonfinite_parameters_{name}", context, tensordict)
+            raise ValueError(f"{exc}; diagnostic_snapshot={path}") from exc
+
+    def _validate_actor_distribution(self, tensordict: TensorDict, context: dict) -> None:
+        alpha = tensordict["alpha"]
+        beta = tensordict["beta"]
+        self._audit_tensor("actor_beta_alpha", alpha, context, tensordict)
+        self._audit_tensor("actor_beta_beta", beta, context, tensordict)
+
+    def _clamp_action_and_recompute_log_prob(self, tensordict: TensorDict, context: dict) -> None:
+        action = tensordict["agents", "action_normalized"]
+        self._audit_tensor("action_normalized", action, context, tensordict)
+        clamped = action.clamp(self.action_eps, 1.0 - self.action_eps)
+        tensordict["agents", "action_normalized"] = clamped
+        action_dist = self.actor.get_dist(tensordict)
+        self._validate_actor_distribution(tensordict, context)
+        log_prob = action_dist.log_prob(clamped)
+        tensordict["sample_log_prob"] = log_prob
+        self._audit_tensor("sample_log_prob", log_prob, context, tensordict)
+
+    def _sample_actor_action(self, tensordict: TensorDict, context: dict) -> None:
+        try:
+            self.actor(tensordict)
+        except Exception as exc:
+            if self.finite_audit_enabled:
+                path = self._save_diagnostic("actor_forward_failure", context, tensordict)
+                raise type(exc)(f"{exc}; diagnostic_snapshot={path}") from exc
+            raise
+        self._validate_actor_distribution(tensordict, context)
+        self._clamp_action_and_recompute_log_prob(tensordict, context)
+
+    def decode_action(self, tensordict: TensorDict) -> TensorDict:
+        """Decode normalized policy action into either direct action or learned governor output."""
+        action_normalized = tensordict["agents", "action_normalized"]
+        if self.learned_governor:
+            state_vec = tensordict["agents", "observation", "state_vec"]
+            gov_out = self.governor_decoder(action_normalized, state_vec)
+            v_cmd_b = state_vec[..., -7:-4]
+            tensordict["governor_alpha"] = gov_out.alpha
+            tensordict["governor_v_corr"] = gov_out.v_corr
+            tensordict["governor_v_corr_z"] = gov_out.v_corr[..., 2:3]
+            tensordict["governor_v_cmd_b"] = v_cmd_b
+            tensordict["governor_v_cmd_b_z"] = v_cmd_b[..., 2:3]
+            tensordict["governor_v_gov_b"] = gov_out.v_gov
+            tensordict["governor_v_gov_b_z"] = gov_out.v_gov[..., 2:3]
+            # Collector wrappers overwrite this with world-frame velocity. Keeping a
+            # 3D body-frame command here preserves standalone PPO forward usability.
+            tensordict["agents", "action"] = gov_out.v_gov
+        else:
+            actions = (
+                2 * action_normalized * self.cfg.actor.action_limit
+            ) - self.cfg.actor.action_limit
+            tensordict["agents", "action"] = actions
         return tensordict
 
     def verify_actor_critic_separation(self, tensordict: TensorDict) -> bool:
@@ -232,7 +523,7 @@ class PPO(TensorDictModuleBase):
         Test that changing critic-only privileged fields does NOT change actor actions.
 
         This is the canonical audit check for the instinctRL actor input contract:
-        the critic may see privileged state (drone_state, target_rpos, target_distance),
+        the critic may see privileged task state,
         but the actor must be independent of those fields.
 
         Args:
@@ -247,30 +538,49 @@ class PPO(TensorDictModuleBase):
         with torch.no_grad():
             # Reference: actor output with original privileged fields
             self.actor_feature_extractor(tensordict)
-            self.actor(tensordict)
+            self._sample_actor_action(tensordict, self._context("actor_critic_separation_reference"))
+            self.decode_action(tensordict)
             ref_action = tensordict["agents", "action_normalized"].clone()
+            ref_governor = (
+                tensordict["governor_v_gov_b"].clone()
+                if self.learned_governor
+                else tensordict["agents", "action"].clone()
+            )
 
             # Perturb ALL critic-only privileged fields significantly
             perturbed_td = tensordict.clone()
             perturbed_td["info", "drone_state"] += (
                 torch.randn_like(perturbed_td["info", "drone_state"]) * 10.0
             )
-            perturbed_td["info", "target_rpos"] += (
-                torch.randn_like(perturbed_td["info", "target_rpos"]) * 10.0
+            perturbed_td["info", "v_cmd"] += (
+                torch.randn_like(perturbed_td["info", "v_cmd"]) * 10.0
             )
-            perturbed_td["info", "target_distance"] += (
-                torch.randn_like(perturbed_td["info", "target_distance"]) * 10.0
+            perturbed_td["info", "actual_velocity_b"] += (
+                torch.randn_like(perturbed_td["info", "actual_velocity_b"]) * 10.0
+            )
+            perturbed_td["info", "min_clearance"] += (
+                torch.randn_like(perturbed_td["info", "min_clearance"]) * 10.0
             )
 
             # Re-run actor on perturbed data (critic fields changed, actor should be unaffected)
             self.actor_feature_extractor(perturbed_td)
-            self.actor(perturbed_td)
+            self._sample_actor_action(perturbed_td, self._context("actor_critic_separation_perturbed"))
+            self.decode_action(perturbed_td)
             perturbed_action = perturbed_td["agents", "action_normalized"]
+            perturbed_governor = (
+                perturbed_td["governor_v_gov_b"]
+                if self.learned_governor
+                else perturbed_td["agents", "action"]
+            )
 
             assert torch.allclose(ref_action, perturbed_action, atol=1e-5), (
                 "instinctRL-0 AUDIT FAIL: Changing critic-only privileged fields "
-                "(drone_state, target_rpos, target_distance) altered actor output! "
+                "altered actor output! "
                 "Actor input contract violated."
+            )
+            assert torch.allclose(ref_governor, perturbed_governor, atol=1e-5), (
+                "instinctRL-A2 AUDIT FAIL: Changing critic-only privileged fields "
+                "altered learned governor output. Actor/governor contract violated."
             )
         return True
 
@@ -300,17 +610,30 @@ class PPO(TensorDictModuleBase):
             next_tensordict = torch.vmap(self.actor_feature_extractor)(next_tensordict)
             next_tensordict = torch.vmap(self.critic_feature_extractor)(next_tensordict)
             next_values = self.critic(next_tensordict)["state_value"]
+            self._audit_tensor("next_state_value", next_values, self._context("gae"), next_tensordict)
         
         # 获取奖励和终止标志
         rewards = tensordict["next", "agents", "reward"]  # r_t
         dones = tensordict["next", "terminated"]  # 是否终止
+        self._audit_tensor("reward", rewards, self._context("gae"), tensordict)
 
         # ============================================
         # 第 2 步：反归一化价值（恢复真实尺度）
         # ============================================
         values = tensordict["state_value"]  # V(s_t)，在数据收集时已计算
-        values = self.value_norm.denormalize(values)
-        next_values = self.value_norm.denormalize(next_values)
+        self._audit_tensor("raw_state_value", values, self._context("gae"), tensordict)
+        self._audit_tensor("raw_next_state_value", next_values, self._context("gae"), next_tensordict)
+        self._audit_value_norm(self._context("gae_pre_denormalize"), tensordict)
+        values = self.value_norm.denormalize(
+            values,
+            max_abs=self.value_norm_max_abs_bootstrap,
+        )
+        next_values = self.value_norm.denormalize(
+            next_values,
+            max_abs=self.value_norm_max_abs_bootstrap,
+        )
+        self._audit_tensor("denormalized_value", values, self._context("gae"), tensordict)
+        self._audit_tensor("denormalized_next_value", next_values, self._context("gae"), tensordict)
 
         # ============================================
         # 第 3 步：计算 GAE 优势函数
@@ -319,16 +642,47 @@ class PPO(TensorDictModuleBase):
         # A_t = δ_t + (γλ)δ_{t+1} + (γλ)²δ_{t+2} + ...
         # 其中 δ_t = r_t + γV(s_{t+1}) - V(s_t)
         adv, ret = self.gae(rewards, dones, values, next_values)
+        self._audit_tensor("advantage_raw", adv, self._context("gae"), tensordict)
+        self._audit_tensor("return_raw", ret, self._context("gae"), tensordict)
+        ret, _return_clip_fraction = self._clip_finite_tensor(
+            "return_pre_value_norm_clip",
+            ret,
+            self.value_norm_max_abs_return,
+            self._context("gae_return_clip"),
+            tensordict,
+        )
         
         # 标准化优势函数：均值为0，标准差为1
         # 作用：稳定训练，避免梯度爆炸
-        adv_mean = adv.mean()
-        adv_std = adv.std()
-        adv = (adv - adv_mean) / adv_std.clip(1e-7)
+        adv = safe_normalize_advantage(adv, eps=1e-6)
         
         # 更新价值归一化统计量
-        self.value_norm.update(ret)
+        value_norm_context = self._context("gae_value_norm_update")
+        self._audit_tensor(
+            "return_pre_value_norm_update",
+            ret,
+            value_norm_context,
+            tensordict,
+            extra_tensors={"return_pre_value_norm_update": ret},
+        )
+        try:
+            self.value_norm.update(ret)
+        except ValueError as exc:
+            path = self._save_diagnostic(
+                "value_norm_update_failure",
+                value_norm_context,
+                tensordict,
+                extra_tensors={
+                    "return_pre_value_norm_update": ret,
+                    "value_norm_running_mean": self.value_norm.running_mean,
+                    "value_norm_running_mean_sq": self.value_norm.running_mean_sq,
+                    "value_norm_debiasing_term": self.value_norm.debiasing_term,
+                },
+            )
+            raise ValueError(f"{exc}; diagnostic_snapshot={path}") from exc
+        self._audit_value_norm(self._context("gae_post_value_norm_update"), tensordict)
         ret = self.value_norm.normalize(ret)  # 归一化回报
+        self._audit_tensor("return_normalized", ret, self._context("gae"), tensordict)
         
         # 将优势和回报添加到 tensordict
         tensordict.set("adv", adv)
@@ -343,18 +697,24 @@ class PPO(TensorDictModuleBase):
         for epoch in range(self.cfg.training_epoch_num):
             # 将数据随机打乱并分成 minibatch
             batch = make_batch(tensordict, self.cfg.num_minibatches)
-            for minibatch in batch:
+            for minibatch_index, minibatch in enumerate(batch):
                 # 对每个 minibatch 执行一次梯度更新
-                infos.append(self._update(minibatch))
+                info = self._update(minibatch, epoch_index=epoch, minibatch_index=minibatch_index)
+                infos.append(info)
+                if bool(info["kl_early_stop"].item()):
+                    break
+            if infos and bool(infos[-1]["kl_early_stop"].item()):
+                break
         
         # 聚合所有更新的统计信息
         infos = torch.stack(infos).to_tensordict()
         infos = infos.apply(torch.mean, batch_size=[])
         
+        self._update_index += 1
         return {k: v.item() for k, v in infos.items()}    
 
     
-    def _update(self, tensordict):
+    def _update(self, tensordict, epoch_index: int = 0, minibatch_index: int = 0):
         """
         单次梯度更新
         
@@ -370,13 +730,57 @@ class PPO(TensorDictModuleBase):
         # ============================================
         # instinctRL-0: Asymmetric — actor features from LiDAR only,
         # critic features from actor features + privileged info.
+        context = self._context("ppo_update", epoch_index, minibatch_index)
+        self._audit_tensor(
+            "actor_observation_state_vec",
+            tensordict["agents", "observation", "state_vec"],
+            context,
+            tensordict,
+        )
+        self._audit_tensor(
+            "actor_observation_lidar_grid",
+            tensordict["agents", "observation", "lidar_grid"],
+            context,
+            tensordict,
+        )
         self.actor_feature_extractor(tensordict)
         
         # 获取当前策略的动作分布
-        action_dist = self.actor.get_dist(tensordict)  # Beta(alpha, beta)
+        try:
+            action_dist = self.actor.get_dist(tensordict)  # Beta(alpha, beta)
+        except Exception as exc:
+            if self.finite_audit_enabled:
+                path = self._save_diagnostic("actor_distribution_failure", context, tensordict)
+                raise type(exc)(f"{exc}; diagnostic_snapshot={path}") from exc
+            raise
+        self._validate_actor_distribution(tensordict, context)
+        old_action = tensordict[("agents", "action_normalized")]
+        self._audit_tensor("action_normalized", old_action, context, tensordict)
+        tensordict[("agents", "action_normalized")] = old_action.clamp(
+            self.action_eps, 1.0 - self.action_eps
+        )
         
         # 计算当前策略下采取该动作的对数概率
         log_probs = action_dist.log_prob(tensordict[("agents", "action_normalized")])
+        self._audit_tensor("log_prob", log_probs, context, tensordict, {"log_prob": log_probs})
+        old_log_probs = tensordict["sample_log_prob"]
+        self._audit_tensor("sample_log_prob_old", old_log_probs, context, tensordict)
+        approx_kl = (old_log_probs - log_probs).mean()
+        self._audit_tensor("approx_kl", approx_kl, context, tensordict, {"approx_kl": approx_kl})
+        if self.target_kl > 0.0 and approx_kl.item() > self.target_kl:
+            zero = torch.zeros((), device=log_probs.device)
+            return TensorDict({
+                "actor_loss": zero,
+                "critic_loss": zero,
+                "entropy": zero,
+                "actor_grad_norm": zero,
+                "critic_grad_norm": zero,
+                "actor_feature_grad_norm": zero,
+                "critic_feature_grad_norm": zero,
+                "explained_var": zero,
+                "approx_kl": approx_kl.detach(),
+                "kl_early_stop": torch.ones((), device=log_probs.device),
+            }, [])
 
         # ============================================
         # 第 2 步：计算熵损失（鼓励探索）
@@ -384,16 +788,20 @@ class PPO(TensorDictModuleBase):
         # 熵越大，策略越随机，探索性越强
         # 熵损失：-c * H(π)，最小化负熵 = 最大化熵
         action_entropy = action_dist.entropy()
+        self._audit_tensor("entropy", action_entropy, context, tensordict, {"entropy": action_entropy})
         entropy_loss = -self.cfg.entropy_loss_coefficient * torch.mean(action_entropy)
+        self._audit_tensor("entropy_loss", entropy_loss, context, tensordict, {"entropy_loss": entropy_loss})
 
         # ============================================
         # 第 3 步：计算 PPO-Clip Actor 损失
         # ============================================
         # PPO 的核心：限制策略更新幅度，避免性能崩溃
         advantage = tensordict["adv"]  # 优势函数 A(s,a)
+        self._audit_tensor("advantage", advantage, context, tensordict)
         
         # 重要性采样比率：π_new(a|s) / π_old(a|s)
         ratio = torch.exp(log_probs - tensordict["sample_log_prob"]).unsqueeze(-1)
+        self._audit_tensor("ppo_ratio", ratio, context, tensordict, {"ppo_ratio": ratio})
         
         # PPO-Clip 目标：
         # L^CLIP = E[min(ratio * A, clip(ratio, 1-ε, 1+ε) * A)]
@@ -407,6 +815,7 @@ class PPO(TensorDictModuleBase):
         # 取两者的最小值（悲观更新）
         # 乘以 action_dim 是为了缩放损失
         actor_loss = -torch.mean(torch.min(surr1, surr2)) * self.action_dim 
+        self._audit_tensor("actor_loss", actor_loss, context, tensordict, {"actor_loss": actor_loss})
 
         # ============================================
         # 第 4 步：计算 Critic 损失
@@ -414,8 +823,10 @@ class PPO(TensorDictModuleBase):
         # 目标：让 V(s) 接近真实回报 G_t
         b_value = tensordict["state_value"]  # 旧的价值估计
         ret = tensordict["ret"]  # 真实回报 G_t
+        self._audit_tensor("return", ret, context, tensordict)
         self.critic_feature_extractor(tensordict)
         value = self.critic(tensordict)["state_value"]  # 新的价值估计
+        self._audit_tensor("value", value, context, tensordict)
         
         # Value Clipping：限制价值函数的更新幅度
         # 原因：防止价值函数变化过大，导致训练不稳定
@@ -428,11 +839,13 @@ class PPO(TensorDictModuleBase):
         critic_loss_clipped = self.critic_loss_fn(ret, value_clipped)
         critic_loss_original = self.critic_loss_fn(ret, value)
         critic_loss = torch.max(critic_loss_clipped, critic_loss_original)
+        self._audit_tensor("critic_loss", critic_loss, context, tensordict, {"critic_loss": critic_loss})
 
         # ============================================
         # 第 5 步：总损失 = 熵损失 + Actor 损失 + Critic 损失
         # ============================================
         loss = entropy_loss + actor_loss + critic_loss
+        self._audit_tensor("total_loss", loss, context, tensordict, {"total_loss": loss})
 
         # ============================================
         # 第 6 步：反向传播和梯度更新
@@ -444,25 +857,41 @@ class PPO(TensorDictModuleBase):
         self.critic_optim.zero_grad()
         loss.backward()  # 计算梯度
 
+        for module_name, module in self._diagnostic_modules().items():
+            self._audit_module_gradients(module_name, module, context, tensordict)
+
         # 梯度裁剪：防止梯度爆炸
+        actor_feature_grad_norm = nn.utils.clip_grad.clip_grad_norm_(
+            self.actor_feature_extractor.parameters(), max_norm=self.max_grad_norm
+        )
+        critic_feature_grad_norm = nn.utils.clip_grad.clip_grad_norm_(
+            self.critic_feature_extractor.parameters(), max_norm=self.max_grad_norm
+        )
         actor_grad_norm = nn.utils.clip_grad.clip_grad_norm_(
-            self.actor.parameters(), max_norm=5.
+            self.actor.parameters(), max_norm=self.max_grad_norm
         )
         critic_grad_norm = nn.utils.clip_grad.clip_grad_norm_(
-            self.critic.parameters(), max_norm=5.
+            self.critic.parameters(), max_norm=self.max_grad_norm
         )
+        self._audit_tensor("actor_feature_grad_norm", actor_feature_grad_norm, context, tensordict)
+        self._audit_tensor("critic_feature_grad_norm", critic_feature_grad_norm, context, tensordict)
+        self._audit_tensor("actor_grad_norm", actor_grad_norm, context, tensordict)
+        self._audit_tensor("critic_grad_norm", critic_grad_norm, context, tensordict)
         
         # 应用梯度
         self.actor_feature_optim.step()
         self.actor_optim.step()
         self.critic_optim.step()
+        for module_name, module in self._diagnostic_modules().items():
+            self._audit_module_parameters(module_name, module, context, tensordict)
         
         # ============================================
         # 第 7 步：计算解释方差（评估 Critic 质量）
         # ============================================
         # Explained Variance = 1 - Var(V - G) / Var(G)
         # 接近 1：Critic 准确；接近 0：Critic 无用
-        explained_var = 1 - F.mse_loss(value, ret) / ret.var()
+        explained_var = 1 - F.mse_loss(value, ret) / ret.var().clamp_min(1e-6)
+        self._audit_tensor("explained_var", explained_var, context, tensordict, {"explained_var": explained_var})
         
         return TensorDict({
             "actor_loss": actor_loss,
@@ -470,5 +899,9 @@ class PPO(TensorDictModuleBase):
             "entropy": entropy_loss,
             "actor_grad_norm": actor_grad_norm,
             "critic_grad_norm": critic_grad_norm,
-            "explained_var": explained_var
+            "actor_feature_grad_norm": actor_feature_grad_norm,
+            "critic_feature_grad_norm": critic_feature_grad_norm,
+            "explained_var": explained_var,
+            "approx_kl": approx_kl.detach(),
+            "kl_early_stop": torch.zeros((), device=log_probs.device),
         }, [])

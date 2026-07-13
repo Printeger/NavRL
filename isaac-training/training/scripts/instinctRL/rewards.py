@@ -19,6 +19,14 @@ REWARD_COMPONENT_KEYS = (
     "reward_ics_compliance",
     "reward_intervention",
     "reward_smoothness",
+    "reward_null_command_speed",
+    "reward_null_command_output",
+    "reward_proxy_tracking",
+    "reward_preservation_low",
+    "reward_preservation_high",
+    "reward_command_amplification",
+    "reward_height_floor",
+    "reward_height_ceiling",
     "reward_collision",
     "reward_total",
 )
@@ -30,11 +38,24 @@ class RewardConfig:
 
     enabled: bool = True
     tracking_weight: float = 1.0
-    anchor_weight: float = 0.5
+    anchor_weight: float = 4.0
     safety_weight: float = 0.5
     ics_compliance_weight: float = 1.0
     intervention_weight: float = 0.05
     smoothness_weight: float = 0.05
+    null_command_speed_weight: float = 2.0
+    null_command_output_weight: float = 0.1
+    null_output_anchor_loss_threshold: float = 0.05
+    proxy_tracking_weight: float = 0.25
+    preservation_low_weight: float = 0.5
+    preservation_high_weight: float = 0.5
+    preservation_lower: float = 0.75
+    preservation_upper: float = 1.05
+    command_amplification_weight: float = 0.5
+    height_floor: float = 0.5
+    height_floor_weight: float = 8.0
+    height_ceiling: float = 4.0
+    height_ceiling_weight: float = 0.0
     collision_weight: float = 10.0
     clearance_safe: float = 0.8
     clearance_margin: float = 0.2
@@ -53,6 +74,19 @@ class RewardConfig:
             "ics_compliance_weight",
             "intervention_weight",
             "smoothness_weight",
+            "null_command_speed_weight",
+            "null_command_output_weight",
+            "null_output_anchor_loss_threshold",
+            "proxy_tracking_weight",
+            "preservation_low_weight",
+            "preservation_high_weight",
+            "preservation_lower",
+            "preservation_upper",
+            "command_amplification_weight",
+            "height_floor",
+            "height_floor_weight",
+            "height_ceiling",
+            "height_ceiling_weight",
             "collision_weight",
             "clearance_safe",
             "clearance_margin",
@@ -72,16 +106,33 @@ class RewardConfig:
             "ics_compliance_weight",
             "intervention_weight",
             "smoothness_weight",
+            "null_command_speed_weight",
+            "null_command_output_weight",
+            "null_output_anchor_loss_threshold",
+            "proxy_tracking_weight",
+            "preservation_low_weight",
+            "preservation_high_weight",
+            "command_amplification_weight",
+            "height_floor_weight",
+            "height_ceiling_weight",
             "collision_weight",
         ):
             if getattr(self, name) < 0.0:
                 raise ValueError(f"{name} must be >= 0")
+        if self.height_floor < 0.0:
+            raise ValueError("height_floor must be >= 0")
+        if self.height_ceiling < self.height_floor:
+            raise ValueError("height_ceiling must be >= height_floor")
         if self.clearance_safe <= 0.0:
             raise ValueError("clearance_safe must be > 0")
         if self.clearance_margin < 0.0:
             raise ValueError("clearance_margin must be >= 0")
         if self.max_reward_abs <= 0.0:
             raise ValueError("max_reward_abs must be > 0")
+        if self.preservation_lower < 0.0:
+            raise ValueError("preservation_lower must be >= 0")
+        if self.preservation_upper < self.preservation_lower:
+            raise ValueError("preservation_upper must be >= preservation_lower")
         if not (0.0 <= self.min_anchor_valid_fraction <= 1.0):
             raise ValueError("min_anchor_valid_fraction must satisfy 0.0 <= value <= 1.0")
         if self.command_eps <= 0.0:
@@ -94,11 +145,28 @@ class RewardConfig:
         return cls(
             enabled=bool(getattr(cfg, "enabled", True)),
             tracking_weight=float(getattr(cfg, "tracking_weight", 1.0)),
-            anchor_weight=float(getattr(cfg, "anchor_weight", 0.5)),
+            anchor_weight=float(getattr(cfg, "anchor_weight", 4.0)),
             safety_weight=float(getattr(cfg, "safety_weight", 0.5)),
             ics_compliance_weight=float(getattr(cfg, "ics_compliance_weight", 1.0)),
             intervention_weight=float(getattr(cfg, "intervention_weight", 0.05)),
             smoothness_weight=float(getattr(cfg, "smoothness_weight", 0.05)),
+            null_command_speed_weight=float(getattr(cfg, "null_command_speed_weight", 2.0)),
+            null_command_output_weight=float(getattr(cfg, "null_command_output_weight", 0.1)),
+            null_output_anchor_loss_threshold=float(
+                getattr(cfg, "null_output_anchor_loss_threshold", 0.05)
+            ),
+            proxy_tracking_weight=float(getattr(cfg, "proxy_tracking_weight", 0.25)),
+            preservation_low_weight=float(getattr(cfg, "preservation_low_weight", 0.5)),
+            preservation_high_weight=float(getattr(cfg, "preservation_high_weight", 0.5)),
+            preservation_lower=float(getattr(cfg, "preservation_lower", 0.75)),
+            preservation_upper=float(getattr(cfg, "preservation_upper", 1.05)),
+            command_amplification_weight=float(
+                getattr(cfg, "command_amplification_weight", 0.5)
+            ),
+            height_floor=float(getattr(cfg, "height_floor", 0.5)),
+            height_floor_weight=float(getattr(cfg, "height_floor_weight", 8.0)),
+            height_ceiling=float(getattr(cfg, "height_ceiling", 4.0)),
+            height_ceiling_weight=float(getattr(cfg, "height_ceiling_weight", 0.0)),
             collision_weight=float(getattr(cfg, "collision_weight", 10.0)),
             clearance_safe=float(getattr(cfg, "clearance_safe", 0.8)),
             clearance_margin=float(getattr(cfg, "clearance_margin", 0.2)),
@@ -108,6 +176,8 @@ class RewardConfig:
             ),
             min_anchor_valid_fraction=float(getattr(cfg, "min_anchor_valid_fraction", 0.1)),
             tracking_beta_gate=bool(getattr(cfg, "tracking_beta_gate", True)),
+            command_eps=float(getattr(cfg, "command_eps", 1e-3)),
+            eps=float(getattr(cfg, "eps", 1e-6)),
         )
 
 
@@ -142,6 +212,7 @@ class InstinctRLRewardComputer:
         ics_emergency: Optional[torch.Tensor] = None,
         ics_active_beam_count: Optional[torch.Tensor] = None,
         actual_velocity_b: Optional[torch.Tensor] = None,
+        height_w: Optional[torch.Tensor] = None,
     ) -> RewardTerms:
         v_cmd = self._vector("v_cmd_b", v_cmd_b)
         N = v_cmd.shape[0]
@@ -160,12 +231,18 @@ class InstinctRLRewardComputer:
         active_beam_count = self._scalar(
             "ics_active_beam_count", ics_active_beam_count, N, default=0.0
         ).clamp_min(0.0)
+        height_w = self._scalar("height_w", height_w, N, default=self.cfg.height_floor)
 
         tracking_signal = v_final
+        actual_signal = v_final
+        if actual_velocity_b is not None:
+            actual_signal = self._vector("actual_velocity_b", actual_velocity_b, N)
         if self.cfg.use_privileged_velocity_for_reward and actual_velocity_b is not None:
-            tracking_signal = self._vector("actual_velocity_b", actual_velocity_b, N)
+            tracking_signal = actual_signal
 
-        command_active = (v_cmd.norm(dim=-1, keepdim=True) > self.cfg.command_eps).to(v_cmd.dtype)
+        command_norm = v_cmd.norm(dim=-1, keepdim=True)
+        command_active = (command_norm > self.cfg.command_eps).to(v_cmd.dtype)
+        null_command = 1.0 - command_active
         tracking_error = (tracking_signal - v_cmd).norm(dim=-1, keepdim=True)
         raw_tracking = -self.cfg.tracking_weight * command_active * tracking_error
         if self.cfg.tracking_beta_gate:
@@ -181,6 +258,12 @@ class InstinctRLRewardComputer:
 
         anchor_valid = (anchor_valid_fraction >= self.cfg.min_anchor_valid_fraction).to(v_cmd.dtype)
         reward_anchor = -self.cfg.anchor_weight * anchor_loss * anchor_active * anchor_valid
+        station_correction_allowed = (
+            anchor_active
+            * anchor_valid
+            * (anchor_loss >= self.cfg.null_output_anchor_loss_threshold).to(v_cmd.dtype)
+        )
+        null_output_bias_gate = (1.0 - station_correction_allowed).clamp(0.0, 1.0)
 
         clearance_threshold = self.cfg.clearance_safe + self.cfg.clearance_margin
         clearance_violation = (clearance_threshold - min_clearance).clamp_min(0.0)
@@ -190,6 +273,55 @@ class InstinctRLRewardComputer:
         reward_smoothness = -self.cfg.smoothness_weight * (
             v_final - prev_v_final
         ).norm(dim=-1, keepdim=True)
+        reward_null_command_speed = (
+            -self.cfg.null_command_speed_weight
+            * null_command
+            * actual_signal.norm(dim=-1, keepdim=True)
+        )
+        reward_null_command_output = (
+            -self.cfg.null_command_output_weight
+            * null_command
+            * null_output_bias_gate
+            * v_final.norm(dim=-1, keepdim=True)
+        )
+        command_safe_gate = (
+            command_active
+            * (beta >= 0.999).to(v_cmd.dtype)
+            * (1.0 - emergency)
+        )
+        reward_proxy_tracking = (
+            -self.cfg.proxy_tracking_weight
+            * command_safe_gate
+            * (v_final - v_cmd).norm(dim=-1, keepdim=True)
+        )
+        preservation_ratio = v_final.norm(dim=-1, keepdim=True) / command_norm.clamp_min(
+            self.cfg.command_eps
+        )
+        preservation_low_violation = (
+            self.cfg.preservation_lower - preservation_ratio
+        ).clamp_min(0.0) * command_safe_gate
+        preservation_high_violation = (
+            preservation_ratio - self.cfg.preservation_upper
+        ).clamp_min(0.0) * command_safe_gate
+        reward_preservation_low = (
+            -self.cfg.preservation_low_weight * preservation_low_violation
+        )
+        reward_preservation_high = (
+            -self.cfg.preservation_high_weight * preservation_high_violation
+        )
+        amplification = (preservation_ratio - 1.0).clamp_min(0.0)
+        reward_command_amplification = (
+            -self.cfg.command_amplification_weight * command_safe_gate * amplification
+        )
+        height_floor_violation = (self.cfg.height_floor - height_w).clamp_min(0.0)
+        reward_height_floor = (
+            -self.cfg.height_floor_weight * height_floor_violation.square()
+        )
+        height_ceiling_margin = self.cfg.height_ceiling - height_w
+        height_ceiling_violation = (height_w - self.cfg.height_ceiling).clamp_min(0.0)
+        reward_height_ceiling = (
+            -self.cfg.height_ceiling_weight * height_ceiling_violation.square()
+        )
         reward_collision = -self.cfg.collision_weight * collision_f
 
         components = {
@@ -199,6 +331,14 @@ class InstinctRLRewardComputer:
             "reward_ics_compliance": reward_ics_compliance,
             "reward_intervention": reward_intervention,
             "reward_smoothness": reward_smoothness,
+            "reward_null_command_speed": reward_null_command_speed,
+            "reward_null_command_output": reward_null_command_output,
+            "reward_proxy_tracking": reward_proxy_tracking,
+            "reward_preservation_low": reward_preservation_low,
+            "reward_preservation_high": reward_preservation_high,
+            "reward_command_amplification": reward_command_amplification,
+            "reward_height_floor": reward_height_floor,
+            "reward_height_ceiling": reward_height_ceiling,
             "reward_collision": reward_collision,
         }
         total_raw = sum(components.values())
@@ -218,6 +358,16 @@ class InstinctRLRewardComputer:
         cache = {
             "tracking_error_norm": tracking_error,
             "tracking_gate": tracking_gate,
+            "null_command_speed": actual_signal.norm(dim=-1, keepdim=True) * null_command,
+            "null_command_output_speed": v_final.norm(dim=-1, keepdim=True) * null_command,
+            "null_command_output_bias_gate": null_output_bias_gate * null_command,
+            "command_preservation_ratio": preservation_ratio * command_active,
+            "preservation_low_violation": preservation_low_violation,
+            "preservation_high_violation": preservation_high_violation,
+            "command_amplification": amplification * command_safe_gate,
+            "height_floor_violation": height_floor_violation,
+            "height_ceiling_violation": height_ceiling_violation,
+            "height_ceiling_margin": height_ceiling_margin,
             "clearance_violation": clearance_violation,
             "reward_clip_scale": scale,
             "ics_active_beam_count": active_beam_count,

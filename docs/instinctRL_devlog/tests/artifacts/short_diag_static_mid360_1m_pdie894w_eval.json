@@ -1,0 +1,1562 @@
+{
+  "checkpoint_path": "/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260710_155948-pdie894w/files/checkpoint_final.pt",
+  "deterministic_exploration_type": "MEAN",
+  "env_dyn_num_obstacles": 0,
+  "env_max_episode_length": 1000,
+  "env_num_envs": 32,
+  "env_num_obstacles": 350,
+  "eval/handbook.anchor_active_fraction": 0.999,
+  "eval/handbook.anchor_error_max": 35.08068084716797,
+  "eval/handbook.anchor_error_mean": 3.612449803840369,
+  "eval/handbook.anchor_loss": 0.25722396892518734,
+  "eval/handbook.command_amplification_mean": 0.14063168290257455,
+  "eval/handbook.command_amplification_rate": 0.23990625,
+  "eval/handbook.command_mode_fraction.adversarial": 0.050625,
+  "eval/handbook.command_mode_fraction.aggressive": 0.16425,
+  "eval/handbook.command_mode_fraction.normal": 0.43865625,
+  "eval/handbook.command_mode_fraction.oscillation": 0.21746875,
+  "eval/handbook.command_mode_fraction.recovery": 0.129,
+  "eval/handbook.command_preservation_ratio": 0.7812325593829155,
+  "eval/handbook.ics_beta_mean": 0.895625,
+  "eval/handbook.ics_emergency_rate": 0.0,
+  "eval/handbook.ics_intervention_frequency": 0.104375,
+  "eval/handbook.ics_violation_rate": 0.10796875,
+  "eval/handbook.null_command_output_speed_mean": 0.24358520240709186,
+  "eval/handbook.null_command_speed_mean": 0.2574113107435405,
+  "eval/handbook.observability_condition_number_mean": 2.99153084397316,
+  "eval/handbook.observability_drift_norm_mean": 2.060494130919086,
+  "eval/handbook.observability_drift_projection_mean": 0.8101744241566734,
+  "eval/handbook.observability_is_proxy": 1.0,
+  "eval/handbook.observability_mode_code_mean": 0.0,
+  "eval/handbook.observability_rank_mean": 3.0,
+  "eval/handbook.observability_score_mean": 0.3353492255806923,
+  "eval/handbook.observability_sigma_max_mean": 65.08686488723755,
+  "eval/handbook.observability_sigma_min_mean": 21.85723989868164,
+  "eval/handbook.observability_valid_fraction_mean": 0.35248152124881743,
+  "eval/handbook.observability_weighted_valid_fraction_mean": 0.34129260045289994,
+  "eval/handbook.safety_collision_rate": 0.0,
+  "eval/handbook.safety_min_clearance_mean": 1.9632474136948586,
+  "eval/handbook.safety_min_clearance_p05": 0.6383163928985596,
+  "eval/handbook.station_keeping_drift_max": 4.08730411529541,
+  "eval/handbook.station_keeping_drift_mean": 2.0604941318233716,
+  "eval/handbook.station_keeping_drift_p95": 3.9687840938568115,
+  "eval/handbook.termination_above_bound": 0.0,
+  "eval/handbook.termination_below_bound": 0.0,
+  "eval/handbook.termination_collision": 0.0,
+  "eval/handbook.termination_timeout": 1.0,
+  "eval/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.560329228790784,
+  "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.5615714155979621,
+  "eval/scenario_id": "static_mid360_short_diag",
+  "eval/scenario_id_code": 1,
+  "eval/station/diagnostics.anchor_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.999,
+    "min": 0.0,
+    "std": 0.031606961258557775
+  },
+  "eval/station/diagnostics.anchor_error_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 35.08068084716797,
+    "mean": 31.488124794006346,
+    "min": 0.0,
+    "std": 2.830341350819881
+  },
+  "eval/station/diagnostics.anchor_error_mean": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 5.868924617767334,
+    "mean": 3.612449803840369,
+    "min": 0.0,
+    "std": 1.2715433604679847
+  },
+  "eval/station/diagnostics.anchor_loss": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.44902536273002625,
+    "mean": 0.25722396892518734,
+    "min": 0.0,
+    "std": 0.09573982525556285
+  },
+  "eval/station/diagnostics.command_amplification": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_amplification_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.0,
+    "mean": 4.0,
+    "min": 4.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_preservation_ratio": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.governor_alpha": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.05700575187802315,
+    "mean": 0.05259394272789359,
+    "min": 0.052348438650369644,
+    "std": 0.00012532025850560193
+  },
+  "eval/station/diagnostics.governor_v_corr": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": -0.025914743542671204,
+    "mean": -0.13474883261322976,
+    "min": -0.2143365740776062,
+    "std": 0.0777681741471247
+  },
+  "eval/station/diagnostics.governor_v_final_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.0,
+    "mean": -0.12179172426617393,
+    "min": -0.2143365740776062,
+    "std": 0.0839437625645304
+  },
+  "eval/station/diagnostics.governor_v_gov_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": -0.025914743542671204,
+    "mean": -0.13474883261322976,
+    "min": -0.2143365740776062,
+    "std": 0.0777681741471247
+  },
+  "eval/station/diagnostics.ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.9039375,
+    "min": 0.0,
+    "std": 0.29467693512345017
+  },
+  "eval/station/diagnostics.ics_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.27880531549453735,
+    "mean": 0.2694722363650799,
+    "min": 0.26850005984306335,
+    "std": 0.00035227362836573635
+  },
+  "eval/station/diagnostics.ics_emergency": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.ics_final_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.27880531549453735,
+    "mean": 0.24358520240709186,
+    "min": 0.0,
+    "std": 0.07940772706136587
+  },
+  "eval/station/diagnostics.ics_intervention": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.0960625,
+    "min": 0.0,
+    "std": 0.29467693512345006
+  },
+  "eval/station/diagnostics.ics_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.10115625,
+    "min": 0.0,
+    "std": 0.301535508830946
+  },
+  "eval/station/diagnostics.null_command_output_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.27880531549453735,
+    "mean": 0.24358520240709186,
+    "min": 0.0,
+    "std": 0.07940772706136587
+  },
+  "eval/station/diagnostics.null_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.270400732755661,
+    "mean": 0.2574113107435405,
+    "min": 0.0,
+    "std": 0.03812062198100865
+  },
+  "eval/station/diagnostics.observability_condition_number": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.5054819583892822,
+    "mean": 2.99153084397316,
+    "min": 2.650217294692993,
+    "std": 0.17070799714125076
+  },
+  "eval/station/diagnostics.observability_drift_norm": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.08730411529541,
+    "mean": 2.060494130919086,
+    "min": 0.0,
+    "std": 1.243156247174282
+  },
+  "eval/station/diagnostics.observability_drift_projection": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.9634898900985718,
+    "mean": 0.8101744241566734,
+    "min": 0.0,
+    "std": 0.49638811297660085
+  },
+  "eval/station/diagnostics.observability_is_proxy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_rank": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_scenario_id": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_score": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.3773275315761566,
+    "mean": 0.3353492255806923,
+    "min": 0.2852674722671509,
+    "std": 0.018832729205282624
+  },
+  "eval/station/diagnostics.observability_sigma_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 68.92478942871094,
+    "mean": 65.08686488723755,
+    "min": 59.769813537597656,
+    "std": 1.7031742711035576
+  },
+  "eval/station/diagnostics.observability_sigma_min": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 25.78944969177246,
+    "mean": 21.85723989868164,
+    "min": 17.071035385131836,
+    "std": 1.7692684125312776
+  },
+  "eval/station/diagnostics.observability_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.4185969829559326,
+    "mean": 0.35248152124881743,
+    "min": 0.2666666805744171,
+    "std": 0.030340093074269527
+  },
+  "eval/station/diagnostics.observability_weighted_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.4053092896938324,
+    "mean": 0.34129260045289994,
+    "min": 0.2582017779350281,
+    "std": 0.029377002597310346
+  },
+  "eval/station/diagnostics.safety_collision": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.safety_min_clearance": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.3728885650634766,
+    "mean": 1.968262160241604,
+    "min": 0.5395548939704895,
+    "std": 0.8410489585272652
+  },
+  "eval/station/diagnostics.station_keeping_drift": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.08730411529541,
+    "mean": 2.0604941318233716,
+    "min": 0.0,
+    "std": 1.2431562546787434
+  },
+  "eval/station/diagnostics.tracking_actual_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.tracking_proxy_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/episodes_expected": 32,
+  "eval/station/episodes_recorded": 32,
+  "eval/station/handbook.anchor_active_fraction": 0.999,
+  "eval/station/handbook.anchor_error_max": 35.08068084716797,
+  "eval/station/handbook.anchor_error_mean": 3.612449803840369,
+  "eval/station/handbook.anchor_loss": 0.25722396892518734,
+  "eval/station/handbook.command_amplification_mean": 0.0,
+  "eval/station/handbook.command_amplification_rate": 0.0,
+  "eval/station/handbook.command_mode_fraction.adversarial": 0.0,
+  "eval/station/handbook.command_mode_fraction.aggressive": 0.0,
+  "eval/station/handbook.command_mode_fraction.normal": 0.0,
+  "eval/station/handbook.command_mode_fraction.oscillation": 0.0,
+  "eval/station/handbook.command_mode_fraction.recovery": 1.0,
+  "eval/station/handbook.command_preservation_ratio": 1.0,
+  "eval/station/handbook.ics_beta_mean": 0.9039375,
+  "eval/station/handbook.ics_emergency_rate": 0.0,
+  "eval/station/handbook.ics_intervention_frequency": 0.0960625,
+  "eval/station/handbook.ics_violation_rate": 0.10115625,
+  "eval/station/handbook.null_command_output_speed_mean": 0.24358520240709186,
+  "eval/station/handbook.null_command_speed_mean": 0.2574113107435405,
+  "eval/station/handbook.observability_condition_number_mean": 2.99153084397316,
+  "eval/station/handbook.observability_drift_norm_mean": 2.060494130919086,
+  "eval/station/handbook.observability_drift_projection_mean": 0.8101744241566734,
+  "eval/station/handbook.observability_is_proxy": 1.0,
+  "eval/station/handbook.observability_mode_code_mean": 0.0,
+  "eval/station/handbook.observability_rank_mean": 3.0,
+  "eval/station/handbook.observability_score_mean": 0.3353492255806923,
+  "eval/station/handbook.observability_sigma_max_mean": 65.08686488723755,
+  "eval/station/handbook.observability_sigma_min_mean": 21.85723989868164,
+  "eval/station/handbook.observability_valid_fraction_mean": 0.35248152124881743,
+  "eval/station/handbook.observability_weighted_valid_fraction_mean": 0.34129260045289994,
+  "eval/station/handbook.safety_collision_rate": 0.0,
+  "eval/station/handbook.safety_min_clearance_mean": 1.968262160241604,
+  "eval/station/handbook.safety_min_clearance_p05": 0.6582913994789124,
+  "eval/station/handbook.station_keeping_drift_max": 4.08730411529541,
+  "eval/station/handbook.station_keeping_drift_mean": 2.0604941318233716,
+  "eval/station/handbook.station_keeping_drift_p95": 3.9687840938568115,
+  "eval/station/handbook.termination_above_bound": 0.0,
+  "eval/station/handbook.termination_below_bound": 0.0,
+  "eval/station/handbook.termination_collision": 0.0,
+  "eval/station/handbook.termination_timeout": 1.0,
+  "eval/station/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.0,
+  "eval/station/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.0,
+  "eval/station/pass_command_curriculum_profile": "station_first",
+  "eval/station/pass_command_frame_count": 0,
+  "eval/station/pass_command_source": "scripted_eval",
+  "eval/station/pass_name": "station_static_mid360",
+  "eval/station/reward": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": -0.15442535281181335,
+    "mean": -1.177740912154317,
+    "min": -1.6195491552352905,
+    "std": 0.23172945997682545,
+    "sum": -37687.70918893814
+  },
+  "eval/station/stats.collision": 0.0,
+  "eval/station/stats.episode_len": 1000.0,
+  "eval/station/stats.legacy_reach_goal": 0.0,
+  "eval/station/stats.return": -1177.7412109375,
+  "eval/station/stats.reward_anchor": -515.258056640625,
+  "eval/station/stats.reward_collision": 0.0,
+  "eval/station/stats.reward_command_amplification": 0.0,
+  "eval/station/stats.reward_ics_compliance": 0.0,
+  "eval/station/stats.reward_intervention": -4.803124904632568,
+  "eval/station/stats.reward_null_command_output": -121.79261779785156,
+  "eval/station/stats.reward_null_command_speed": -515.225341796875,
+  "eval/station/stats.reward_proxy_tracking": 0.0,
+  "eval/station/stats.reward_safety": -20.63349723815918,
+  "eval/station/stats.reward_smoothness": -0.028426622971892357,
+  "eval/station/stats.reward_total": -1177.7412109375,
+  "eval/station/stats.reward_tracking": 0.0,
+  "eval/station/stats.terminated_above_bound": 0.0,
+  "eval/station/stats.terminated_below_bound": 0.0,
+  "eval/station/stats.terminated_collision": 0.0,
+  "eval/station/stats.termination_reason_code": 4.0,
+  "eval/station/stats.truncated": 1.0,
+  "eval/station/stats.truncated_timeout": 1.0,
+  "eval/suite": "short_diagnostic",
+  "eval/tracking/diagnostics.anchor_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.1845625,
+    "min": 0.0,
+    "std": 0.38794224260029997
+  },
+  "eval/tracking/diagnostics.anchor_error_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 34.66697692871094,
+    "mean": 5.362371266245842,
+    "min": 0.0,
+    "std": 11.496061983118711
+  },
+  "eval/tracking/diagnostics.anchor_error_mean": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.686088800430298,
+    "mean": 0.28163343932200224,
+    "min": 0.0,
+    "std": 0.7378208545189152
+  },
+  "eval/tracking/diagnostics.anchor_loss": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.3045490086078644,
+    "mean": 0.021301098590512994,
+    "min": 0.0,
+    "std": 0.05656134410761786
+  },
+  "eval/tracking/diagnostics.command_amplification": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.14063168290257455,
+    "min": 0.0,
+    "std": 0.3032984960808287
+  },
+  "eval/tracking/diagnostics.command_amplification_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.23990625,
+    "min": 0.0,
+    "std": 0.4270260427783503
+  },
+  "eval/tracking/diagnostics.command_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.0,
+    "mean": 1.43390625,
+    "min": 0.0,
+    "std": 1.527049971746484
+  },
+  "eval/tracking/diagnostics.command_preservation_ratio": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.7812325593829155,
+    "min": 0.0,
+    "std": 0.5561011640708449
+  },
+  "eval/tracking/diagnostics.governor_alpha": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.058049704879522324,
+    "mean": 0.05288871062546968,
+    "min": 0.05234534665942192,
+    "std": 0.0007132624144417539
+  },
+  "eval/tracking/diagnostics.governor_v_corr": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": -0.022867277264595032,
+    "mean": -0.13422845965623856,
+    "min": -0.2150391787290573,
+    "std": 0.07783977420486181
+  },
+  "eval/tracking/diagnostics.governor_v_final_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.011761419475078583,
+    "mean": -0.12040874145956089,
+    "min": -0.25400760769844055,
+    "std": 0.0851069825689097
+  },
+  "eval/tracking/diagnostics.governor_v_gov_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.01237565279006958,
+    "mean": -0.13434500530362128,
+    "min": -0.2647528052330017,
+    "std": 0.07880174346476633
+  },
+  "eval/tracking/diagnostics.ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.895625,
+    "min": 0.0,
+    "std": 0.3057463971578405
+  },
+  "eval/tracking/diagnostics.ics_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.32164332270622253,
+    "mean": 0.2692240848839283,
+    "min": 0.21198324859142303,
+    "std": 0.017125359029008646
+  },
+  "eval/tracking/diagnostics.ics_emergency": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.ics_final_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.31911158561706543,
+    "mean": 0.2412477309871465,
+    "min": 0.0,
+    "std": 0.08380884717910372
+  },
+  "eval/tracking/diagnostics.ics_intervention": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.104375,
+    "min": 0.0,
+    "std": 0.30574639715784063
+  },
+  "eval/tracking/diagnostics.ics_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.10796875,
+    "min": 0.0,
+    "std": 0.31034093997318096
+  },
+  "eval/tracking/diagnostics.null_command_output_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.28967413306236267,
+    "mean": 0.03180904903449118,
+    "min": 0.0,
+    "std": 0.08694083372282911
+  },
+  "eval/tracking/diagnostics.null_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.28494149446487427,
+    "mean": 0.03392986806586851,
+    "min": 0.0,
+    "std": 0.088175120074378
+  },
+  "eval/tracking/diagnostics.observability_condition_number": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.5070135593414307,
+    "mean": 2.9895853106975556,
+    "min": 2.643808364868164,
+    "std": 0.17232406189532617
+  },
+  "eval/tracking/diagnostics.observability_drift_norm": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.256623268127441,
+    "mean": 2.0509357970683224,
+    "min": 0.0,
+    "std": 1.2393594419511402
+  },
+  "eval/tracking/diagnostics.observability_drift_projection": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.02223801612854,
+    "mean": 0.8174764272601343,
+    "min": 0.0,
+    "std": 0.5063762076928315
+  },
+  "eval/tracking/diagnostics.observability_is_proxy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_rank": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_scenario_id": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_score": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.37824222445487976,
+    "mean": 0.335589625954628,
+    "min": 0.2851428985595703,
+    "std": 0.019043304188098603
+  },
+  "eval/tracking/diagnostics.observability_sigma_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 69.14891815185547,
+    "mean": 65.10153665161133,
+    "min": 59.73438262939453,
+    "std": 1.7063815806865783
+  },
+  "eval/tracking/diagnostics.observability_sigma_min": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 26.15189552307129,
+    "mean": 21.87824223136902,
+    "min": 17.040771484375,
+    "std": 1.7853548905659522
+  },
+  "eval/tracking/diagnostics.observability_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.424717515707016,
+    "mean": 0.35286532413959504,
+    "min": 0.26676082611083984,
+    "std": 0.030530258131147743
+  },
+  "eval/tracking/diagnostics.observability_weighted_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.41123563051223755,
+    "mean": 0.3416642202436924,
+    "min": 0.2582929730415344,
+    "std": 0.029561131850655394
+  },
+  "eval/tracking/diagnostics.safety_collision": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.safety_min_clearance": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.370366096496582,
+    "mean": 1.9632474136948586,
+    "min": 0.41010385751724243,
+    "std": 0.8532229955118361
+  },
+  "eval/tracking/diagnostics.station_keeping_drift": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.2566237449646,
+    "mean": 2.0509357979514817,
+    "min": 0.0,
+    "std": 1.2393594405403883
+  },
+  "eval/tracking/diagnostics.tracking_actual_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.4441977739334106,
+    "mean": 0.31396884463727476,
+    "min": 0.0,
+    "std": 0.3178530350096841
+  },
+  "eval/tracking/diagnostics.tracking_proxy_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.4154478311538696,
+    "mean": 0.315362454816699,
+    "min": 0.0,
+    "std": 0.34398360150805063
+  },
+  "eval/tracking/episodes_expected": 32,
+  "eval/tracking/episodes_recorded": 32,
+  "eval/tracking/handbook.anchor_active_fraction": 0.1845625,
+  "eval/tracking/handbook.anchor_error_max": 34.66697692871094,
+  "eval/tracking/handbook.anchor_error_mean": 0.28163343932200224,
+  "eval/tracking/handbook.anchor_loss": 0.021301098590512994,
+  "eval/tracking/handbook.command_amplification_mean": 0.14063168290257455,
+  "eval/tracking/handbook.command_amplification_rate": 0.23990625,
+  "eval/tracking/handbook.command_mode_fraction.adversarial": 0.050625,
+  "eval/tracking/handbook.command_mode_fraction.aggressive": 0.16425,
+  "eval/tracking/handbook.command_mode_fraction.normal": 0.43865625,
+  "eval/tracking/handbook.command_mode_fraction.oscillation": 0.21746875,
+  "eval/tracking/handbook.command_mode_fraction.recovery": 0.129,
+  "eval/tracking/handbook.command_preservation_ratio": 0.7812325593829155,
+  "eval/tracking/handbook.ics_beta_mean": 0.895625,
+  "eval/tracking/handbook.ics_emergency_rate": 0.0,
+  "eval/tracking/handbook.ics_intervention_frequency": 0.104375,
+  "eval/tracking/handbook.ics_violation_rate": 0.10796875,
+  "eval/tracking/handbook.null_command_output_speed_mean": 0.03180904903449118,
+  "eval/tracking/handbook.null_command_speed_mean": 0.03392986806586851,
+  "eval/tracking/handbook.observability_condition_number_mean": 2.9895853106975556,
+  "eval/tracking/handbook.observability_drift_norm_mean": 2.0509357970683224,
+  "eval/tracking/handbook.observability_drift_projection_mean": 0.8174764272601343,
+  "eval/tracking/handbook.observability_is_proxy": 1.0,
+  "eval/tracking/handbook.observability_mode_code_mean": 0.0,
+  "eval/tracking/handbook.observability_rank_mean": 3.0,
+  "eval/tracking/handbook.observability_score_mean": 0.335589625954628,
+  "eval/tracking/handbook.observability_sigma_max_mean": 65.10153665161133,
+  "eval/tracking/handbook.observability_sigma_min_mean": 21.87824223136902,
+  "eval/tracking/handbook.observability_valid_fraction_mean": 0.35286532413959504,
+  "eval/tracking/handbook.observability_weighted_valid_fraction_mean": 0.3416642202436924,
+  "eval/tracking/handbook.safety_collision_rate": 0.0,
+  "eval/tracking/handbook.safety_min_clearance_mean": 1.9632474136948586,
+  "eval/tracking/handbook.safety_min_clearance_p05": 0.6383163928985596,
+  "eval/tracking/handbook.station_keeping_drift_max": 4.2566237449646,
+  "eval/tracking/handbook.station_keeping_drift_mean": 2.0509357979514817,
+  "eval/tracking/handbook.station_keeping_drift_p95": 3.9190900325775146,
+  "eval/tracking/handbook.termination_above_bound": 0.0,
+  "eval/tracking/handbook.termination_below_bound": 0.0,
+  "eval/tracking/handbook.termination_collision": 0.0,
+  "eval/tracking/handbook.termination_timeout": 1.0,
+  "eval/tracking/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.560329228790784,
+  "eval/tracking/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.5615714155979621,
+  "eval/tracking/pass_command_curriculum_profile": "diagnostic_mixed",
+  "eval/tracking/pass_command_frame_count": 600000,
+  "eval/tracking/pass_command_source": "curriculum_generator",
+  "eval/tracking/pass_name": "tracking_static_mid360",
+  "eval/tracking/reward": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.8994297385215759,
+    "mean": -0.9591695966161787,
+    "min": -20.000001907348633,
+    "std": 1.606678101077424,
+    "sum": -30693.42709171772
+  },
+  "eval/tracking/stats.collision": 0.0,
+  "eval/tracking/stats.episode_len": 1000.0,
+  "eval/tracking/stats.legacy_reach_goal": 0.0,
+  "eval/tracking/stats.return": -958.9849243164062,
+  "eval/tracking/stats.reward_anchor": -42.65984344482422,
+  "eval/tracking/stats.reward_collision": 0.0,
+  "eval/tracking/stats.reward_command_amplification": -330.13836669921875,
+  "eval/tracking/stats.reward_ics_compliance": 51.477516174316406,
+  "eval/tracking/stats.reward_intervention": -5.268753528594971,
+  "eval/tracking/stats.reward_null_command_output": -15.904523849487305,
+  "eval/tracking/stats.reward_null_command_speed": -67.93550109863281,
+  "eval/tracking/stats.reward_proxy_tracking": -103.9610824584961,
+  "eval/tracking/stats.reward_safety": -23.10515022277832,
+  "eval/tracking/stats.reward_smoothness": -0.07206501066684723,
+  "eval/tracking/stats.reward_total": -958.9849243164062,
+  "eval/tracking/stats.reward_tracking": -421.4172058105469,
+  "eval/tracking/stats.terminated_above_bound": 0.0,
+  "eval/tracking/stats.terminated_below_bound": 0.0,
+  "eval/tracking/stats.terminated_collision": 0.0,
+  "eval/tracking/stats.termination_reason_code": 4.0,
+  "eval/tracking/stats.truncated": 1.0,
+  "eval/tracking/stats.truncated_timeout": 1.0,
+  "headless": true,
+  "instinctRL_enabled": true,
+  "instinctRL_eval_suite": "short_diagnostic",
+  "instinctRL_mode": "train",
+  "learned_governor": true,
+  "max_frame_num": 10000,
+  "passes": {
+    "station_static_mid360": {
+      "eval/diagnostics.anchor_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.999,
+        "min": 0.0,
+        "std": 0.031606961258557775
+      },
+      "eval/diagnostics.anchor_error_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 35.08068084716797,
+        "mean": 31.488124794006346,
+        "min": 0.0,
+        "std": 2.830341350819881
+      },
+      "eval/diagnostics.anchor_error_mean": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 5.868924617767334,
+        "mean": 3.612449803840369,
+        "min": 0.0,
+        "std": 1.2715433604679847
+      },
+      "eval/diagnostics.anchor_loss": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.44902536273002625,
+        "mean": 0.25722396892518734,
+        "min": 0.0,
+        "std": 0.09573982525556285
+      },
+      "eval/diagnostics.command_amplification": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_amplification_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.0,
+        "mean": 4.0,
+        "min": 4.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_preservation_ratio": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.governor_alpha": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.05700575187802315,
+        "mean": 0.05259394272789359,
+        "min": 0.052348438650369644,
+        "std": 0.00012532025850560193
+      },
+      "eval/diagnostics.governor_v_corr": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": -0.025914743542671204,
+        "mean": -0.13474883261322976,
+        "min": -0.2143365740776062,
+        "std": 0.0777681741471247
+      },
+      "eval/diagnostics.governor_v_final_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.0,
+        "mean": -0.12179172426617393,
+        "min": -0.2143365740776062,
+        "std": 0.0839437625645304
+      },
+      "eval/diagnostics.governor_v_gov_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": -0.025914743542671204,
+        "mean": -0.13474883261322976,
+        "min": -0.2143365740776062,
+        "std": 0.0777681741471247
+      },
+      "eval/diagnostics.ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.9039375,
+        "min": 0.0,
+        "std": 0.29467693512345017
+      },
+      "eval/diagnostics.ics_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.27880531549453735,
+        "mean": 0.2694722363650799,
+        "min": 0.26850005984306335,
+        "std": 0.00035227362836573635
+      },
+      "eval/diagnostics.ics_emergency": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.ics_final_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.27880531549453735,
+        "mean": 0.24358520240709186,
+        "min": 0.0,
+        "std": 0.07940772706136587
+      },
+      "eval/diagnostics.ics_intervention": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.0960625,
+        "min": 0.0,
+        "std": 0.29467693512345006
+      },
+      "eval/diagnostics.ics_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.10115625,
+        "min": 0.0,
+        "std": 0.301535508830946
+      },
+      "eval/diagnostics.null_command_output_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.27880531549453735,
+        "mean": 0.24358520240709186,
+        "min": 0.0,
+        "std": 0.07940772706136587
+      },
+      "eval/diagnostics.null_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.270400732755661,
+        "mean": 0.2574113107435405,
+        "min": 0.0,
+        "std": 0.03812062198100865
+      },
+      "eval/diagnostics.observability_condition_number": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.5054819583892822,
+        "mean": 2.99153084397316,
+        "min": 2.650217294692993,
+        "std": 0.17070799714125076
+      },
+      "eval/diagnostics.observability_drift_norm": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.08730411529541,
+        "mean": 2.060494130919086,
+        "min": 0.0,
+        "std": 1.243156247174282
+      },
+      "eval/diagnostics.observability_drift_projection": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.9634898900985718,
+        "mean": 0.8101744241566734,
+        "min": 0.0,
+        "std": 0.49638811297660085
+      },
+      "eval/diagnostics.observability_is_proxy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_rank": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.0,
+        "mean": 3.0,
+        "min": 3.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_scenario_id": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_score": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.3773275315761566,
+        "mean": 0.3353492255806923,
+        "min": 0.2852674722671509,
+        "std": 0.018832729205282624
+      },
+      "eval/diagnostics.observability_sigma_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 68.92478942871094,
+        "mean": 65.08686488723755,
+        "min": 59.769813537597656,
+        "std": 1.7031742711035576
+      },
+      "eval/diagnostics.observability_sigma_min": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 25.78944969177246,
+        "mean": 21.85723989868164,
+        "min": 17.071035385131836,
+        "std": 1.7692684125312776
+      },
+      "eval/diagnostics.observability_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.4185969829559326,
+        "mean": 0.35248152124881743,
+        "min": 0.2666666805744171,
+        "std": 0.030340093074269527
+      },
+      "eval/diagnostics.observability_weighted_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.4053092896938324,
+        "mean": 0.34129260045289994,
+        "min": 0.2582017779350281,
+        "std": 0.029377002597310346
+      },
+      "eval/diagnostics.safety_collision": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.safety_min_clearance": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.3728885650634766,
+        "mean": 1.968262160241604,
+        "min": 0.5395548939704895,
+        "std": 0.8410489585272652
+      },
+      "eval/diagnostics.station_keeping_drift": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.08730411529541,
+        "mean": 2.0604941318233716,
+        "min": 0.0,
+        "std": 1.2431562546787434
+      },
+      "eval/diagnostics.tracking_actual_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.tracking_proxy_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/episodes_expected": 32,
+      "eval/episodes_recorded": 32,
+      "eval/handbook.anchor_active_fraction": 0.999,
+      "eval/handbook.anchor_error_max": 35.08068084716797,
+      "eval/handbook.anchor_error_mean": 3.612449803840369,
+      "eval/handbook.anchor_loss": 0.25722396892518734,
+      "eval/handbook.command_amplification_mean": 0.0,
+      "eval/handbook.command_amplification_rate": 0.0,
+      "eval/handbook.command_mode_fraction.adversarial": 0.0,
+      "eval/handbook.command_mode_fraction.aggressive": 0.0,
+      "eval/handbook.command_mode_fraction.normal": 0.0,
+      "eval/handbook.command_mode_fraction.oscillation": 0.0,
+      "eval/handbook.command_mode_fraction.recovery": 1.0,
+      "eval/handbook.command_preservation_ratio": 1.0,
+      "eval/handbook.ics_beta_mean": 0.9039375,
+      "eval/handbook.ics_emergency_rate": 0.0,
+      "eval/handbook.ics_intervention_frequency": 0.0960625,
+      "eval/handbook.ics_violation_rate": 0.10115625,
+      "eval/handbook.null_command_output_speed_mean": 0.24358520240709186,
+      "eval/handbook.null_command_speed_mean": 0.2574113107435405,
+      "eval/handbook.observability_condition_number_mean": 2.99153084397316,
+      "eval/handbook.observability_drift_norm_mean": 2.060494130919086,
+      "eval/handbook.observability_drift_projection_mean": 0.8101744241566734,
+      "eval/handbook.observability_is_proxy": 1.0,
+      "eval/handbook.observability_mode_code_mean": 0.0,
+      "eval/handbook.observability_rank_mean": 3.0,
+      "eval/handbook.observability_score_mean": 0.3353492255806923,
+      "eval/handbook.observability_sigma_max_mean": 65.08686488723755,
+      "eval/handbook.observability_sigma_min_mean": 21.85723989868164,
+      "eval/handbook.observability_valid_fraction_mean": 0.35248152124881743,
+      "eval/handbook.observability_weighted_valid_fraction_mean": 0.34129260045289994,
+      "eval/handbook.safety_collision_rate": 0.0,
+      "eval/handbook.safety_min_clearance_mean": 1.968262160241604,
+      "eval/handbook.safety_min_clearance_p05": 0.6582913994789124,
+      "eval/handbook.station_keeping_drift_max": 4.08730411529541,
+      "eval/handbook.station_keeping_drift_mean": 2.0604941318233716,
+      "eval/handbook.station_keeping_drift_p95": 3.9687840938568115,
+      "eval/handbook.termination_above_bound": 0.0,
+      "eval/handbook.termination_below_bound": 0.0,
+      "eval/handbook.termination_collision": 0.0,
+      "eval/handbook.termination_timeout": 1.0,
+      "eval/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.0,
+      "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.0,
+      "eval/pass_command_curriculum_profile": "station_first",
+      "eval/pass_command_frame_count": 0,
+      "eval/pass_command_source": "scripted_eval",
+      "eval/pass_name": "station_static_mid360",
+      "eval/reward": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": -0.15442535281181335,
+        "mean": -1.177740912154317,
+        "min": -1.6195491552352905,
+        "std": 0.23172945997682545,
+        "sum": -37687.70918893814
+      },
+      "eval/stats.collision": 0.0,
+      "eval/stats.episode_len": 1000.0,
+      "eval/stats.legacy_reach_goal": 0.0,
+      "eval/stats.return": -1177.7412109375,
+      "eval/stats.reward_anchor": -515.258056640625,
+      "eval/stats.reward_collision": 0.0,
+      "eval/stats.reward_command_amplification": 0.0,
+      "eval/stats.reward_ics_compliance": 0.0,
+      "eval/stats.reward_intervention": -4.803124904632568,
+      "eval/stats.reward_null_command_output": -121.79261779785156,
+      "eval/stats.reward_null_command_speed": -515.225341796875,
+      "eval/stats.reward_proxy_tracking": 0.0,
+      "eval/stats.reward_safety": -20.63349723815918,
+      "eval/stats.reward_smoothness": -0.028426622971892357,
+      "eval/stats.reward_total": -1177.7412109375,
+      "eval/stats.reward_tracking": 0.0,
+      "eval/stats.terminated_above_bound": 0.0,
+      "eval/stats.terminated_below_bound": 0.0,
+      "eval/stats.terminated_collision": 0.0,
+      "eval/stats.termination_reason_code": 4.0,
+      "eval/stats.truncated": 1.0,
+      "eval/stats.truncated_timeout": 1.0
+    },
+    "tracking_static_mid360": {
+      "eval/diagnostics.anchor_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.1845625,
+        "min": 0.0,
+        "std": 0.38794224260029997
+      },
+      "eval/diagnostics.anchor_error_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 34.66697692871094,
+        "mean": 5.362371266245842,
+        "min": 0.0,
+        "std": 11.496061983118711
+      },
+      "eval/diagnostics.anchor_error_mean": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.686088800430298,
+        "mean": 0.28163343932200224,
+        "min": 0.0,
+        "std": 0.7378208545189152
+      },
+      "eval/diagnostics.anchor_loss": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.3045490086078644,
+        "mean": 0.021301098590512994,
+        "min": 0.0,
+        "std": 0.05656134410761786
+      },
+      "eval/diagnostics.command_amplification": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.14063168290257455,
+        "min": 0.0,
+        "std": 0.3032984960808287
+      },
+      "eval/diagnostics.command_amplification_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.23990625,
+        "min": 0.0,
+        "std": 0.4270260427783503
+      },
+      "eval/diagnostics.command_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.0,
+        "mean": 1.43390625,
+        "min": 0.0,
+        "std": 1.527049971746484
+      },
+      "eval/diagnostics.command_preservation_ratio": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.7812325593829155,
+        "min": 0.0,
+        "std": 0.5561011640708449
+      },
+      "eval/diagnostics.governor_alpha": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.058049704879522324,
+        "mean": 0.05288871062546968,
+        "min": 0.05234534665942192,
+        "std": 0.0007132624144417539
+      },
+      "eval/diagnostics.governor_v_corr": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": -0.022867277264595032,
+        "mean": -0.13422845965623856,
+        "min": -0.2150391787290573,
+        "std": 0.07783977420486181
+      },
+      "eval/diagnostics.governor_v_final_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.011761419475078583,
+        "mean": -0.12040874145956089,
+        "min": -0.25400760769844055,
+        "std": 0.0851069825689097
+      },
+      "eval/diagnostics.governor_v_gov_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.01237565279006958,
+        "mean": -0.13434500530362128,
+        "min": -0.2647528052330017,
+        "std": 0.07880174346476633
+      },
+      "eval/diagnostics.ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.895625,
+        "min": 0.0,
+        "std": 0.3057463971578405
+      },
+      "eval/diagnostics.ics_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.32164332270622253,
+        "mean": 0.2692240848839283,
+        "min": 0.21198324859142303,
+        "std": 0.017125359029008646
+      },
+      "eval/diagnostics.ics_emergency": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.ics_final_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.31911158561706543,
+        "mean": 0.2412477309871465,
+        "min": 0.0,
+        "std": 0.08380884717910372
+      },
+      "eval/diagnostics.ics_intervention": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.104375,
+        "min": 0.0,
+        "std": 0.30574639715784063
+      },
+      "eval/diagnostics.ics_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.10796875,
+        "min": 0.0,
+        "std": 0.31034093997318096
+      },
+      "eval/diagnostics.null_command_output_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.28967413306236267,
+        "mean": 0.03180904903449118,
+        "min": 0.0,
+        "std": 0.08694083372282911
+      },
+      "eval/diagnostics.null_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.28494149446487427,
+        "mean": 0.03392986806586851,
+        "min": 0.0,
+        "std": 0.088175120074378
+      },
+      "eval/diagnostics.observability_condition_number": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.5070135593414307,
+        "mean": 2.9895853106975556,
+        "min": 2.643808364868164,
+        "std": 0.17232406189532617
+      },
+      "eval/diagnostics.observability_drift_norm": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.256623268127441,
+        "mean": 2.0509357970683224,
+        "min": 0.0,
+        "std": 1.2393594419511402
+      },
+      "eval/diagnostics.observability_drift_projection": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.02223801612854,
+        "mean": 0.8174764272601343,
+        "min": 0.0,
+        "std": 0.5063762076928315
+      },
+      "eval/diagnostics.observability_is_proxy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_rank": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.0,
+        "mean": 3.0,
+        "min": 3.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_scenario_id": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_score": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.37824222445487976,
+        "mean": 0.335589625954628,
+        "min": 0.2851428985595703,
+        "std": 0.019043304188098603
+      },
+      "eval/diagnostics.observability_sigma_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 69.14891815185547,
+        "mean": 65.10153665161133,
+        "min": 59.73438262939453,
+        "std": 1.7063815806865783
+      },
+      "eval/diagnostics.observability_sigma_min": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 26.15189552307129,
+        "mean": 21.87824223136902,
+        "min": 17.040771484375,
+        "std": 1.7853548905659522
+      },
+      "eval/diagnostics.observability_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.424717515707016,
+        "mean": 0.35286532413959504,
+        "min": 0.26676082611083984,
+        "std": 0.030530258131147743
+      },
+      "eval/diagnostics.observability_weighted_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.41123563051223755,
+        "mean": 0.3416642202436924,
+        "min": 0.2582929730415344,
+        "std": 0.029561131850655394
+      },
+      "eval/diagnostics.safety_collision": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.safety_min_clearance": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.370366096496582,
+        "mean": 1.9632474136948586,
+        "min": 0.41010385751724243,
+        "std": 0.8532229955118361
+      },
+      "eval/diagnostics.station_keeping_drift": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.2566237449646,
+        "mean": 2.0509357979514817,
+        "min": 0.0,
+        "std": 1.2393594405403883
+      },
+      "eval/diagnostics.tracking_actual_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.4441977739334106,
+        "mean": 0.31396884463727476,
+        "min": 0.0,
+        "std": 0.3178530350096841
+      },
+      "eval/diagnostics.tracking_proxy_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.4154478311538696,
+        "mean": 0.315362454816699,
+        "min": 0.0,
+        "std": 0.34398360150805063
+      },
+      "eval/episodes_expected": 32,
+      "eval/episodes_recorded": 32,
+      "eval/handbook.anchor_active_fraction": 0.1845625,
+      "eval/handbook.anchor_error_max": 34.66697692871094,
+      "eval/handbook.anchor_error_mean": 0.28163343932200224,
+      "eval/handbook.anchor_loss": 0.021301098590512994,
+      "eval/handbook.command_amplification_mean": 0.14063168290257455,
+      "eval/handbook.command_amplification_rate": 0.23990625,
+      "eval/handbook.command_mode_fraction.adversarial": 0.050625,
+      "eval/handbook.command_mode_fraction.aggressive": 0.16425,
+      "eval/handbook.command_mode_fraction.normal": 0.43865625,
+      "eval/handbook.command_mode_fraction.oscillation": 0.21746875,
+      "eval/handbook.command_mode_fraction.recovery": 0.129,
+      "eval/handbook.command_preservation_ratio": 0.7812325593829155,
+      "eval/handbook.ics_beta_mean": 0.895625,
+      "eval/handbook.ics_emergency_rate": 0.0,
+      "eval/handbook.ics_intervention_frequency": 0.104375,
+      "eval/handbook.ics_violation_rate": 0.10796875,
+      "eval/handbook.null_command_output_speed_mean": 0.03180904903449118,
+      "eval/handbook.null_command_speed_mean": 0.03392986806586851,
+      "eval/handbook.observability_condition_number_mean": 2.9895853106975556,
+      "eval/handbook.observability_drift_norm_mean": 2.0509357970683224,
+      "eval/handbook.observability_drift_projection_mean": 0.8174764272601343,
+      "eval/handbook.observability_is_proxy": 1.0,
+      "eval/handbook.observability_mode_code_mean": 0.0,
+      "eval/handbook.observability_rank_mean": 3.0,
+      "eval/handbook.observability_score_mean": 0.335589625954628,
+      "eval/handbook.observability_sigma_max_mean": 65.10153665161133,
+      "eval/handbook.observability_sigma_min_mean": 21.87824223136902,
+      "eval/handbook.observability_valid_fraction_mean": 0.35286532413959504,
+      "eval/handbook.observability_weighted_valid_fraction_mean": 0.3416642202436924,
+      "eval/handbook.safety_collision_rate": 0.0,
+      "eval/handbook.safety_min_clearance_mean": 1.9632474136948586,
+      "eval/handbook.safety_min_clearance_p05": 0.6383163928985596,
+      "eval/handbook.station_keeping_drift_max": 4.2566237449646,
+      "eval/handbook.station_keeping_drift_mean": 2.0509357979514817,
+      "eval/handbook.station_keeping_drift_p95": 3.9190900325775146,
+      "eval/handbook.termination_above_bound": 0.0,
+      "eval/handbook.termination_below_bound": 0.0,
+      "eval/handbook.termination_collision": 0.0,
+      "eval/handbook.termination_timeout": 1.0,
+      "eval/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.560329228790784,
+      "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.5615714155979621,
+      "eval/pass_command_curriculum_profile": "diagnostic_mixed",
+      "eval/pass_command_frame_count": 600000,
+      "eval/pass_command_source": "curriculum_generator",
+      "eval/pass_name": "tracking_static_mid360",
+      "eval/reward": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.8994297385215759,
+        "mean": -0.9591695966161787,
+        "min": -20.000001907348633,
+        "std": 1.606678101077424,
+        "sum": -30693.42709171772
+      },
+      "eval/stats.collision": 0.0,
+      "eval/stats.episode_len": 1000.0,
+      "eval/stats.legacy_reach_goal": 0.0,
+      "eval/stats.return": -958.9849243164062,
+      "eval/stats.reward_anchor": -42.65984344482422,
+      "eval/stats.reward_collision": 0.0,
+      "eval/stats.reward_command_amplification": -330.13836669921875,
+      "eval/stats.reward_ics_compliance": 51.477516174316406,
+      "eval/stats.reward_intervention": -5.268753528594971,
+      "eval/stats.reward_null_command_output": -15.904523849487305,
+      "eval/stats.reward_null_command_speed": -67.93550109863281,
+      "eval/stats.reward_proxy_tracking": -103.9610824584961,
+      "eval/stats.reward_safety": -23.10515022277832,
+      "eval/stats.reward_smoothness": -0.07206501066684723,
+      "eval/stats.reward_total": -958.9849243164062,
+      "eval/stats.reward_tracking": -421.4172058105469,
+      "eval/stats.terminated_above_bound": 0.0,
+      "eval/stats.terminated_below_bound": 0.0,
+      "eval/stats.terminated_collision": 0.0,
+      "eval/stats.termination_reason_code": 4.0,
+      "eval/stats.truncated": 1.0,
+      "eval/stats.truncated_timeout": 1.0
+    }
+  },
+  "result_path": "/home/mint/rl_dev/NavRL/isaac-training/../docs/instinctRL_devlog/tests/artifacts/short_diag_static_mid360_1m_pdie894w_eval.json",
+  "wandb_mode": "offline"
+}

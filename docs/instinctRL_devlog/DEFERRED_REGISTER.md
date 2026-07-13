@@ -1,19 +1,27 @@
 # instinctRL Deferred Item Register
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-05 (instinctRL-F reward integration and train-smoke readiness complete)
+> **Last Updated**: 2026-07-05 (instinctRL-A2 trainable governor and training-readiness audit complete)
 > **Purpose**: Track all items intentionally deferred from current or past stages.  
 > **Rule**: Before starting any future stage, read this register and handle all items assigned to that stage. Each item must be implemented, explicitly carried forward, marked blocked, or marked obsolete. Do not silently ignore open items.
 
 ---
 
+## Before First Formal Learned-Governor Training Blockers
+
+None currently open.
+
+The training-before-blockers found in the deferred audit are resolved:
+
+- D-001 trainable governor head is implemented and smoke-tested.
+- The training-required subset of D-008 audit hooks is implemented and smoke-tested.
+- D-006 adversarial command generator is now wired as a staged training curriculum for corrected formal runs; full G baseline/evaluation execution remains open.
+
+Training convergence is still not complete. Do not claim learned-policy success until actual training/evaluation logs support it.
+
 ## Before-G Validation Blockers
 
-None for starting baseline/evaluation harness work. instinctRL-F reward integration acceptance blockers are cleared, and the minimal 16-frame `instinctRL.mode=train` GPU smoke has passed with reward integration enabled.
-
-Completed F validation evidence is recorded in `TEST_PLAN.md`, `tickets/instinctRL-F_reward_integration.md`, and `tests/instinctRL-F_test_report.md`.
-
-Training convergence is still not complete. Before claiming learned-policy success, resolve or explicitly stage D-001 trainable governor as needed and run actual training/evaluation with logs.
+None for starting baseline/evaluation harness work. instinctRL-F reward integration and A2 learned-governor readiness blockers are cleared.
 
 ---
 
@@ -24,11 +32,11 @@ Training convergence is still not complete. Before claiming learned-policy succe
 | Field | Value |
 |-------|-------|
 | **Deferred from** | instinctRL-A |
-| **Reason** | B0 minimal (α=1, v_corr=0) is sufficient for direct velocity pass-through baseline. Full trainable governor requires observation buffer (instinctRL-B) and reward integration (instinctRL-F) to be meaningful. |
-| **Target stage** | instinctRL-A2, before learned-governor training success, or as a dedicated post-F task |
+| **Reason** | B0 minimal (α=1, v_corr=0) was sufficient for direct velocity smoke/baseline; formal learned-governor training requires actor output semantics `(alpha, v_corr)`. |
+| **Target stage** | instinctRL-A2 |
 | **Trigger condition** | Observation buffer (r, m, w, IMU, history) available; actor input schema stable |
-| **Acceptance test** | Governor outputs bounded α∈[0,1] and bounded v_corr; α+v_corr form deterministic v_gov; no critic-to-actor leakage; export-compatible; deterministic mean action |
-| **Status** | ⬜ Open |
+| **Acceptance test** | Governor outputs bounded α∈[0,1] and bounded v_corr; α+v_corr form deterministic v_gov; no critic-to-actor leakage; checkpoint-compatible; deterministic mean action |
+| **Status** | ✅ Complete |
 | **Module ref** | Handbook M3 (`instinctRL/governor.py` — replace `MinimalGovernor` with trainable version) |
 
 ### D-002: Full MID360 Raw Range / Mask / Weight / History Preprocessing
@@ -91,11 +99,13 @@ Training convergence is still not complete. Before claiming learned-policy succe
 |-------|-------|
 | **Deferred from** | instinctRL-A (out of scope; fixed + simple random only) |
 | **Reason** | Aggressive/adversarial commands test ICS attenuation and safety boundaries. They belong to later evaluation stages, not the baseline smoke test. |
-| **Target stage** | instinctRL-E or instinctRL-G |
+| **Target stage** | instinctRL-G |
 | **Trigger condition** | ICS attenuation validated (D-005) |
 | **Acceptance test** | 5 modes (Normal Nav, Aggressive Step, Adversarial Suicide, Oscillation, Recovery Hover) produce expected velocity profiles; log command mode per episode |
-| **Status** | ⬜ Open |
+| **Status** | ✅ Complete for corrected training-curriculum wiring; full G baseline/evaluation execution remains open |
 | **Module ref** | Existing `command_generator.py` (`AdversarialCommandGenerator`) — reuse, do not rewrite |
+
+**2026-07-09 correction**: `instinctRL.command.source=curriculum_generator` now wires `AdversarialCommandGenerator` into the env command path with staged probabilities. This does not complete the full G baseline matrix or paper-level ablations.
 
 ### D-007: Reward Integration (Tracking, Anchor, Safety, Intervention, Smoothness, Collision)
 
@@ -120,12 +130,35 @@ Training convergence is still not complete. Before claiming learned-policy succe
 | **Target stage** | instinctRL-F or instinctRL-G |
 | **Trigger condition** | Training pipeline stable; checkpoint export path defined; ROS inference path available |
 | **Acceptance test** | Audit runs at: env construction ✓, policy init, rollout collection, evaluation, checkpoint export, ROS inference; fails on forbidden key patterns in all contexts |
-| **Status** | ⬜ Partially open (env construction check done in instinctRL-A) |
+| **Status** | ✅ Complete for first formal training requirements; ROS/H deployment audit remains deferred |
 | **Module ref** | Handbook M0 + M7 (`instinctRL/audit.py` — extend with additional hooks) |
+
+**A2 closeout correction**: policy init audit, rollout collection audit, checkpoint save/load sanity, and forbidden-key actor scan are implemented. Evaluation/export/ROS inference audit remains future G/H work and is not a first learned-governor training blocker.
+
+---
+
+### D-012: PPO Numerical Stability Runtime Acceptance
+
+| Field | Value |
+|-------|-------|
+| **Deferred from** | First formal learned-governor training scale-up |
+| **Reason** | A conservative learned-governor run failed around 563k frames with non-finite `("agents", "action_normalized")`. Source/unit hardening is implemented, but the required 1M-frame runtime acceptance has not completed. |
+| **Target stage** | A2-S closeout before resumed long learned-governor training |
+| **Trigger condition** | Isaac/Nucleus assets root is restored so runtime training can import Orbit/env assets |
+| **Acceptance test** | Conservative learned-governor config completes at least 1,048,576 frames without non-finite actor action, distribution params, loss, gradient, or model parameters; no diagnostic snapshot is emitted except expected test artifacts |
+| **Status** | ⬜ Open runtime acceptance; source/unit hardening complete |
+| **Module ref** | `training/scripts/ppo.py`, `training/scripts/utils.py`, `training/scripts/instinctRL/ppo_stability.py` |
+
+**A2-S closeout correction**: Bounded Beta parameters, finite audits, all-module grad clipping, safe advantage normalization, target-KL early stop, and diagnostic snapshots are implemented and unit-tested. Formal long learned-governor training remains on hold until the runtime acceptance passes.
 
 ---
 
 ## Completed / Corrected Items
+
+### D-001: Trainable Governor Head
+- **Closeout correction**: Accepted as of 2026-07-05 for A2. PPO learned mode now samples a 4D normalized governor action, decodes `alpha` and `v_corr` from actor-clean `state_vec`, and the training wrapper converts body-frame `v_gov_b` through optional ICS and body-to-world controller adaptation.
+- **Validation evidence**: A2 unit tests passed (`13 passed`), A/B/C/D/E/F+A2 regression suite passed (`64 passed`), changed files compile, and GPU learned-governor train smoke passed with rollout/checkpoint audits and `env_frames=16`.
+- **Status**: ✅ Complete for trainable governor implementation and first formal training readiness. Training convergence remains open evidence.
 
 ### D-002: Full MID360 Raw Range / Mask / Weight / History Preprocessing
 - **Closeout correction**: Fully accepted as of 2026-07-04 after B-fix implementation, NavRL pytest, and user-side GPU smoke.
