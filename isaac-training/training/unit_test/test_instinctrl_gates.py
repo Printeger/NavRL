@@ -94,7 +94,14 @@ def test_hard_gate_missing_required_metric_fails():
     )
 
 
-def test_sweep_dry_run_jobs_include_a2r5_config_only_overrides():
+def _last_override(command, key):
+    prefix = f"{key}="
+    values = [arg.split("=", 1)[1] for arg in command if arg.startswith(prefix)]
+    assert values, f"missing override for {key}"
+    return values[-1]
+
+
+def test_sweep_dry_run_jobs_include_a2r5b_height_band_overrides():
     variants = default_safety_preservation_variants()
     jobs = build_jobs(
         python_exe="python",
@@ -102,16 +109,16 @@ def test_sweep_dry_run_jobs_include_a2r5_config_only_overrides():
         seeds=[0],
         frames=131072,
         artifacts_dir=Path("/tmp/instinctrl_sweep"),
-        tag="unit",
+        tag="a2r5b_sweep",
     )
 
     expected_names = [
-        "r5_null_speed4",
-        "r5_amp3",
-        "r5_height16",
-        "r5_safety_margin",
-        "r5_null_amp_height",
-        "r5_null_amp_height_safety",
+        "r5b_ceiling4",
+        "r5b_ceiling8",
+        "r5b_band_floor12_ceiling8",
+        "r5b_ceiling8_amp25",
+        "r5b_ceiling8_vcorr030",
+        "r5b_band_amp25_vcorr030",
     ]
 
     assert [variant.name for variant in variants] == expected_names
@@ -130,51 +137,72 @@ def test_sweep_dry_run_jobs_include_a2r5_config_only_overrides():
     assert "instinctRL.reward.clearance_margin=0.4" in command_text
     assert "instinctRL.ics.active_horizon_margin=1.0" in command_text
     assert "instinctRL.ics.clearance_margin=0.15" in command_text
+    assert "instinctRL.reward.null_command_speed_weight=4.0" in command_text
+    assert "instinctRL.reward.height_floor=0.5" in command_text
+    assert "instinctRL.reward.height_floor_weight=8.0" in command_text
+    assert "instinctRL.reward.height_ceiling=4.0" in command_text
     assert "instinctRL.eval.suite=short_diagnostic" in " ".join(jobs[0].eval_command)
 
-    null_speed = next(job for job in jobs if job.variant == "r5_null_speed4")
-    assert (
-        "instinctRL.reward.null_command_speed_weight=4.0"
-        in " ".join(null_speed.train_command)
-    )
-
-    amp = next(job for job in jobs if job.variant == "r5_amp3")
-    assert "instinctRL.reward.command_amplification_weight=3.0" in " ".join(
-        amp.train_command
-    )
-
-    height = next(job for job in jobs if job.variant == "r5_height16")
-    assert "instinctRL.reward.height_floor_weight=16.0" in " ".join(
-        height.train_command
-    )
-
-    safety = next(job for job in jobs if job.variant == "r5_safety_margin")
-    safety_text = " ".join(safety.train_command)
-    assert "instinctRL.reward.safety_weight=1.5" in safety_text
-    assert "instinctRL.reward.clearance_margin=0.5" in safety_text
-    assert "instinctRL.ics.active_horizon_margin=1.2" in safety_text
-    assert "instinctRL.ics.clearance_margin=0.2" in safety_text
-
-    combined = next(job for job in jobs if job.variant == "r5_null_amp_height")
-    combined_text = " ".join(combined.train_command)
-    assert "instinctRL.reward.null_command_speed_weight=4.0" in combined_text
-    assert "instinctRL.reward.command_amplification_weight=3.0" in combined_text
-    assert "instinctRL.reward.height_floor_weight=16.0" in combined_text
-
-    combined_safety = next(
-        job for job in jobs if job.variant == "r5_null_amp_height_safety"
-    )
-    combined_safety_text = " ".join(combined_safety.train_command)
-    assert "instinctRL.reward.null_command_speed_weight=4.0" in combined_safety_text
-    assert "instinctRL.reward.command_amplification_weight=3.0" in combined_safety_text
-    assert "instinctRL.reward.height_floor_weight=16.0" in combined_safety_text
-    assert "instinctRL.reward.safety_weight=1.5" in combined_safety_text
-    assert "instinctRL.reward.clearance_margin=0.5" in combined_safety_text
-    assert "instinctRL.ics.active_horizon_margin=1.2" in combined_safety_text
-    assert "instinctRL.ics.clearance_margin=0.2" in combined_safety_text
+    expected_effective_overrides = {
+        "r5b_ceiling4": {
+            "instinctRL.reward.height_floor_weight": "8.0",
+            "instinctRL.reward.height_ceiling_weight": "4.0",
+            "instinctRL.reward.command_amplification_weight": "2.0",
+            "algo.instinctRL.governor.v_corr_limit": "0.35",
+        },
+        "r5b_ceiling8": {
+            "instinctRL.reward.height_floor_weight": "8.0",
+            "instinctRL.reward.height_ceiling_weight": "8.0",
+            "instinctRL.reward.command_amplification_weight": "2.0",
+            "algo.instinctRL.governor.v_corr_limit": "0.35",
+        },
+        "r5b_band_floor12_ceiling8": {
+            "instinctRL.reward.height_floor_weight": "12.0",
+            "instinctRL.reward.height_ceiling_weight": "8.0",
+            "instinctRL.reward.command_amplification_weight": "2.0",
+            "algo.instinctRL.governor.v_corr_limit": "0.35",
+        },
+        "r5b_ceiling8_amp25": {
+            "instinctRL.reward.height_floor_weight": "8.0",
+            "instinctRL.reward.height_ceiling_weight": "8.0",
+            "instinctRL.reward.command_amplification_weight": "2.5",
+            "algo.instinctRL.governor.v_corr_limit": "0.35",
+        },
+        "r5b_ceiling8_vcorr030": {
+            "instinctRL.reward.height_floor_weight": "8.0",
+            "instinctRL.reward.height_ceiling_weight": "8.0",
+            "instinctRL.reward.command_amplification_weight": "2.0",
+            "algo.instinctRL.governor.v_corr_limit": "0.30",
+        },
+        "r5b_band_amp25_vcorr030": {
+            "instinctRL.reward.height_floor_weight": "12.0",
+            "instinctRL.reward.height_ceiling_weight": "8.0",
+            "instinctRL.reward.command_amplification_weight": "2.5",
+            "algo.instinctRL.governor.v_corr_limit": "0.30",
+        },
+    }
+    jobs_by_variant = {job.variant: job for job in jobs}
+    for variant_name, expected_overrides in expected_effective_overrides.items():
+        command = jobs_by_variant[variant_name].train_command
+        assert (
+            _last_override(command, "instinctRL.reward.null_command_speed_weight")
+            == "4.0"
+        )
+        assert _last_override(command, "instinctRL.reward.height_floor") == "0.5"
+        assert _last_override(command, "instinctRL.reward.height_ceiling") == "4.0"
+        for key, expected_value in expected_overrides.items():
+            assert _last_override(command, key) == expected_value
 
     for job in jobs:
         assert "instinctRL.reward.anchor_weight=5.0" not in job.train_command
+        assert "instinctRL.reward.safety_weight=1.5" not in job.train_command
+        assert "instinctRL.reward.clearance_margin=0.5" not in job.train_command
+        assert "instinctRL.ics.active_horizon_margin=1.2" not in job.train_command
+        assert "instinctRL.ics.clearance_margin=0.2" not in job.train_command
+        assert any(
+            arg.startswith("wandb.name=instinctrl_a2r5b_sweep_")
+            for arg in job.train_command
+        )
 
     sweep_source = open(SWEEP_PATH, encoding="utf-8").read()
-    assert 'parser.add_argument("--tag", default="a2r5_sweep")' in sweep_source
+    assert 'parser.add_argument("--tag", default="a2r5b_sweep")' in sweep_source

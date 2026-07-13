@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5A 128k sweep executed; no promotion; config-only tuning stopped pending R5B height/safety diagnostics  
+**Status**: R5B 128k sweep dry-run passed; no R5B execution or 1M run performed
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -343,6 +343,58 @@ Next adjustment:
 - R5B sweep variants may be designed only after the diagnostics patch passes the full `training/unit_test/test_instinctrl_*.py` set and the first R5B diagnostic eval artifact is inspected.
 - Still do not run 1M, do not run a new sweep, do not warm-start a failed checkpoint, and do not modify hard gates.
 
+## A2-R5B 128k Sweep Plan - 2026-07-13
+
+R5B sweep-only scope:
+
+- Use the existing R5B height-band reward and vertical diagnostics. Do not modify actor observation, learned action semantics, or hard gates.
+- Start from the best R5A direction, `r5_null_speed4`, with `algo.instinctRL.governor.v_corr_limit=0.35`, `instinctRL.reward.null_command_speed_weight=4.0`, `instinctRL.reward.height_floor=0.5`, `instinctRL.reward.height_floor_weight=8.0`, and `instinctRL.reward.height_ceiling=4.0`.
+- Retain the R5A common base: anchor 4.0, null output 0.1, amp 2.0, proxy tracking 0.5, safety 1.2, clearance margin 0.4, ICS active horizon margin 1.0, and ICS clearance margin 0.15.
+- Do not add `anchor_weight=5.0` and do not reintroduce the failed R5A safety-margin bundle.
+- This pass is dry-run only. Do not pass `--execute`, do not run 1M, and do not warm-start any checkpoint.
+
+Default sweep tag: `a2r5b_sweep`.
+
+| Variant | Additional overrides | Hypothesis |
+|---|---|---|
+| `r5b_ceiling4` | `instinctRL.reward.height_ceiling_weight=4.0` | A light ceiling penalty may remove above-bound termination without destabilizing the R5A best station/safety direction. |
+| `r5b_ceiling8` | `instinctRL.reward.height_ceiling_weight=8.0` | A ceiling penalty matching the floor weight may enforce the height band more reliably than the light ceiling branch. |
+| `r5b_band_floor12_ceiling8` | `instinctRL.reward.height_floor_weight=12.0`, `instinctRL.reward.height_ceiling_weight=8.0` | A stronger lower band plus ceiling may reduce both below-bound and above-bound failures. |
+| `r5b_ceiling8_amp25` | `instinctRL.reward.height_ceiling_weight=8.0`, `instinctRL.reward.command_amplification_weight=2.5` | Moderate amp pressure may reduce the remaining amplification misses without the R5A amp3 collapse. |
+| `r5b_ceiling8_vcorr030` | `instinctRL.reward.height_ceiling_weight=8.0`, `algo.instinctRL.governor.v_corr_limit=0.30` | A slightly smaller correction envelope may reduce vertical/height overshoot while preserving the R5A `v_corr_limit=0.35` direction as a reference. |
+| `r5b_band_amp25_vcorr030` | `instinctRL.reward.height_floor_weight=12.0`, `instinctRL.reward.height_ceiling_weight=8.0`, `instinctRL.reward.command_amplification_weight=2.5`, `algo.instinctRL.governor.v_corr_limit=0.30` | Combined height band, moderate amp, and lower correction envelope may be the best balanced branch if single levers move in the right direction. |
+
+## R5B Sweep Dry-Run Backfill - 2026-07-13
+
+Code changes:
+
+- Updated `training/scripts/instinctRL/sweep.py` default `--tag` from `a2r5_sweep` to `a2r5b_sweep`.
+- Replaced the default R5A variant list with exactly the six R5B variants in the plan above.
+- Kept dry-run as the default behavior; `--execute` remains explicit and was not run.
+- Kept `training/scripts/instinctRL/gates.py` unchanged.
+- Updated `training/unit_test/test_instinctrl_gates.py` to assert the R5B variant names/order, R5B base overrides, effective ceiling/floor/amp/vcorr overrides, default tag, short diagnostic eval suite, absence of `anchor_weight=5.0`, and absence of the failed R5A safety-margin bundle.
+
+Validation results:
+
+- `python -m py_compile training/scripts/instinctRL/sweep.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_gates.py`: passed, `5 passed in 1.11s`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `105 passed, 11 warnings in 3.79s`.
+
+Dry-run review:
+
+- Command run: `python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6`.
+- Result: passed as dry-run only with `execute=false`, `frames=131072`, `seed=0`, and six generated jobs.
+- Generated artifact paths pointed under `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_115654/`, but that directory was absent after the run because `--execute` was not used.
+- Generated variants, in order: `r5b_ceiling4`, `r5b_ceiling8`, `r5b_band_floor12_ceiling8`, `r5b_ceiling8_amp25`, `r5b_ceiling8_vcorr030`, `r5b_band_amp25_vcorr030`.
+- All run names used the `instinctrl_a2r5b_sweep_*_131072_seed0` prefix.
+- Eval commands retained `instinctRL.eval.suite=short_diagnostic`.
+
+Decision:
+
+- R5B dry-run passed and is ready for explicit execution review.
+- No R5B sweep was executed, no 1M/formal run was executed, no warm-start checkpoint was used, and no hard gates were modified.
+- 1M remains forbidden until a 128k R5B candidate passes all hard gates.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -377,4 +429,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-Start R5B planning before any further sweep. The next work should address height-band control and vertical-correction diagnostics, then inspect ICS attenuation timing and effective clearance diagnostics. Do not run 1M, do not change hard gates, and do not run another R5A config-only sweep without a recorded R5B plan.
+Review the R5B dry-run and only then decide whether to execute the exact six-job 128k R5B sweep. Do not run 1M, do not warm-start, and do not change hard gates.

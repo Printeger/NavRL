@@ -53,7 +53,7 @@ class SweepJob:
 
 
 def default_safety_preservation_variants() -> tuple[SweepVariant, ...]:
-    r5_base = (
+    r5b_base = (
         "algo.instinctRL.governor.v_corr_limit=0.35",
         "instinctRL.reward.preservation_high_weight=2.0",
         "instinctRL.reward.command_amplification_weight=2.0",
@@ -62,47 +62,40 @@ def default_safety_preservation_variants() -> tuple[SweepVariant, ...]:
         "instinctRL.reward.clearance_margin=0.4",
         "instinctRL.ics.active_horizon_margin=1.0",
         "instinctRL.ics.clearance_margin=0.15",
-    )
-    null_speed = (
         "instinctRL.reward.null_command_speed_weight=4.0",
+        "instinctRL.reward.height_floor=0.5",
+        "instinctRL.reward.height_floor_weight=8.0",
+        "instinctRL.reward.height_ceiling=4.0",
     )
-    amp3 = (
-        "instinctRL.reward.command_amplification_weight=3.0",
-    )
-    height16 = (
-        "instinctRL.reward.height_floor_weight=16.0",
-    )
-    safety_margin = (
-        "instinctRL.reward.safety_weight=1.5",
-        "instinctRL.reward.clearance_margin=0.5",
-        "instinctRL.ics.active_horizon_margin=1.2",
-        "instinctRL.ics.clearance_margin=0.2",
-    )
-    null_amp_height = null_speed + amp3 + height16
+    ceiling4 = ("instinctRL.reward.height_ceiling_weight=4.0",)
+    ceiling8 = ("instinctRL.reward.height_ceiling_weight=8.0",)
+    band_floor12 = ("instinctRL.reward.height_floor_weight=12.0",)
+    amp25 = ("instinctRL.reward.command_amplification_weight=2.5",)
+    vcorr030 = ("algo.instinctRL.governor.v_corr_limit=0.30",)
     return (
         SweepVariant(
-            "r5_null_speed4",
-            r5_base + null_speed,
+            "r5b_ceiling4",
+            r5b_base + ceiling4,
         ),
         SweepVariant(
-            "r5_amp3",
-            r5_base + amp3,
+            "r5b_ceiling8",
+            r5b_base + ceiling8,
         ),
         SweepVariant(
-            "r5_height16",
-            r5_base + height16,
+            "r5b_band_floor12_ceiling8",
+            r5b_base + band_floor12 + ceiling8,
         ),
         SweepVariant(
-            "r5_safety_margin",
-            r5_base + safety_margin,
+            "r5b_ceiling8_amp25",
+            r5b_base + ceiling8 + amp25,
         ),
         SweepVariant(
-            "r5_null_amp_height",
-            r5_base + null_amp_height,
+            "r5b_ceiling8_vcorr030",
+            r5b_base + ceiling8 + vcorr030,
         ),
         SweepVariant(
-            "r5_null_amp_height_safety",
-            r5_base + null_amp_height + safety_margin,
+            "r5b_band_amp25_vcorr030",
+            r5b_base + band_floor12 + ceiling8 + amp25 + vcorr030,
         ),
     )
 
@@ -277,7 +270,7 @@ def _main() -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
     parser.add_argument("--limit", type=int, default=0, help="Limit number of generated jobs")
     parser.add_argument("--python", default=sys.executable)
-    parser.add_argument("--tag", default="a2r5_sweep")
+    parser.add_argument("--tag", default="a2r5b_sweep")
     parser.add_argument(
         "--artifacts-dir",
         default="../docs/instinctRL_devlog/tests/artifacts/sweeps",
