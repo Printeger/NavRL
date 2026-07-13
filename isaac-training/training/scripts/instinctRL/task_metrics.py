@@ -317,3 +317,108 @@ def compute_handbook_step_metrics(
         "ics_emergency": emergency,
         "ics_violation": violation,
     }
+
+
+def compute_vertical_channel_step_metrics(
+    *,
+    v_cmd_z: torch.Tensor,
+    v_corr_z: torch.Tensor,
+    v_gov_z: torch.Tensor,
+    v_final_z: torch.Tensor,
+    station_drift: Optional[torch.Tensor] = None,
+    command_preservation_ratio: Optional[torch.Tensor] = None,
+    command_amplification_vertical: Optional[torch.Tensor] = None,
+    ics_beta: Optional[torch.Tensor] = None,
+    ics_emergency: Optional[torch.Tensor] = None,
+    v_corr_limit: float = 0.0,
+    command_eps: float = 1e-3,
+    saturation_tol: float = 1e-4,
+) -> Dict[str, torch.Tensor]:
+    """Per-step vertical governor diagnostics for mechanism diagnosis.
+
+    The returned tensors are all shaped [N, 1]. Conditional quantities are
+    returned as masked numerators; callers should divide by the corresponding
+    mask sum when computing "when active" means.
+    """
+    cmd = _as_scalar(v_cmd_z, "v_cmd_z", v_cmd_z.reshape(-1).shape[0], device=v_cmd_z.device)
+    N = cmd.shape[0]
+    device = cmd.device
+    corr = _as_scalar(v_corr_z, "v_corr_z", N, device=device)
+    gov = _as_scalar(v_gov_z, "v_gov_z", N, device=device)
+    final = _as_scalar(v_final_z, "v_final_z", N, device=device)
+    drift = _as_scalar(station_drift, "station_drift", N, default=0.0, device=device)
+    preservation = _as_scalar(
+        command_preservation_ratio,
+        "command_preservation_ratio",
+        N,
+        default=0.0,
+        device=device,
+    )
+    amplification = _as_scalar(
+        command_amplification_vertical,
+        "command_amplification_vertical",
+        N,
+        default=0.0,
+        device=device,
+    )
+    beta = _as_scalar(ics_beta, "ics_beta", N, default=1.0, device=device).clamp(0.0, 1.0)
+    emergency = _as_scalar(
+        ics_emergency,
+        "ics_emergency",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+
+    eps = float(command_eps)
+    if not math.isfinite(eps) or eps < 0.0:
+        raise ValueError("command_eps must be finite and >= 0")
+    tol = float(saturation_tol)
+    if not math.isfinite(tol) or tol < 0.0:
+        raise ValueError("saturation_tol must be finite and >= 0")
+    limit = float(v_corr_limit)
+    if not math.isfinite(limit) or limit < 0.0:
+        raise ValueError("v_corr_limit must be finite and >= 0")
+
+    command_active = (cmd.abs() > eps).float()
+    command_null = 1.0 - command_active
+    corr_abs = corr.abs()
+    corr_active = (corr_abs > eps).float()
+    saturated = (
+        corr_abs >= max(limit - tol, 0.0)
+    ).float() * float(limit > 0.0)
+    gov_minus_cmd = gov - cmd
+    final_minus_cmd = final - cmd
+    ics_delta = final - gov
+    reinforces = ((cmd * corr) > 0.0).float() * command_active
+    opposes = ((cmd * corr) < 0.0).float() * command_active
+    null_corr_active = command_null * corr_active
+    tracking_corr_active = command_active * corr_active
+
+    return {
+        "vertical_command_active": command_active,
+        "vertical_command_null": command_null,
+        "vertical_corr_z": corr,
+        "vertical_corr_z_abs": corr_abs,
+        "vertical_corr_z_positive": (corr > 0.0).float(),
+        "vertical_corr_z_negative": (corr < 0.0).float(),
+        "vertical_corr_z_saturated": saturated,
+        "vertical_gov_minus_cmd_z": gov_minus_cmd,
+        "vertical_gov_minus_cmd_z_abs": gov_minus_cmd.abs(),
+        "vertical_final_minus_cmd_z": final_minus_cmd,
+        "vertical_final_minus_cmd_z_abs": final_minus_cmd.abs(),
+        "vertical_ics_delta_z": ics_delta,
+        "vertical_ics_delta_z_abs": ics_delta.abs(),
+        "vertical_corr_reinforces_command": reinforces,
+        "vertical_corr_opposes_command": opposes,
+        "vertical_null_corr_active": null_corr_active,
+        "vertical_null_corr_abs": corr_abs * command_null,
+        "vertical_null_station_drift_when_corr_active": drift * null_corr_active,
+        "vertical_tracking_corr_active": tracking_corr_active,
+        "vertical_tracking_amplification_when_corr_active": amplification
+        * tracking_corr_active,
+        "vertical_tracking_preservation_when_corr_active": preservation
+        * tracking_corr_active,
+        "vertical_ics_beta": beta,
+        "vertical_ics_emergency": emergency,
+    }

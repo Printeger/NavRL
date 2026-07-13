@@ -209,3 +209,75 @@ def test_handbook_step_metrics_report_height_and_split_command_amplification():
     assert abs(summary["height_ceiling_margin"][1].item() + 0.25) < 1e-6
     assert summary["v_cmd_z"].reshape(-1).tolist() == [0.0, 1.0, 1.0, 0.0]
     assert summary["v_final_b_z"].reshape(-1).tolist() == [0.0, 1.5, 1.5, 2.0]
+
+
+def test_vertical_channel_metrics_report_sign_masks_saturation_and_conditionals():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_vertical_channel_step_metrics(
+        v_cmd_z=torch.tensor([[0.0], [1.0], [-1.0], [1.0]]),
+        v_corr_z=torch.tensor([[0.2], [0.5], [0.5], [-0.1]]),
+        v_gov_z=torch.tensor([[0.2], [1.5], [-0.5], [0.9]]),
+        v_final_z=torch.tensor([[0.1], [1.3], [-0.4], [0.7]]),
+        station_drift=torch.tensor([[2.0], [3.0], [4.0], [5.0]]),
+        command_preservation_ratio=torch.tensor([[1.0], [0.8], [0.9], [1.1]]),
+        command_amplification_vertical=torch.tensor([[0.0], [0.1], [0.2], [0.3]]),
+        ics_beta=torch.tensor([[1.0], [0.5], [1.0], [0.2]]),
+        ics_emergency=torch.tensor([[0.0], [1.0], [0.0], [0.0]]),
+        v_corr_limit=0.5,
+        command_eps=0.05,
+        saturation_tol=1e-4,
+    )
+
+    assert summary["vertical_command_active"].reshape(-1).tolist() == [0.0, 1.0, 1.0, 1.0]
+    assert summary["vertical_command_null"].reshape(-1).tolist() == [1.0, 0.0, 0.0, 0.0]
+    assert summary["vertical_corr_z_positive"].reshape(-1).tolist() == [1.0, 1.0, 1.0, 0.0]
+    assert summary["vertical_corr_z_negative"].reshape(-1).tolist() == [0.0, 0.0, 0.0, 1.0]
+    assert summary["vertical_corr_z_saturated"].reshape(-1).tolist() == [0.0, 1.0, 1.0, 0.0]
+    assert torch.allclose(
+        summary["vertical_gov_minus_cmd_z"].reshape(-1),
+        torch.tensor([0.2, 0.5, 0.5, -0.1]),
+    )
+    assert torch.allclose(
+        summary["vertical_final_minus_cmd_z"].reshape(-1),
+        torch.tensor([0.1, 0.3, 0.6, -0.3]),
+    )
+    assert torch.allclose(
+        summary["vertical_ics_delta_z"].reshape(-1),
+        torch.tensor([-0.1, -0.2, 0.1, -0.2]),
+    )
+    assert summary["vertical_corr_reinforces_command"].reshape(-1).tolist() == [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+    ]
+    assert summary["vertical_corr_opposes_command"].reshape(-1).tolist() == [
+        0.0,
+        0.0,
+        1.0,
+        1.0,
+    ]
+    assert summary["vertical_null_corr_active"].reshape(-1).tolist() == [1.0, 0.0, 0.0, 0.0]
+    assert torch.allclose(
+        summary["vertical_null_corr_abs"].reshape(-1),
+        torch.tensor([0.2, 0.0, 0.0, 0.0]),
+    )
+    assert torch.allclose(
+        summary["vertical_null_station_drift_when_corr_active"].reshape(-1),
+        torch.tensor([2.0, 0.0, 0.0, 0.0]),
+    )
+    assert summary["vertical_tracking_corr_active"].reshape(-1).tolist() == [
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+    ]
+    assert torch.allclose(
+        summary["vertical_tracking_amplification_when_corr_active"].reshape(-1),
+        torch.tensor([0.0, 0.1, 0.2, 0.3]),
+    )
+    assert torch.allclose(
+        summary["vertical_tracking_preservation_when_corr_active"].reshape(-1),
+        torch.tensor([0.0, 0.8, 0.9, 1.1]),
+    )

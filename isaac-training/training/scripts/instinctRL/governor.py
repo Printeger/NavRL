@@ -71,17 +71,27 @@ class TrainableGovernorDecoder(nn.Module):
     def __init__(
         self,
         v_corr_limit: float = 0.5,
+        v_corr_z_limit: Optional[float] = None,
         velocity_limit: float = 2.0,
         smoothing_tau: float = 0.0,
         null_vcorr_gate_enabled: bool = False,
         null_vcorr_gate_eps: float = 0.25,
         null_vcorr_gate_min: float = 0.25,
+        tracking_vcorr_z_gate_enabled: bool = False,
+        tracking_vcorr_z_gate_eps: float = 1e-3,
+        tracking_vcorr_z_gain: float = 1.0,
     ):
         super().__init__()
         if not torch.isfinite(torch.tensor(float(v_corr_limit))):
             raise ValueError("v_corr_limit must be finite")
         if v_corr_limit < 0:
             raise ValueError(f"v_corr_limit must be >= 0, got {v_corr_limit}")
+        if v_corr_z_limit is None:
+            v_corr_z_limit = v_corr_limit
+        if not torch.isfinite(torch.tensor(float(v_corr_z_limit))):
+            raise ValueError("v_corr_z_limit must be finite")
+        if v_corr_z_limit < 0:
+            raise ValueError(f"v_corr_z_limit must be >= 0, got {v_corr_z_limit}")
         if velocity_limit <= 0:
             raise ValueError(f"velocity_limit must be > 0, got {velocity_limit}")
         if not 0.0 <= smoothing_tau < 1.0:
@@ -95,12 +105,30 @@ class TrainableGovernorDecoder(nn.Module):
                 "null_vcorr_gate_min must satisfy 0.0 <= value <= 1.0, "
                 f"got {null_vcorr_gate_min}"
             )
+        if not torch.isfinite(torch.tensor(float(tracking_vcorr_z_gate_eps))):
+            raise ValueError("tracking_vcorr_z_gate_eps must be finite")
+        if tracking_vcorr_z_gate_eps <= 0.0:
+            raise ValueError(
+                "tracking_vcorr_z_gate_eps must be > 0, "
+                f"got {tracking_vcorr_z_gate_eps}"
+            )
+        if not torch.isfinite(torch.tensor(float(tracking_vcorr_z_gain))):
+            raise ValueError("tracking_vcorr_z_gain must be finite")
+        if not 0.0 <= tracking_vcorr_z_gain <= 1.0:
+            raise ValueError(
+                "tracking_vcorr_z_gain must satisfy 0.0 <= value <= 1.0, "
+                f"got {tracking_vcorr_z_gain}"
+            )
         self.v_corr_limit = float(v_corr_limit)
+        self.v_corr_z_limit = float(v_corr_z_limit)
         self.velocity_limit = float(velocity_limit)
         self.smoothing_tau = float(smoothing_tau)
         self.null_vcorr_gate_enabled = bool(null_vcorr_gate_enabled)
         self.null_vcorr_gate_eps = float(null_vcorr_gate_eps)
         self.null_vcorr_gate_min = float(null_vcorr_gate_min)
+        self.tracking_vcorr_z_gate_enabled = bool(tracking_vcorr_z_gate_enabled)
+        self.tracking_vcorr_z_gate_eps = float(tracking_vcorr_z_gate_eps)
+        self.tracking_vcorr_z_gain = float(tracking_vcorr_z_gain)
 
     def forward(
         self,
@@ -120,7 +148,9 @@ class TrainableGovernorDecoder(nn.Module):
 
         action = action_normalized.clamp(0.0, 1.0)
         alpha = action[..., 0:1]
-        v_corr = (2.0 * action[..., 1:4] - 1.0) * self.v_corr_limit
+        v_corr_xy = (2.0 * action[..., 1:3] - 1.0) * self.v_corr_limit
+        v_corr_z = (2.0 * action[..., 3:4] - 1.0) * self.v_corr_z_limit
+        v_corr = torch.cat((v_corr_xy, v_corr_z), dim=-1)
         v_cmd_b = extract_latest_v_cmd_b(state_vec)
         if self.null_vcorr_gate_enabled:
             command_norm = v_cmd_b.norm(dim=-1, keepdim=True)
@@ -129,6 +159,14 @@ class TrainableGovernorDecoder(nn.Module):
                 1.0,
             )
             v_corr = v_corr * gate
+        if self.tracking_vcorr_z_gate_enabled:
+            tracking_active = v_cmd_b[..., 2:3].abs() > self.tracking_vcorr_z_gate_eps
+            z_gain = torch.where(
+                tracking_active,
+                torch.full_like(v_corr[..., 2:3], self.tracking_vcorr_z_gain),
+                torch.ones_like(v_corr[..., 2:3]),
+            )
+            v_corr = torch.cat((v_corr[..., :2], v_corr[..., 2:3] * z_gain), dim=-1)
         if prev_action_b is None:
             prev_action_b = extract_latest_prev_action_b(state_vec)
 

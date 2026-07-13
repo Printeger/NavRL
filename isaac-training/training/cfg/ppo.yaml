@@ -41,8 +41,12 @@ algo:
       alpha_mode: "learned"            # "fixed" (B0/direct baseline) | "learned" (A2)
       alpha_fixed: 1.0                 # Fixed alpha for B0
       v_corr_limit: 0.5                # Max |v_corr| per axis (m/s)
+      v_corr_z_limit: null             # Null inherits v_corr_limit; optional vertical correction limit
       velocity_limit: 2.0              # Max ||v_gov|| (m/s)
       smoothing_tau: 0.0               # Exponential smoothing factor (0 = off)
       null_vcorr_gate_enabled: true    # Soft null prior: allow small station correction at null command
       null_vcorr_gate_eps: 0.25        # Ramp v_corr from soft minimum to full strength by this command norm
       null_vcorr_gate_min: 0.25        # Retain 25% correction authority at exactly null command
+      tracking_vcorr_z_gate_enabled: false # Default-off vertical correction attenuation during vertical tracking
+      tracking_vcorr_z_gate_eps: 1e-3   # Tracking-active when abs(v_cmd_b.z) exceeds this threshold
+      tracking_vcorr_z_gain: 1.0        # 1.0 preserves current behavior; 0.0 hard-gates active tracking z correction

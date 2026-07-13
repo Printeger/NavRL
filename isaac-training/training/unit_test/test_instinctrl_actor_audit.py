@@ -1,5 +1,6 @@
 import importlib.util
 import os
+import re
 import sys
 from types import SimpleNamespace
 
@@ -43,6 +44,25 @@ def test_actor_audit_rejects_forbidden_key_and_extra_schema_key():
     })
     assert not audit.check_actor_input(bad_key)[0]
     assert not audit.check_actor_schema(bad_key, history_len=4)[0]
+
+
+def test_actor_audit_rejects_velocity_map_slam_and_privileged_state_keys():
+    audit = _load_module()
+
+    for forbidden_key in [
+        "vertical_velocity",
+        "height_root_state",
+        "local_map",
+        "slam_pose",
+        "privileged_sim_state",
+    ]:
+        td = _td({
+            "lidar_grid": torch.zeros(2, 12, 360, 59),
+            "state_vec": torch.zeros(2, 52),
+            forbidden_key: torch.zeros(2, 1),
+        })
+        assert not audit.check_actor_input(td)[0]
+        assert not audit.check_actor_schema(td, history_len=4)[0]
 
 
 def test_rollout_audit_requires_learned_governor_action_dim_and_finite_reward():
@@ -110,6 +130,33 @@ def test_learned_governor_source_does_not_read_privileged_v_cmd():
     assert "info\", \"v_cmd" not in text
 
 
+def test_ppo_actor_feature_extractor_source_uses_exact_actor_observation_keys():
+    ppo_source = os.path.join(SCRIPTS, "ppo.py")
+    ppo_text = open(ppo_source, encoding="utf-8").read()
+    actor_block = ppo_text.split("self.actor_feature_extractor = TensorDictSequential", 1)[1]
+    actor_block = actor_block.split("self.critic_feature_extractor = TensorDictSequential", 1)[0]
+
+    observation_keys = re.findall(
+        r'\("agents", "observation", "([^"]+)"\)',
+        actor_block,
+    )
+    assert sorted(observation_keys) == ["lidar_grid", "state_vec"]
+
+    for forbidden_key in [
+        "height_world_z",
+        "height_root_state",
+        "root_state",
+        "pose",
+        "odometry",
+        "actual_velocity_b",
+        "local_map",
+        "slam_pose",
+        "privileged_sim_state",
+        "drone_state",
+    ]:
+        assert f'("agents", "observation", "{forbidden_key}")' not in actor_block
+
+
 def test_r5b_height_diagnostics_do_not_enter_actor_observation_source():
     env_source = open(os.path.join(SCRIPTS, "env.py"), encoding="utf-8").read()
     ppo_source = open(os.path.join(SCRIPTS, "ppo.py"), encoding="utf-8").read()
@@ -123,6 +170,7 @@ def test_r5b_height_diagnostics_do_not_enter_actor_observation_source():
         "height_floor_violation",
         "height_ceiling_violation",
         "height_ceiling_margin",
+        "vertical_",
         "v_final_b_z",
         "governor_v_corr_z",
         "governor_v_final_b_z",

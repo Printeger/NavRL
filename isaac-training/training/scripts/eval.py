@@ -236,12 +236,31 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
     _copy_handbook_keys(
         combined_summary,
         station_summary,
-        prefixes=("station_keeping", "anchor", "observability", "null_command"),
+        prefixes=(
+            "station_keeping",
+            "anchor",
+            "observability",
+            "null_command",
+            "vertical_null",
+        ),
     )
     _copy_handbook_keys(
         combined_summary,
         tracking_summary,
-        prefixes=("tracking", "command", "height", "safety", "ics", "termination"),
+        prefixes=(
+            "tracking",
+            "command",
+            "height",
+            "safety",
+            "ics",
+            "termination",
+            "vertical_corr",
+            "vertical_final",
+            "vertical_gov",
+            "vertical_ics_delta",
+            "vertical_tracking",
+            "vertical_v_corr_limit",
+        ),
     )
 
     combined_info = {}

@@ -21,6 +21,8 @@ from tensordict.tensordict import TensorDict
 from omni_drones.utils.torchrl import RenderCallback
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
+from instinctRL.task_metrics import compute_vertical_channel_step_metrics
+
 # ============================================
 # 价值归一化（Value Normalization）
 # ============================================
@@ -810,6 +812,20 @@ def _categorical_fractions(accumulator: _TensorSummaryAccumulator, labels):
     }
 
 
+def _governor_v_corr_limit(cfg) -> float:
+    gov_cfg = getattr(getattr(getattr(cfg, "algo", None), "instinctRL", None), "governor", None)
+    return float(getattr(gov_cfg, "v_corr_limit", 0.0))
+
+
+def _masked_sum_mean(
+    numerator: _TensorSummaryAccumulator,
+    denominator: _TensorSummaryAccumulator,
+):
+    if denominator.sum <= 0.0:
+        return None
+    return numerator.sum / denominator.sum
+
+
 @torch.no_grad()
 def _evaluate_streaming(
     env,
@@ -835,6 +851,35 @@ def _evaluate_streaming(
         field_name: _TensorSummaryAccumulator()
         for field_name in optional_candidates
     }
+    vertical_diagnostic_accumulators = {
+        field_name: _TensorSummaryAccumulator()
+        for field_name in (
+            "vertical_command_active",
+            "vertical_command_null",
+            "vertical_corr_z",
+            "vertical_corr_z_abs",
+            "vertical_corr_z_positive",
+            "vertical_corr_z_negative",
+            "vertical_corr_z_saturated",
+            "vertical_gov_minus_cmd_z",
+            "vertical_gov_minus_cmd_z_abs",
+            "vertical_final_minus_cmd_z",
+            "vertical_final_minus_cmd_z_abs",
+            "vertical_ics_delta_z",
+            "vertical_ics_delta_z_abs",
+            "vertical_corr_reinforces_command",
+            "vertical_corr_opposes_command",
+            "vertical_null_corr_active",
+            "vertical_null_corr_abs",
+            "vertical_null_station_drift_when_corr_active",
+            "vertical_tracking_corr_active",
+            "vertical_tracking_amplification_when_corr_active",
+            "vertical_tracking_preservation_when_corr_active",
+            "vertical_ics_beta",
+            "vertical_ics_emergency",
+        )
+    }
+    v_corr_limit = _governor_v_corr_limit(cfg)
     reward_accumulator = _TensorSummaryAccumulator()
     reward_sum = 0.0
 
@@ -849,6 +894,46 @@ def _evaluate_streaming(
                 value = _get_optional_tensor(step_td, candidates)
                 if value is not None:
                     diagnostic_accumulators[field_name].add(value)
+
+            vertical_inputs = {
+                field_name: _get_optional_tensor(step_td, optional_candidates[field_name])
+                for field_name in (
+                    "governor_v_cmd_b_z",
+                    "governor_v_corr_z",
+                    "governor_v_gov_b_z",
+                    "governor_v_final_b_z",
+                )
+            }
+            if all(value is not None for value in vertical_inputs.values()):
+                vertical_metrics = compute_vertical_channel_step_metrics(
+                    v_cmd_z=vertical_inputs["governor_v_cmd_b_z"],
+                    v_corr_z=vertical_inputs["governor_v_corr_z"],
+                    v_gov_z=vertical_inputs["governor_v_gov_b_z"],
+                    v_final_z=vertical_inputs["governor_v_final_b_z"],
+                    station_drift=_get_optional_tensor(
+                        step_td,
+                        optional_candidates["station_keeping_drift"],
+                    ),
+                    command_preservation_ratio=_get_optional_tensor(
+                        step_td,
+                        optional_candidates["command_preservation_ratio"],
+                    ),
+                    command_amplification_vertical=_get_optional_tensor(
+                        step_td,
+                        optional_candidates["command_amplification_vertical"],
+                    ),
+                    ics_beta=_get_optional_tensor(
+                        step_td,
+                        optional_candidates["ics_beta"],
+                    ),
+                    ics_emergency=_get_optional_tensor(
+                        step_td,
+                        optional_candidates["ics_emergency"],
+                    ),
+                    v_corr_limit=v_corr_limit,
+                )
+                for field_name, value in vertical_metrics.items():
+                    vertical_diagnostic_accumulators[field_name].add(value)
 
             reward = _get_optional_tensor(step_td, [("next", "agents", "reward")])
             if reward is not None:
@@ -913,6 +998,9 @@ def _evaluate_streaming(
             absent_fields.append(field_name)
             continue
         summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+    for field_name, accumulator in vertical_diagnostic_accumulators.items():
+        if accumulator.count > 0:
+            summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
     actual_error = diagnostic_accumulators["tracking_actual_error_sq"].mean()
     if actual_error is not None:
         summary["eval/handbook.tracking_rmse_actual_body_vs_v_cmd"] = float(
@@ -1072,6 +1160,91 @@ def _evaluate_streaming(
     violation_rate = diagnostic_accumulators["ics_violation"].mean()
     if violation_rate is not None:
         summary["eval/handbook.ics_violation_rate"] = float(violation_rate)
+    vertical_corr = vertical_diagnostic_accumulators["vertical_corr_z"].mean()
+    if vertical_corr is not None:
+        summary["eval/handbook.vertical_v_corr_limit"] = float(v_corr_limit)
+        summary["eval/handbook.vertical_corr_z_mean"] = float(vertical_corr)
+        summary["eval/handbook.vertical_corr_z_abs_mean"] = float(
+            vertical_diagnostic_accumulators["vertical_corr_z_abs"].mean()
+        )
+        summary["eval/handbook.vertical_corr_z_positive_fraction"] = float(
+            vertical_diagnostic_accumulators["vertical_corr_z_positive"].mean()
+        )
+        summary["eval/handbook.vertical_corr_z_negative_fraction"] = float(
+            vertical_diagnostic_accumulators["vertical_corr_z_negative"].mean()
+        )
+        summary["eval/handbook.vertical_corr_z_saturation_rate"] = float(
+            vertical_diagnostic_accumulators["vertical_corr_z_saturated"].mean()
+        )
+        summary["eval/handbook.vertical_gov_minus_cmd_z_abs_mean"] = float(
+            vertical_diagnostic_accumulators["vertical_gov_minus_cmd_z_abs"].mean()
+        )
+        summary["eval/handbook.vertical_final_minus_cmd_z_abs_mean"] = float(
+            vertical_diagnostic_accumulators["vertical_final_minus_cmd_z_abs"].mean()
+        )
+        summary["eval/handbook.vertical_ics_delta_z_abs_mean"] = float(
+            vertical_diagnostic_accumulators["vertical_ics_delta_z_abs"].mean()
+        )
+        summary["eval/handbook.vertical_corr_reinforcing_fraction"] = float(
+            vertical_diagnostic_accumulators["vertical_corr_reinforces_command"].mean()
+        )
+        summary["eval/handbook.vertical_corr_opposing_fraction"] = float(
+            vertical_diagnostic_accumulators["vertical_corr_opposes_command"].mean()
+        )
+    vertical_null_count = vertical_diagnostic_accumulators["vertical_command_null"]
+    vertical_null_rate = _masked_sum_mean(
+        vertical_diagnostic_accumulators["vertical_null_corr_active"],
+        vertical_null_count,
+    )
+    if vertical_null_rate is not None:
+        summary["eval/handbook.vertical_null_corr_active_rate"] = float(
+            vertical_null_rate
+        )
+        summary["eval/handbook.vertical_null_corr_abs_mean"] = float(
+            _masked_sum_mean(
+                vertical_diagnostic_accumulators["vertical_null_corr_abs"],
+                vertical_null_count,
+            )
+        )
+    null_active = vertical_diagnostic_accumulators["vertical_null_corr_active"]
+    null_station_drift = _masked_sum_mean(
+        vertical_diagnostic_accumulators["vertical_null_station_drift_when_corr_active"],
+        null_active,
+    )
+    if null_station_drift is not None:
+        summary[
+            "eval/handbook.vertical_null_station_drift_mean_when_corr_active"
+        ] = float(null_station_drift)
+    vertical_active_count = vertical_diagnostic_accumulators["vertical_command_active"]
+    vertical_tracking_rate = _masked_sum_mean(
+        vertical_diagnostic_accumulators["vertical_tracking_corr_active"],
+        vertical_active_count,
+    )
+    if vertical_tracking_rate is not None:
+        summary["eval/handbook.vertical_tracking_corr_active_rate"] = float(
+            vertical_tracking_rate
+        )
+    tracking_active = vertical_diagnostic_accumulators["vertical_tracking_corr_active"]
+    tracking_amplification = _masked_sum_mean(
+        vertical_diagnostic_accumulators[
+            "vertical_tracking_amplification_when_corr_active"
+        ],
+        tracking_active,
+    )
+    if tracking_amplification is not None:
+        summary[
+            "eval/handbook.vertical_tracking_amplification_mean_when_corr_active"
+        ] = float(tracking_amplification)
+    tracking_preservation = _masked_sum_mean(
+        vertical_diagnostic_accumulators[
+            "vertical_tracking_preservation_when_corr_active"
+        ],
+        tracking_active,
+    )
+    if tracking_preservation is not None:
+        summary[
+            "eval/handbook.vertical_tracking_preservation_mean_when_corr_active"
+        ] = float(tracking_preservation)
     for field_name, handbook_name in (
         ("observability_valid_fraction", "observability_valid_fraction_mean"),
         ("observability_weighted_valid_fraction", "observability_weighted_valid_fraction_mean"),

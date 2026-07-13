@@ -47,6 +47,103 @@ def test_trainable_governor_bounds_formula_and_clip():
     assert torch.all(torch.linalg.norm(out.v_gov, dim=-1) <= 1.0 + 1e-6)
 
 
+def test_trainable_governor_default_z_limit_inherits_v_corr_limit():
+    decoder = TrainableGovernorDecoder(v_corr_limit=0.4, velocity_limit=10.0)
+    v_cmd = torch.tensor([[0.2, -0.1, 0.3], [-0.3, 0.2, -0.1]])
+    action = torch.tensor([
+        [0.25, 1.0, 0.0, 1.0],
+        [1.0, 0.75, 0.25, 0.0],
+    ])
+
+    out = decoder(action, _state_vec(v_cmd))
+
+    expected_v_corr = (2.0 * action[:, 1:4] - 1.0) * 0.4
+    assert torch.allclose(out.v_corr, expected_v_corr)
+    assert torch.allclose(out.v_gov, out.alpha * v_cmd + expected_v_corr)
+
+
+def test_trainable_governor_v_corr_z_limit_changes_only_z_correction():
+    baseline = TrainableGovernorDecoder(v_corr_limit=0.5, velocity_limit=10.0)
+    split_z = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        v_corr_z_limit=0.2,
+        velocity_limit=10.0,
+    )
+    v_cmd = torch.zeros(1, 3)
+    action = torch.tensor([[0.0, 1.0, 0.0, 1.0]])
+
+    baseline_out = baseline(action, _state_vec(v_cmd))
+    split_out = split_z(action, _state_vec(v_cmd))
+
+    assert torch.allclose(split_out.v_corr[..., :2], baseline_out.v_corr[..., :2])
+    assert torch.allclose(baseline_out.v_corr[..., 2:3], torch.tensor([[0.5]]))
+    assert torch.allclose(split_out.v_corr[..., 2:3], torch.tensor([[0.2]]))
+
+
+def test_trainable_governor_tracking_z_attenuation_uses_abs_v_cmd_z_only():
+    decoder = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        v_corr_z_limit=0.5,
+        velocity_limit=10.0,
+        tracking_vcorr_z_gate_enabled=True,
+        tracking_vcorr_z_gate_eps=0.1,
+        tracking_vcorr_z_gain=0.25,
+    )
+    action = torch.tensor([
+        [0.0, 1.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0, 1.0],
+        [0.0, 1.0, 0.0, 1.0],
+    ])
+    v_cmd = torch.tensor([
+        [0.0, 0.0, 0.2],
+        [0.0, 0.0, -0.2],
+        [0.0, 0.0, 0.1],
+        [0.3, 0.0, 0.0],
+    ])
+
+    out = decoder(action, _state_vec(v_cmd))
+
+    assert torch.allclose(out.v_corr[..., :2], torch.tensor([
+        [0.5, -0.5],
+        [0.5, -0.5],
+        [0.5, -0.5],
+        [0.5, -0.5],
+    ]))
+    assert torch.allclose(out.v_corr[..., 2:3], torch.tensor([
+        [0.125],
+        [0.125],
+        [0.5],
+        [0.5],
+    ]))
+
+
+def test_trainable_governor_tracking_z_gain_zero_preserves_null_station_correction():
+    decoder = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        velocity_limit=10.0,
+        null_vcorr_gate_enabled=True,
+        null_vcorr_gate_eps=0.2,
+        null_vcorr_gate_min=0.25,
+        tracking_vcorr_z_gate_enabled=True,
+        tracking_vcorr_z_gate_eps=0.1,
+        tracking_vcorr_z_gain=0.0,
+    )
+    action = torch.tensor([
+        [0.0, 0.5, 0.5, 1.0],
+        [0.0, 0.5, 0.5, 1.0],
+    ])
+    v_cmd = torch.tensor([
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.2],
+    ])
+
+    out = decoder(action, _state_vec(v_cmd))
+
+    assert torch.allclose(out.v_corr[..., :2], torch.zeros(2, 2))
+    assert torch.allclose(out.v_corr[..., 2:3], torch.tensor([[0.125], [0.0]]))
+
+
 def test_trainable_governor_smoothing_uses_actor_clean_prev_action():
     decoder = TrainableGovernorDecoder(
         v_corr_limit=0.0,
@@ -87,6 +184,19 @@ def test_trainable_governor_null_command_gate_validation():
         TrainableGovernorDecoder(null_vcorr_gate_eps=0.0)
     with pytest.raises(ValueError, match="null_vcorr_gate_min"):
         TrainableGovernorDecoder(null_vcorr_gate_min=1.5)
+
+
+def test_trainable_governor_z_limit_and_tracking_gate_validation():
+    with pytest.raises(ValueError, match="v_corr_z_limit"):
+        TrainableGovernorDecoder(v_corr_z_limit=-0.1)
+    with pytest.raises(ValueError, match="v_corr_z_limit"):
+        TrainableGovernorDecoder(v_corr_z_limit=float("nan"))
+    with pytest.raises(ValueError, match="tracking_vcorr_z_gate_eps"):
+        TrainableGovernorDecoder(tracking_vcorr_z_gate_eps=0.0)
+    with pytest.raises(ValueError, match="tracking_vcorr_z_gain"):
+        TrainableGovernorDecoder(tracking_vcorr_z_gain=-0.1)
+    with pytest.raises(ValueError, match="tracking_vcorr_z_gain"):
+        TrainableGovernorDecoder(tracking_vcorr_z_gain=1.1)
 
 
 def test_trainable_governor_extractors_and_shape_validation():

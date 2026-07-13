@@ -40,6 +40,7 @@ class SweepJob:
     seed: int
     train_command: List[str]
     eval_command: List[str]
+    eval_overrides: tuple[str, ...]
     result_path: str
     checkpoint_path: Optional[str] = None
     gate_report: Optional[dict] = None
@@ -53,10 +54,10 @@ class SweepJob:
 
 
 def default_safety_preservation_variants() -> tuple[SweepVariant, ...]:
-    r5b_base = (
+    r5d_base = (
         "algo.instinctRL.governor.v_corr_limit=0.35",
         "instinctRL.reward.preservation_high_weight=2.0",
-        "instinctRL.reward.command_amplification_weight=2.0",
+        "instinctRL.reward.command_amplification_weight=2.5",
         "instinctRL.reward.proxy_tracking_weight=0.5",
         "instinctRL.reward.safety_weight=1.2",
         "instinctRL.reward.clearance_margin=0.4",
@@ -66,36 +67,44 @@ def default_safety_preservation_variants() -> tuple[SweepVariant, ...]:
         "instinctRL.reward.height_floor=0.5",
         "instinctRL.reward.height_floor_weight=8.0",
         "instinctRL.reward.height_ceiling=4.0",
+        "instinctRL.reward.height_ceiling_weight=8.0",
     )
-    ceiling4 = ("instinctRL.reward.height_ceiling_weight=4.0",)
-    ceiling8 = ("instinctRL.reward.height_ceiling_weight=8.0",)
-    band_floor12 = ("instinctRL.reward.height_floor_weight=12.0",)
-    amp25 = ("instinctRL.reward.command_amplification_weight=2.5",)
-    vcorr030 = ("algo.instinctRL.governor.v_corr_limit=0.30",)
+    zlimit020 = ("algo.instinctRL.governor.v_corr_z_limit=0.20",)
+    zlimit012 = ("algo.instinctRL.governor.v_corr_z_limit=0.12",)
+    trackzgain050 = (
+        "algo.instinctRL.governor.tracking_vcorr_z_gate_enabled=true",
+        "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
+        "algo.instinctRL.governor.tracking_vcorr_z_gain=0.50",
+    )
+    trackzgain000 = (
+        "algo.instinctRL.governor.tracking_vcorr_z_gate_enabled=true",
+        "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
+        "algo.instinctRL.governor.tracking_vcorr_z_gain=0.0",
+    )
     return (
         SweepVariant(
-            "r5b_ceiling4",
-            r5b_base + ceiling4,
+            "r5d_zlimit020",
+            r5d_base + zlimit020,
         ),
         SweepVariant(
-            "r5b_ceiling8",
-            r5b_base + ceiling8,
+            "r5d_zlimit012",
+            r5d_base + zlimit012,
         ),
         SweepVariant(
-            "r5b_band_floor12_ceiling8",
-            r5b_base + band_floor12 + ceiling8,
+            "r5d_trackzgain050",
+            r5d_base + trackzgain050,
         ),
         SweepVariant(
-            "r5b_ceiling8_amp25",
-            r5b_base + ceiling8 + amp25,
+            "r5d_trackzgain000",
+            r5d_base + trackzgain000,
         ),
         SweepVariant(
-            "r5b_ceiling8_vcorr030",
-            r5b_base + ceiling8 + vcorr030,
+            "r5d_zlimit020_trackzgain050",
+            r5d_base + zlimit020 + trackzgain050,
         ),
         SweepVariant(
-            "r5b_band_amp25_vcorr030",
-            r5b_base + band_floor12 + ceiling8 + amp25 + vcorr030,
+            "r5d_zlimit012_trackzgain000",
+            r5d_base + zlimit012 + trackzgain000,
         ),
     )
 
@@ -145,8 +154,9 @@ def build_eval_command(
     python_exe: str,
     checkpoint_path: str,
     result_path: str,
+    extra_overrides: Sequence[str] = (),
 ) -> List[str]:
-    return [
+    base = [
         python_exe,
         "training/scripts/eval.py",
         f"checkpoint_path={checkpoint_path}",
@@ -161,6 +171,7 @@ def build_eval_command(
         "wandb.mode=offline",
         "headless=true",
     ]
+    return base + list(extra_overrides)
 
 
 def build_jobs(
@@ -188,6 +199,7 @@ def build_jobs(
                 python_exe=python_exe,
                 checkpoint_path="<filled-after-training>",
                 result_path=str(result_path),
+                extra_overrides=variant.overrides,
             )
             jobs.append(
                 SweepJob(
@@ -195,6 +207,7 @@ def build_jobs(
                     seed=int(seed),
                     train_command=train_command,
                     eval_command=eval_command,
+                    eval_overrides=variant.overrides,
                     result_path=str(result_path),
                 )
             )
@@ -226,6 +239,7 @@ def execute_jobs(jobs: Sequence[SweepJob], *, cwd: Path) -> list[SweepJob]:
             python_exe=job.eval_command[0],
             checkpoint_path=checkpoint,
             result_path=job.result_path,
+            extra_overrides=job.eval_overrides,
         )
         eval_run = subprocess.run(
             job.eval_command,
@@ -270,7 +284,7 @@ def _main() -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
     parser.add_argument("--limit", type=int, default=0, help="Limit number of generated jobs")
     parser.add_argument("--python", default=sys.executable)
-    parser.add_argument("--tag", default="a2r5b_sweep")
+    parser.add_argument("--tag", default="a2r5d_sweep")
     parser.add_argument(
         "--artifacts-dir",
         default="../docs/instinctRL_devlog/tests/artifacts/sweeps",

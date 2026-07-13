@@ -96,6 +96,53 @@ def test_ppo_learned_governor_forward_and_actor_critic_separation():
     assert policy.verify_actor_critic_separation(td.clone())
 
 
+def test_ppo_learned_governor_passes_r5d_decoder_config_and_keeps_4d_schema():
+    if PPO is None:
+        message = (
+            "PPO hybrid test dependencies unavailable: "
+            f"{type(PPO_IMPORT_ERROR).__name__}: {PPO_IMPORT_ERROR}"
+        )
+        try:
+            import pytest
+        except Exception:
+            print(f"SKIP {message}")
+            return
+        pytest.skip(message)
+        return
+
+    cfg = _cfg()
+    cfg.instinctRL.governor.v_corr_z_limit = 0.2
+    cfg.instinctRL.governor.null_vcorr_gate_enabled = False
+    cfg.instinctRL.governor.tracking_vcorr_z_gate_enabled = True
+    cfg.instinctRL.governor.tracking_vcorr_z_gate_eps = 0.1
+    cfg.instinctRL.governor.tracking_vcorr_z_gain = 0.0
+    policy = PPO(cfg, _obs_spec(), _ActionSpec(), "cpu")
+
+    assert policy.action_dim == 4
+    assert policy.governor_decoder.v_corr_limit == 0.5
+    assert policy.governor_decoder.v_corr_z_limit == 0.2
+    assert policy.governor_decoder.tracking_vcorr_z_gate_enabled
+    assert policy.governor_decoder.tracking_vcorr_z_gate_eps == 0.1
+    assert policy.governor_decoder.tracking_vcorr_z_gain == 0.0
+
+    td = _obs_spec().zero().clone()
+    td["agents", "action_normalized"] = torch.tensor([
+        [0.0, 0.5, 0.5, 1.0],
+        [0.0, 0.5, 0.5, 1.0],
+    ])
+    td["agents", "observation", "state_vec"][:, -7:-4] = torch.tensor([
+        [0.0, 0.0, 0.2],
+        [0.0, 0.0, 0.0],
+    ])
+
+    out = policy.decode_action(td)
+
+    assert out["agents", "action_normalized"].shape == torch.Size([2, 4])
+    assert out["governor_v_corr"].shape == torch.Size([2, 3])
+    assert torch.allclose(out["governor_v_corr_z"], torch.tensor([[0.0], [0.2]]))
+    assert out["agents", "action"].shape == torch.Size([2, 3])
+
+
 def test_ppo_update_recomputes_critic_features_for_minibatch():
     if PPO is None:
         message = (

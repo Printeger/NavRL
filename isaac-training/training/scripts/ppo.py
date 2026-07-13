@@ -203,6 +203,7 @@ class PPO(TensorDictModuleBase):
         if self.learned_governor:
             self.governor_decoder = TrainableGovernorDecoder(
                 v_corr_limit=getattr(governor_cfg, "v_corr_limit", 0.5),
+                v_corr_z_limit=getattr(governor_cfg, "v_corr_z_limit", None),
                 velocity_limit=getattr(governor_cfg, "velocity_limit", 2.0),
                 smoothing_tau=getattr(governor_cfg, "smoothing_tau", 0.0),
                 null_vcorr_gate_enabled=getattr(
@@ -210,6 +211,15 @@ class PPO(TensorDictModuleBase):
                 ),
                 null_vcorr_gate_eps=getattr(governor_cfg, "null_vcorr_gate_eps", 0.25),
                 null_vcorr_gate_min=getattr(governor_cfg, "null_vcorr_gate_min", 0.25),
+                tracking_vcorr_z_gate_enabled=getattr(
+                    governor_cfg, "tracking_vcorr_z_gate_enabled", False
+                ),
+                tracking_vcorr_z_gate_eps=getattr(
+                    governor_cfg, "tracking_vcorr_z_gate_eps", 1e-3
+                ),
+                tracking_vcorr_z_gain=getattr(
+                    governor_cfg, "tracking_vcorr_z_gain", 1.0
+                ),
             ).to(self.device)
 
         # ============================================

@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5B 128k sweep dry-run passed; no R5B execution or 1M run performed
+**Status**: R5D dry-run-only sweep implemented and validated; no training execution, 1M, promotion, warm-start, or hard-gate change
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -395,6 +395,216 @@ Decision:
 - No R5B sweep was executed, no 1M/formal run was executed, no warm-start checkpoint was used, and no hard gates were modified.
 - 1M remains forbidden until a 128k R5B candidate passes all hard gates.
 
+## R5B Execution Backfill - 2026-07-13
+
+Execution:
+
+- Preflight found no complete or incomplete prior `a2r5b_sweep` execution summary.
+- Command run exactly once: `python training/scripts/instinctRL/sweep.py --execute --frames 131072 --seeds 0 --limit 6`.
+- Artifact: `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json`.
+- All six jobs completed with `error=null`, non-null checkpoints, eval artifacts, and embedded `gate_report`.
+- Gate truth source: embedded `gate_report` produced by `training/scripts/instinctRL/gates.py`.
+- Hard gates were unchanged; `training/scripts/instinctRL/gates.py` was not modified.
+- No 1M, formal long training, warm-start, code change, parameter change, hard-gate change, or extra sweep command was executed.
+
+Execution decision:
+
+- No candidate passed all 14 hard gates.
+- Best candidate by hard-gate ranking was `r5b_ceiling8_amp25`, seed `0`, with `8/14` gates and score `7.301`.
+- `r5b_ceiling8_amp25` is not promotable because it failed station drift mean/p95, station null speed, station anchor error, tracking preservation ratio, and ICS violation rate.
+- R5B micro-sweep is not allowed under the default R5B branch rule: best candidate is below `10/14`, even though it has zero terminations.
+- Stop reward/config tuning. Next work should diagnose mechanism-level control: vertical correction/action constraints, whether height control belongs in a governor-side safety clamp, and horizontal/vertical amplification governance.
+
+Rows below are ranked as written in `summary.json`.
+
+| Date | Sweep artifact | Variant | Seed | Gates | Score | Passed | Failed gates | Decision |
+|---|---|---|---:|---:|---:|---|---|---|
+| 2026-07-13 | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json` | `r5b_ceiling8_amp25` | 0 | 8/14 | 7.301 | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `ics_violation_rate` | Best failed R5B; zero terminations but below 10/14, so no micro-sweep |
+| 2026-07-13 | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json` | `r5b_ceiling4` | 0 | 6/14 | 5.125 | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_command_amplification_mean`, `tracking_command_amplification_rate`, `ics_violation_rate`, `termination_above_bound` | Reject; ceiling 4 did not control station/amp and still had above-bound termination |
+| 2026-07-13 | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json` | `r5b_ceiling8_vcorr030` | 0 | 5/14 | 4.191 | false | `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_command_amplification_mean`, `tracking_command_amplification_rate`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_above_bound` | Reject; lower correction limit did not fix safety/ICS and retained terminations |
+| 2026-07-13 | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json` | `r5b_band_amp25_vcorr030` | 0 | 4/14 | 2.408 | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` | Reject; combined lower band/amp/lower correction regressed station, safety, and below-bound |
+| 2026-07-13 | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json` | `r5b_band_floor12_ceiling8` | 0 | 4/14 | 1.671 | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` | Reject; stronger floor shifted failure toward low altitude/clearance/ICS |
+| 2026-07-13 | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_125240/summary.json` | `r5b_ceiling8` | 0 | 2/14 | -0.132 | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_rmse_actual`, `tracking_command_amplification_mean`, `tracking_command_amplification_rate`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_above_bound` | Reject; ceiling 8 alone broadly regressed and had above-bound/collision terminations |
+
+Key diagnostics:
+
+| Variant | Station drift mean/p95 | Null speed | Anchor error | Tracking RMSE | Preservation | Amp mean/rate | H amp mean/rate | V amp mean/rate | Height z p05/p95 | Floor max | Ceiling margin min | Clearance p05 | ICS | Term below/above/collision |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5b_ceiling8_amp25` | 1.357 / 2.629 | 0.172 | 2.861 | 0.417 | 0.631 | 0.024 / 0.038 | 0.019 / 0.035 | 0.191 / 0.311 | 1.289 / 3.087 | 0.000 | 0.283 | 1.438 | 0.00759 | 0 / 0 / 0 |
+| `r5b_ceiling4` | 1.362 / 2.646 | 0.173 | 2.799 | 0.351 | 0.940 | 0.105 / 0.280 | 0.103 / 0.257 | 0.299 / 0.433 | 1.125 / 3.496 | 0.217 | 0.000276 | 1.161 | 0.01291 | 0 / 0.125 / 0 |
+| `r5b_ceiling8_vcorr030` | 1.299 / 2.522 | 0.165 | 2.781 | 0.374 | 0.821 | 0.052 / 0.175 | 0.065 / 0.199 | 0.195 / 0.318 | 1.044 / 3.333 | 0.197 | 0.000563 | 0.846 | 0.03313 | 0 / 0.03125 / 0.09375 |
+| `r5b_band_amp25_vcorr030` | 1.586 / 3.110 | 0.204 | 3.136 | 0.444 | 0.668 | 0.037 / 0.071 | 0.050 / 0.100 | 0.141 / 0.237 | 0.793 / 2.771 | 0.300 | 0.772 | 0.800 | 0.05009 | 0.125 / 0 / 0.03125 |
+| `r5b_band_floor12_ceiling8` | 1.590 / 3.095 | 0.202 | 3.324 | 0.396 | 0.641 | 0.019 / 0.025 | 0.042 / 0.073 | 0.043 / 0.077 | 0.360 / 2.149 | 0.300 | 1.527 | 0.592 | 0.08784 | 0.5 / 0 / 0.03125 |
+| `r5b_ceiling8` | 1.547 / 3.009 | 0.197 | 2.825 | 0.466 | 0.937 | 0.158 / 0.372 | 0.063 / 0.131 | 0.434 / 0.562 | 1.964 / 3.820 | 0.000 | 0.000016 | 0.739 | 0.06059 | 0 / 0.46875 / 0.125 |
+
+Interpretation:
+
+`r5b_ceiling8_amp25` is the only R5B branch that removed height terminations, collision termination, and hard amp failures while keeping clearance above the hard gate. It still failed all station gates, preservation low, and ICS. Its vertical amplification diagnostics remained high (`vertical_mean=0.1906`, `vertical_rate=0.3109`) even though norm-level amplification gates passed. This supports a mechanism diagnosis rather than another reward-weight sweep.
+
+Stop condition:
+
+Hard gates unchanged; `training/scripts/instinctRL/gates.py` unchanged; no actor observation, learned action method, platform/sensor, or body-frame velocity-governor method was modified; no 1M/formal/warm-start run executed.
+
+## A2-R5C Mechanism Diagnosis Plan - 2026-07-13
+
+R5C entry evidence:
+
+- R5B best candidate was `r5b_ceiling8_amp25`, seed `0`, checkpoint `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260713_133443-ym5ojvas/files/checkpoint_final.pt`.
+- It reached only `8/14` hard gates and is not promotable. Failed gates were station drift mean/p95, station null speed, station anchor error, tracking preservation ratio, and ICS violation rate.
+- R5B station/null/anchor remained weak: station drift `1.357 / 2.629`, null speed `0.172`, anchor error `2.861`.
+- R5B preservation and ICS remained weak: preservation `0.631`, ICS `0.00759`.
+- R5B vertical amplification remained high even though norm-level amp gates passed: vertical amp mean/rate `0.191 / 0.311`.
+
+R5C decision:
+
+- Stop reward/config tuning for this pass.
+- Do not run another sweep, do not run 1M/formal training, do not promote, do not warm-start, and do not modify hard gates.
+- Do not alter `PPO.decode_action`, governor action semantics, actor observation, platform/sensor, or the body-frame velocity-governor method.
+- Implement diagnostics only so the future mechanism fix can be selected from measured vertical-channel behavior.
+
+Implemented R5C diagnostics:
+
+- Added pure torch `compute_vertical_channel_step_metrics` in `training/scripts/instinctRL/task_metrics.py`.
+- Added streaming eval aggregation for aligned `governor_v_cmd_b_z`, `governor_v_corr_z`, `governor_v_gov_b_z`, `governor_v_final_b_z`, station drift, preservation, vertical amplification, `ics_beta`, and `ics_emergency`.
+- Emitted `eval/handbook.vertical_*` diagnostics for correction sign/magnitude/saturation, governor/final/ICS deltas, null-command correction, and tracking-command correction conditionals.
+- Kept all new metrics in eval/logging summaries only. `training/scripts/instinctRL/gates.py` was not modified.
+- Confirmed actor observation remains exactly `lidar_grid + state_vec`; vertical, height/root state, velocity, map, SLAM, and privileged simulator state stay out of actor input.
+
+Future mechanism candidates, classified:
+
+- Governor-side vertical correction clamp: governor-action constraint; actor-clean; behavior-changing if enabled.
+- Asymmetric z correction limit: governor-action constraint; actor-clean; behavior-changing if enabled.
+- Height safety clamp after governor before body-to-world command: safety filter; actor-clean if kept outside actor observation; behavior-changing if enabled.
+- Horizontal/vertical amplification split: diagnostic/reward-only if only logged or rewarded; governor-action constraint if it clips commands; behavior-changing if enabled.
+
+Validation results:
+
+- `python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/ppo.py training/scripts/train.py training/scripts/env.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_task_metrics.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py`: passed, `23 passed, 4 warnings in 1.86s`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `107 passed, 11 warnings in 2.07s`.
+
+Diagnostic eval:
+
+- Command run exactly once, eval-only: `python training/scripts/eval.py checkpoint_path=/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260713_133443-ym5ojvas/files/checkpoint_final.pt result_path=../docs/instinctRL_devlog/tests/artifacts/r5c_diagnostics/20260713_r5b_ceiling8_amp25_vertical_eval.json env.num_envs=32 env.max_episode_length=1000 env.num_obstacles=350 env_dyn.num_obstacles=0 instinctRL.eval.suite=short_diagnostic instinctRL.observability.enabled=true instinctRL.observability.mode=proxy wandb.mode=offline headless=true`.
+- Artifact: `docs/instinctRL_devlog/tests/artifacts/r5c_diagnostics/20260713_r5b_ceiling8_amp25_vertical_eval.json`.
+- Saturation is measured against the eval-time governor limit used by the replayed eval config: `eval/handbook.vertical_v_corr_limit=0.5`.
+
+Key R5C vertical readings:
+
+| Scope | corr z mean | corr z abs | positive / negative | saturation | gov-cmd abs | final-cmd abs | ICS delta abs | null active | null abs | null drift when active | tracking active | tracking amp when active | tracking preservation when active |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Top-level diagnostic mix | 0.1165 | 0.1165 | 1.000 / 0.000 | 0.000 | 0.1582 | 0.1599 | 0.00171 | 1.000 | 0.0343 | 1.3566 | 1.000 | 0.2264 | 0.5641 |
+| Station pass | 0.0343 | 0.0343 | 1.000 / 0.000 | 0.000 | 0.0343 | 0.0343 | 0.00000 | 1.000 | 0.0343 | 1.3566 | n/a | n/a | n/a |
+| Tracking pass | 0.1165 | 0.1165 | 1.000 / 0.000 | 0.000 | 0.1582 | 0.1599 | 0.00171 | 1.000 | 0.0486 | 1.4250 | 1.000 | 0.2264 | 0.5641 |
+
+Interpretation:
+
+- Vertical correction is always positive in this replay and never saturates against `v_corr_limit=0.5`, so the immediate failure is not a hard correction-limit saturation.
+- The station pass applies a small persistent upward null-command correction (`0.0343`) on every null step while station drift remains above gate (`1.3566` mean when correction is active).
+- The tracking pass applies vertical correction on every vertical-active step, with high vertical amplification when active (`0.2264`) and low preservation when active (`0.5641`).
+- ICS changes the vertical channel only slightly on average (`vertical_ics_delta_z_abs_mean=0.00171`), so the R5B vertical preservation/amplification issue appears mostly pre-ICS in this replay.
+
+Stop condition:
+
+R5C implemented diagnostics only. No mechanism candidate was enabled, no R5C dry-run or sweep was run, no 1M/formal/warm-start run was executed, and hard gates remain unchanged.
+
+## A2-R5D Mechanism-Fix Readiness - 2026-07-13
+
+R5D scope:
+
+- Implement only default-off/default-equivalent governor-side vertical mechanisms.
+- Do not run training, sweep, 1M, promotion, hard-gate changes, warm-start, reward changes, or actor-observation changes.
+- Primary mechanism hooks are separate vertical correction authority and actor-clean tracking z-correction attenuation using `abs(v_cmd_b[..., 2]) > eps`.
+- Height safety clamp and horizontal/vertical amplification split governance are documented/classified only in this pass.
+
+Code changes:
+
+- Added `TrainableGovernorDecoder(v_corr_z_limit=None)`. `None` inherits `v_corr_limit`, so existing configs and old overrides preserve current behavior.
+- Added default-off tracking z-correction attenuation: `tracking_vcorr_z_gate_enabled=false`, `tracking_vcorr_z_gate_eps=1e-3`, and `tracking_vcorr_z_gain=1.0`.
+- Kept learned governor action schema at 4D `[alpha, v_corr_x, v_corr_y, v_corr_z]`.
+- Kept `PPO.decode_action` semantics and output tensor names unchanged.
+- Wired the new config through PPO construction and `training/cfg/ppo.yaml`.
+- Did not implement a height safety clamp or any amplification clipping/gating code.
+
+Candidate classification:
+
+- Separate `v_corr_z_limit`: actor-clean; governor-action constraint; default unchanged; deployable under the handbook.
+- Tracking z-correction attenuation: actor-clean using only `v_cmd_b[..., 2]`; governor-action constraint; default unchanged; deployable under the handbook.
+- Governor-side height safety clamp: actor-clean only if outside actor observation; safety filter; default-off if ever implemented; not deployable under the handbook when using privileged/root height.
+- Horizontal/vertical amplification split governance: reward-only/diagnostic if logged or rewarded; governor-action constraint if clipping commands; default unchanged in R5D; deployability depends on no privileged inputs.
+
+Validation results:
+
+- `python -m py_compile training/scripts/instinctRL/governor.py training/scripts/ppo.py training/scripts/train.py training/scripts/eval.py training/scripts/env.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ppo_hybrid.py training/unit_test/test_instinctrl_actor_audit.py`: passed, `24 passed, 5 warnings in 1.83s`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `114 passed, 12 warnings in 3.69s`.
+
+Readiness decision:
+
+R5D is ready for mechanism-screening design. No training, sweep, 1M, promotion, hard-gate change, warm-start, reward change, actor-observation change, or behavior-changing default was executed.
+
+## A2-R5D 128k Sweep Plan - 2026-07-13
+
+R5D sweep-only scope:
+
+- Use `r5b_ceiling8_amp25` as the fixed base because it had zero terminations and passed norm-level amplification gates.
+- Vary only `algo.instinctRL.governor.v_corr_z_limit`, `algo.instinctRL.governor.tracking_vcorr_z_gate_enabled`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps`, and `algo.instinctRL.governor.tracking_vcorr_z_gain`.
+- Keep `algo.instinctRL.governor.v_corr_limit=0.35`, `instinctRL.reward.height_ceiling_weight=8.0`, and `instinctRL.reward.command_amplification_weight=2.5`.
+- Retain the R5B best station/safety/height/ICS base: anchor 4.0, null output 0.1, preservation high 2.0, proxy tracking 0.5, safety 1.2, clearance margin 0.4, ICS active horizon margin 1.0, ICS clearance margin 0.15, null speed 4.0, height floor 0.5, height floor weight 8.0, and height ceiling 4.0.
+- Do not change hard gates, actor observation, platform/sensor, rewards beyond the fixed R5B best base, height clamp behavior, or the velocity-governor/body-frame command method.
+- This pass is dry-run only. Do not pass `--execute`, do not run 1M, and do not warm-start any checkpoint.
+
+Default sweep tag: `a2r5d_sweep`.
+
+Implementation note:
+
+- Keep `default_safety_preservation_variants()` as the sweep entry point.
+- Propagate variant overrides to both train and eval commands so eval replays the same R5D governor settings.
+
+| Variant | Additional overrides | Hypothesis |
+|---|---|---|
+| `r5d_zlimit020` | `algo.instinctRL.governor.v_corr_z_limit=0.20` | A smaller vertical correction envelope may reduce vertical amplification while preserving the R5B best horizontal authority. |
+| `r5d_zlimit012` | `algo.instinctRL.governor.v_corr_z_limit=0.12` | A tighter vertical envelope tests whether the persistent upward z correction is over-authorized. |
+| `r5d_trackzgain050` | `algo.instinctRL.governor.tracking_vcorr_z_gate_enabled=true`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001`, `algo.instinctRL.governor.tracking_vcorr_z_gain=0.50` | Half-strength z correction only on vertical tracking commands may reduce tracking vertical amplification without changing station null-command correction. |
+| `r5d_trackzgain000` | `algo.instinctRL.governor.tracking_vcorr_z_gate_enabled=true`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001`, `algo.instinctRL.governor.tracking_vcorr_z_gain=0.0` | Fully removing z correction during vertical tracking tests whether tracking z correction is the main preservation/ICS driver. |
+| `r5d_zlimit020_trackzgain050` | `algo.instinctRL.governor.v_corr_z_limit=0.20`, `algo.instinctRL.governor.tracking_vcorr_z_gate_enabled=true`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001`, `algo.instinctRL.governor.tracking_vcorr_z_gain=0.50` | Combined moderate z limit and half tracking attenuation tests the least disruptive mechanism fix. |
+| `r5d_zlimit012_trackzgain000` | `algo.instinctRL.governor.v_corr_z_limit=0.12`, `algo.instinctRL.governor.tracking_vcorr_z_gate_enabled=true`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001`, `algo.instinctRL.governor.tracking_vcorr_z_gain=0.0` | Combined tight z limit and no tracking z correction is the aggressive mechanism screen. |
+
+## R5D Sweep Dry-Run Backfill - 2026-07-13
+
+Code changes:
+
+- Updated `training/scripts/instinctRL/sweep.py` default `--tag` from `a2r5b_sweep` to `a2r5d_sweep`.
+- Replaced the default R5B variant list with exactly the six R5D variants in the plan above.
+- Kept `default_safety_preservation_variants()` as the sweep entry point.
+- Added `eval_overrides` to `SweepJob`, added `extra_overrides=()` to `build_eval_command()`, propagated variant overrides into eval commands during dry-run planning, and preserved them when rebuilding eval commands after checkpoint discovery.
+- Kept dry-run as the default behavior; `--execute` remains explicit and was not run.
+- Kept `training/scripts/instinctRL/gates.py` unchanged.
+- Updated `training/unit_test/test_instinctrl_gates.py` to assert the R5D variant names/order, default tag, `instinctrl_a2r5d_sweep_*` run-name prefix, R5D base overrides, train/eval override propagation, and absence of forbidden R5A/R5B/height-clamp overrides.
+
+Validation results:
+
+- `python -m py_compile training/scripts/instinctRL/sweep.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_gates.py`: passed, `5 passed in 1.11s`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `114 passed, 12 warnings in 5.41s`.
+
+Dry-run review:
+
+- Command run: `python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6`.
+- Result: passed as dry-run only with `execute=false`, `frames=131072`, `seed=0`, and six generated jobs.
+- Generated artifact paths pointed under `docs/instinctRL_devlog/tests/artifacts/sweeps/20260713_201326/`, but that directory was absent after the run because `--execute` was not used.
+- Dry-run printed planned jobs only and did not create an execution `summary.json`.
+- Generated variants, in order: `r5d_zlimit020`, `r5d_zlimit012`, `r5d_trackzgain050`, `r5d_trackzgain000`, `r5d_zlimit020_trackzgain050`, `r5d_zlimit012_trackzgain000`.
+- All run names used the `instinctrl_a2r5d_sweep_*_131072_seed0` prefix.
+- Train and eval commands both included the R5D base overrides and each variant's z-limit/tracking-z overrides.
+
+Stop condition:
+
+- No `--execute`, no 1M, no warm-start, no hard-gate change, and no actor-observation change.
+- No platform/sensor, reward, height-clamp, or velocity-governor/body-frame command method change was made in this sweep dry-run pass.
+- Next step after this clean dry-run is a controlled 128k R5D execute sweep.
+- Only a `14/14` candidate with `passed=true` can be considered for a 1M confirmation.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -429,4 +639,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-Review the R5B dry-run and only then decide whether to execute the exact six-job 128k R5B sweep. Do not run 1M, do not warm-start, and do not change hard gates.
+Do not promote any R5B candidate and do not run 1M. R5D dry-run passed; the next step is a controlled 128k R5D execute sweep with `--execute`. Only a `14/14` candidate with `passed=true` can be considered for a 1M confirmation.

@@ -90,9 +90,37 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "eval/handbook.height_ceiling_margin_p05",
         "eval/handbook.command_amplification_horizontal_mean",
         "eval/handbook.command_amplification_vertical_mean",
+        "eval/handbook.vertical_corr_z_mean",
+        "eval/handbook.vertical_corr_z_abs_mean",
+        "eval/handbook.vertical_corr_z_positive_fraction",
+        "eval/handbook.vertical_corr_z_negative_fraction",
+        "eval/handbook.vertical_corr_z_saturation_rate",
+        "eval/handbook.vertical_gov_minus_cmd_z_abs_mean",
+        "eval/handbook.vertical_final_minus_cmd_z_abs_mean",
+        "eval/handbook.vertical_ics_delta_z_abs_mean",
+        "eval/handbook.vertical_null_corr_active_rate",
+        "eval/handbook.vertical_null_corr_abs_mean",
+        "eval/handbook.vertical_null_station_drift_mean_when_corr_active",
+        "eval/handbook.vertical_tracking_corr_active_rate",
+        "eval/handbook.vertical_tracking_amplification_mean_when_corr_active",
+        "eval/handbook.vertical_tracking_preservation_mean_when_corr_active",
         "eval/handbook.observability_is_proxy",
     ]:
         assert key in source
+    for key in [
+        "compute_vertical_channel_step_metrics(",
+        "vertical_diagnostic_accumulators",
+        "v_corr_limit = _governor_v_corr_limit(cfg)",
+    ]:
+        assert key in source
+
+    eval_source = _read(os.path.join(SCRIPTS, "eval.py"))
+    for key in [
+        '"vertical_null"',
+        '"vertical_corr"',
+        '"vertical_tracking"',
+    ]:
+        assert key in eval_source
     for key in [
         "observability_sigma_min_mean",
         "observability_condition_number_mean",
