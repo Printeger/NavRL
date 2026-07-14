@@ -35,12 +35,13 @@ FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cfg")
 class InstinctRLTrainPolicy(torch.nn.Module):
     """Policy wrapper that converts learned governor body commands to controller actions."""
 
-    def __init__(self, policy, env, adapter, ics_attenuator=None):
+    def __init__(self, policy, env, adapter, ics_attenuator=None, safety_filter=None):
         super().__init__()
         self.policy = policy
         self.env = env
         self.adapter = adapter
         self.ics_attenuator = ics_attenuator
+        self.safety_filter = safety_filter
 
     def forward(self, tensordict):
         self.policy(tensordict)
@@ -61,6 +62,11 @@ class InstinctRLTrainPolicy(torch.nn.Module):
             )
             v_final_body = ics_out.v_final_b
             self.env.record_instinctrl_ics_output(ics_out)
+
+        if self.safety_filter is not None:
+            root_height_w = tensordict["info", "drone_state"][..., 2:3]
+            safety_out = self.safety_filter(v_final_body, root_height_w)
+            v_final_body = safety_out.v_final_b
 
         self.env.set_prev_issued_action_body(v_final_body)
         drone_quat = tensordict["info", "drone_state"][..., 3:7]
@@ -215,6 +221,7 @@ def main(cfg):
         ).to(cfg.device)
         adapter = BodyToWorldVelocityAdapter().to(cfg.device)
         ics_attenuator = None
+        safety_filter = None
         ics_cfg = getattr(cfg.instinctRL, "ics", None)
         if ics_cfg is not None and getattr(ics_cfg, "enabled", False):
             from instinctRL.ics import ICSConfig, RangeHistoryICSAttenuator
@@ -224,6 +231,25 @@ def main(cfg):
                 device=cfg.device,
             )
             print("[instinctRL-E] ICS attenuation enabled (brake_mode=zero)", flush=True)
+        safety_filter_cfg = getattr(cfg.instinctRL, "safety_filter", None)
+        if (
+            safety_filter_cfg is not None
+            and getattr(safety_filter_cfg, "privileged_height_floor_enabled", False)
+        ):
+            from instinctRL.safety_filter import (
+                PrivilegedHeightFloorSafetyFilter,
+                PrivilegedHeightSafetyFilterConfig,
+            )
+
+            safety_filter = PrivilegedHeightFloorSafetyFilter(
+                PrivilegedHeightSafetyFilterConfig.from_namespace(safety_filter_cfg),
+                device=cfg.device,
+            )
+            print(
+                "[instinctRL-R5F] Privileged height safety filter enabled "
+                "(sim/eval-only)",
+                flush=True,
+            )
         print(f"[instinctRL-A] Governor mode: {gov_cfg.alpha_mode}", flush=True)
         print(f"[instinctRL-A] Baseline: {cfg.instinctRL.baseline.id}", flush=True)
 
@@ -289,6 +315,10 @@ def main(cfg):
                     )
                     v_final_body = ics_out.v_final_b
                     env.record_instinctrl_ics_output(ics_out)
+                if safety_filter is not None:
+                    root_height_w = td["info", "drone_state"][..., 2:3]
+                    safety_out = safety_filter(v_final_body, root_height_w)
+                    v_final_body = safety_out.v_final_b
                 env.set_prev_issued_action_body(v_final_body)
 
                 # Body → world using privileged drone quaternion at controller boundary.
@@ -362,6 +392,7 @@ def main(cfg):
             env=env,
             adapter=adapter,
             ics_attenuator=ics_attenuator,
+            safety_filter=safety_filter,
         ).to(cfg.device)
         print("[instinctRL-A2] Learned governor collector wrapper enabled.", flush=True)
     if instinct_enabled:

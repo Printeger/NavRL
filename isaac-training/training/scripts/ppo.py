@@ -211,6 +211,15 @@ class PPO(TensorDictModuleBase):
                 ),
                 null_vcorr_gate_eps=getattr(governor_cfg, "null_vcorr_gate_eps", 0.25),
                 null_vcorr_gate_min=getattr(governor_cfg, "null_vcorr_gate_min", 0.25),
+                null_vcorr_axis_split_enabled=getattr(
+                    governor_cfg, "null_vcorr_axis_split_enabled", False
+                ),
+                null_vcorr_xy_gate_min=getattr(
+                    governor_cfg, "null_vcorr_xy_gate_min", 0.25
+                ),
+                null_vcorr_z_gate_min=getattr(
+                    governor_cfg, "null_vcorr_z_gate_min", 0.25
+                ),
                 tracking_vcorr_z_gate_enabled=getattr(
                     governor_cfg, "tracking_vcorr_z_gate_enabled", False
                 ),
@@ -219,6 +228,15 @@ class PPO(TensorDictModuleBase):
                 ),
                 tracking_vcorr_z_gain=getattr(
                     governor_cfg, "tracking_vcorr_z_gain", 1.0
+                ),
+                tracking_vcorr_z_sign_gate_enabled=getattr(
+                    governor_cfg, "tracking_vcorr_z_sign_gate_enabled", False
+                ),
+                tracking_vcorr_z_opposing_gain=getattr(
+                    governor_cfg, "tracking_vcorr_z_opposing_gain", 1.0
+                ),
+                tracking_vcorr_z_reinforcing_gain=getattr(
+                    governor_cfg, "tracking_vcorr_z_reinforcing_gain", 1.0
                 ),
             ).to(self.device)
 
@@ -356,6 +374,8 @@ class PPO(TensorDictModuleBase):
                 ("next", "stats", "reward_proxy_tracking"),
                 ("next", "stats", "reward_preservation_low"),
                 ("next", "stats", "reward_preservation_high"),
+                ("next", "stats", "reward_horizontal_preservation"),
+                ("next", "stats", "reward_vertical_preservation"),
                 ("next", "stats", "reward_command_amplification"),
                 ("next", "stats", "reward_height_floor"),
                 ("next", "stats", "reward_height_ceiling"),

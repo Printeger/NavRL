@@ -179,11 +179,59 @@ def test_trainable_governor_null_command_gate_allows_soft_station_correction():
     assert torch.allclose(active_out.v_corr, torch.tensor([[0.5, 0.0, 0.0]]))
 
 
+def test_trainable_governor_axis_split_disabled_matches_scalar_null_gate():
+    ref = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        velocity_limit=10.0,
+        null_vcorr_gate_enabled=True,
+        null_vcorr_gate_eps=0.2,
+        null_vcorr_gate_min=0.25,
+    )
+    split_disabled = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        velocity_limit=10.0,
+        null_vcorr_gate_enabled=True,
+        null_vcorr_gate_eps=0.2,
+        null_vcorr_gate_min=0.25,
+        null_vcorr_axis_split_enabled=False,
+        null_vcorr_xy_gate_min=0.0,
+        null_vcorr_z_gate_min=1.0,
+    )
+    action = torch.tensor([[0.0, 1.0, 0.0, 1.0]])
+    state = _state_vec(torch.zeros(1, 3))
+
+    assert torch.allclose(split_disabled(action, state).v_corr, ref(action, state).v_corr)
+    assert torch.allclose(split_disabled(action, state).v_gov, ref(action, state).v_gov)
+
+
+def test_trainable_governor_axis_split_null_gate_controls_xy_and_z_separately():
+    decoder = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        velocity_limit=10.0,
+        null_vcorr_gate_enabled=True,
+        null_vcorr_gate_eps=0.2,
+        null_vcorr_axis_split_enabled=True,
+        null_vcorr_xy_gate_min=0.5,
+        null_vcorr_z_gate_min=0.0,
+    )
+    action = torch.tensor([[0.0, 1.0, 0.0, 1.0]])
+
+    null_out = decoder(action, _state_vec(torch.zeros(1, 3)))
+    ramp_out = decoder(action, _state_vec(torch.tensor([[0.1, 0.0, 0.0]])))
+
+    assert torch.allclose(null_out.v_corr, torch.tensor([[0.25, -0.25, 0.0]]))
+    assert torch.allclose(ramp_out.v_corr, torch.tensor([[0.25, -0.25, 0.25]]))
+
+
 def test_trainable_governor_null_command_gate_validation():
     with pytest.raises(ValueError, match="null_vcorr_gate_eps"):
         TrainableGovernorDecoder(null_vcorr_gate_eps=0.0)
     with pytest.raises(ValueError, match="null_vcorr_gate_min"):
         TrainableGovernorDecoder(null_vcorr_gate_min=1.5)
+    with pytest.raises(ValueError, match="null_vcorr_xy_gate_min"):
+        TrainableGovernorDecoder(null_vcorr_xy_gate_min=-0.1)
+    with pytest.raises(ValueError, match="null_vcorr_z_gate_min"):
+        TrainableGovernorDecoder(null_vcorr_z_gate_min=1.1)
 
 
 def test_trainable_governor_z_limit_and_tracking_gate_validation():
@@ -197,6 +245,42 @@ def test_trainable_governor_z_limit_and_tracking_gate_validation():
         TrainableGovernorDecoder(tracking_vcorr_z_gain=-0.1)
     with pytest.raises(ValueError, match="tracking_vcorr_z_gain"):
         TrainableGovernorDecoder(tracking_vcorr_z_gain=1.1)
+    with pytest.raises(ValueError, match="tracking_vcorr_z_opposing_gain"):
+        TrainableGovernorDecoder(tracking_vcorr_z_opposing_gain=-0.1)
+    with pytest.raises(ValueError, match="tracking_vcorr_z_reinforcing_gain"):
+        TrainableGovernorDecoder(tracking_vcorr_z_reinforcing_gain=1.1)
+
+
+def test_trainable_governor_sign_aware_vertical_gate_uses_command_and_correction_sign():
+    decoder = TrainableGovernorDecoder(
+        v_corr_limit=0.5,
+        velocity_limit=10.0,
+        tracking_vcorr_z_gate_eps=0.1,
+        tracking_vcorr_z_sign_gate_enabled=True,
+        tracking_vcorr_z_opposing_gain=0.25,
+        tracking_vcorr_z_reinforcing_gain=0.5,
+    )
+    action = torch.tensor([
+        [0.0, 0.5, 0.5, 1.0],
+        [0.0, 0.5, 0.5, 1.0],
+        [0.0, 0.5, 0.5, 1.0],
+        [0.0, 0.5, 0.5, 0.0],
+    ])
+    v_cmd = torch.tensor([
+        [0.0, 0.0, 0.2],
+        [0.0, 0.0, -0.2],
+        [0.0, 0.0, 0.0],
+        [0.0, 0.0, 0.2],
+    ])
+
+    out = decoder(action, _state_vec(v_cmd))
+
+    assert torch.allclose(out.v_corr[..., 2:3], torch.tensor([
+        [0.25],
+        [0.125],
+        [0.5],
+        [-0.125],
+    ]))
 
 
 def test_trainable_governor_extractors_and_shape_validation():

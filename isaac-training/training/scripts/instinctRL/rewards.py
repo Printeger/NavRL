@@ -24,6 +24,8 @@ REWARD_COMPONENT_KEYS = (
     "reward_proxy_tracking",
     "reward_preservation_low",
     "reward_preservation_high",
+    "reward_horizontal_preservation",
+    "reward_vertical_preservation",
     "reward_command_amplification",
     "reward_height_floor",
     "reward_height_ceiling",
@@ -49,6 +51,8 @@ class RewardConfig:
     proxy_tracking_weight: float = 0.25
     preservation_low_weight: float = 0.5
     preservation_high_weight: float = 0.5
+    horizontal_preservation_weight: float = 0.0
+    vertical_preservation_weight: float = 0.0
     preservation_lower: float = 0.75
     preservation_upper: float = 1.05
     command_amplification_weight: float = 0.5
@@ -80,6 +84,8 @@ class RewardConfig:
             "proxy_tracking_weight",
             "preservation_low_weight",
             "preservation_high_weight",
+            "horizontal_preservation_weight",
+            "vertical_preservation_weight",
             "preservation_lower",
             "preservation_upper",
             "command_amplification_weight",
@@ -112,6 +118,8 @@ class RewardConfig:
             "proxy_tracking_weight",
             "preservation_low_weight",
             "preservation_high_weight",
+            "horizontal_preservation_weight",
+            "vertical_preservation_weight",
             "command_amplification_weight",
             "height_floor_weight",
             "height_ceiling_weight",
@@ -158,6 +166,12 @@ class RewardConfig:
             proxy_tracking_weight=float(getattr(cfg, "proxy_tracking_weight", 0.25)),
             preservation_low_weight=float(getattr(cfg, "preservation_low_weight", 0.5)),
             preservation_high_weight=float(getattr(cfg, "preservation_high_weight", 0.5)),
+            horizontal_preservation_weight=float(
+                getattr(cfg, "horizontal_preservation_weight", 0.0)
+            ),
+            vertical_preservation_weight=float(
+                getattr(cfg, "vertical_preservation_weight", 0.0)
+            ),
             preservation_lower=float(getattr(cfg, "preservation_lower", 0.75)),
             preservation_upper=float(getattr(cfg, "preservation_upper", 1.05)),
             command_amplification_weight=float(
@@ -309,6 +323,38 @@ class InstinctRLRewardComputer:
         reward_preservation_high = (
             -self.cfg.preservation_high_weight * preservation_high_violation
         )
+        horizontal_cmd_norm = v_cmd[..., :2].norm(dim=-1, keepdim=True)
+        horizontal_final_norm = v_final[..., :2].norm(dim=-1, keepdim=True)
+        horizontal_active = (horizontal_cmd_norm > self.cfg.command_eps).to(v_cmd.dtype)
+        horizontal_safe_gate = horizontal_active * (beta >= 0.999).to(v_cmd.dtype) * (
+            1.0 - emergency
+        )
+        horizontal_preservation_ratio = horizontal_final_norm / horizontal_cmd_norm.clamp_min(
+            self.cfg.command_eps
+        )
+        horizontal_preservation_violation = (
+            (self.cfg.preservation_lower - horizontal_preservation_ratio).clamp_min(0.0)
+            + (horizontal_preservation_ratio - self.cfg.preservation_upper).clamp_min(0.0)
+        ) * horizontal_safe_gate
+        reward_horizontal_preservation = (
+            -self.cfg.horizontal_preservation_weight * horizontal_preservation_violation
+        )
+        vertical_cmd_abs = v_cmd[..., 2:3].abs()
+        vertical_final_abs = v_final[..., 2:3].abs()
+        vertical_active = (vertical_cmd_abs > self.cfg.command_eps).to(v_cmd.dtype)
+        vertical_safe_gate = vertical_active * (beta >= 0.999).to(v_cmd.dtype) * (
+            1.0 - emergency
+        )
+        vertical_preservation_ratio = vertical_final_abs / vertical_cmd_abs.clamp_min(
+            self.cfg.command_eps
+        )
+        vertical_preservation_violation = (
+            (self.cfg.preservation_lower - vertical_preservation_ratio).clamp_min(0.0)
+            + (vertical_preservation_ratio - self.cfg.preservation_upper).clamp_min(0.0)
+        ) * vertical_safe_gate
+        reward_vertical_preservation = (
+            -self.cfg.vertical_preservation_weight * vertical_preservation_violation
+        )
         amplification = (preservation_ratio - 1.0).clamp_min(0.0)
         reward_command_amplification = (
             -self.cfg.command_amplification_weight * command_safe_gate * amplification
@@ -336,6 +382,8 @@ class InstinctRLRewardComputer:
             "reward_proxy_tracking": reward_proxy_tracking,
             "reward_preservation_low": reward_preservation_low,
             "reward_preservation_high": reward_preservation_high,
+            "reward_horizontal_preservation": reward_horizontal_preservation,
+            "reward_vertical_preservation": reward_vertical_preservation,
             "reward_command_amplification": reward_command_amplification,
             "reward_height_floor": reward_height_floor,
             "reward_height_ceiling": reward_height_ceiling,
@@ -364,6 +412,10 @@ class InstinctRLRewardComputer:
             "command_preservation_ratio": preservation_ratio * command_active,
             "preservation_low_violation": preservation_low_violation,
             "preservation_high_violation": preservation_high_violation,
+            "horizontal_preservation_ratio": horizontal_preservation_ratio * horizontal_active,
+            "horizontal_preservation_violation": horizontal_preservation_violation,
+            "vertical_preservation_ratio": vertical_preservation_ratio * vertical_active,
+            "vertical_preservation_violation": vertical_preservation_violation,
             "command_amplification": amplification * command_safe_gate,
             "height_floor_violation": height_floor_violation,
             "height_ceiling_violation": height_ceiling_violation,

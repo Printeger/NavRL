@@ -9,6 +9,7 @@ import torch
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SCRIPTS = os.path.join(ROOT, "training", "scripts")
 ICS_PATH = os.path.join(SCRIPTS, "instinctRL", "ics.py")
+SAFETY_FILTER_PATH = os.path.join(SCRIPTS, "instinctRL", "safety_filter.py")
 OBS_PATH = os.path.join(SCRIPTS, "instinctRL", "observation.py")
 ENV_PATH = os.path.join(SCRIPTS, "env.py")
 TRAIN_PATH = os.path.join(SCRIPTS, "train.py")
@@ -24,6 +25,10 @@ def _load_module(path, name):
 
 def _load_ics():
     return _load_module(ICS_PATH, "instinctrl_ics_test")
+
+
+def _load_safety_filter():
+    return _load_module(SAFETY_FILTER_PATH, "instinctrl_safety_filter_test")
 
 
 def _load_observation():
@@ -91,6 +96,8 @@ def test_config_validation():
         {"min_reliability": 1.1},
         {"brake_mode": "reverse"},
         {"range_rate_mode": "other"},
+        {"downward_ray_min_z": -0.1},
+        {"downward_clearance_margin": -0.1},
     ]
     for kwargs in bad_kwargs:
         try:
@@ -221,6 +228,85 @@ def test_command_clipping_uses_unclipped_beta_and_preserves_direction():
     assert out.metrics["ics_clip_ratio"].item() < 1.0
 
 
+def test_downward_attenuator_disabled_preserves_ics_output():
+    params = {
+        "d_safe": 0.1,
+        "emergency_clearance": 0.05,
+        "active_horizon_margin": 0.0,
+        "velocity_limit": 3.0,
+    }
+    _, baseline = _attenuator(**params, downward_attenuation_enabled=False)
+    _, disabled = _attenuator(
+        **params,
+        downward_attenuation_enabled=False,
+        downward_ray_min_z=1.0,
+        downward_clearance_margin=0.1,
+    )
+    ranges, masks, weights = _history([[[0.3], [0.3]]])
+    rays = torch.tensor([[0.0, 0.0, -1.0]])
+    command = torch.tensor([[0.4, 0.0, -1.0]])
+
+    baseline_out = baseline(ranges, masks, weights, rays, command)
+    disabled_out = disabled(ranges, masks, weights, rays, command)
+
+    assert torch.allclose(disabled_out.v_final_b, baseline_out.v_final_b)
+    for key in baseline_out.metrics:
+        assert torch.allclose(disabled_out.metrics[key], baseline_out.metrics[key])
+
+
+def test_downward_attenuator_enabled_reduces_only_downward_z_from_mid360_rays():
+    _, ics = _attenuator(
+        d_safe=0.1,
+        emergency_clearance=0.05,
+        active_horizon_margin=0.0,
+        velocity_limit=3.0,
+        downward_attenuation_enabled=True,
+        downward_ray_min_z=0.25,
+    )
+    ranges, masks, weights = _history([[[0.3, 0.3], [0.3, 0.3]]])
+    rays = torch.tensor([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0]])
+    command = torch.tensor([[0.4, 0.0, -1.0]])
+
+    out = ics(ranges, masks, weights, rays, command)
+
+    expected_z = -math.sqrt(2.0 * (0.3 - 0.05))
+    assert torch.allclose(out.v_final_b[..., :2], torch.tensor([[0.4, 0.0]]))
+    assert math.isclose(out.v_final_b[..., 2].item(), expected_z, rel_tol=1e-5)
+    assert out.cache["ics_downward_active"].item() == 1.0
+    assert out.cache["ics_downward_beta"].item() < 1.0
+
+    upward = ics(ranges, masks, weights, rays, torch.tensor([[0.4, 0.0, 1.0]]))
+    assert torch.allclose(upward.v_final_b, torch.tensor([[0.4, 0.0, 1.0]]))
+
+
+def test_privileged_height_safety_filter_is_default_equivalent_and_downward_only():
+    mod = _load_safety_filter()
+    disabled = mod.PrivilegedHeightFloorSafetyFilter(
+        mod.PrivilegedHeightSafetyFilterConfig(enabled=False),
+        device="cpu",
+    )
+    enabled = mod.PrivilegedHeightFloorSafetyFilter(
+        mod.PrivilegedHeightSafetyFilterConfig(
+            enabled=True,
+            height_floor=0.5,
+            attenuation_band=0.3,
+            min_downward_scale=0.0,
+        ),
+        device="cpu",
+    )
+    command = torch.tensor([[0.2, -0.1, -1.0], [0.2, -0.1, 1.0]])
+    height = torch.tensor([[0.56], [0.56]])
+
+    disabled_out = disabled(command, height)
+    enabled_out = enabled(command, height)
+
+    assert torch.allclose(disabled_out.v_final_b, command)
+    assert torch.allclose(enabled_out.v_final_b[..., :2], command[..., :2])
+    assert math.isclose(enabled_out.v_final_b[0, 2].item(), -0.2, rel_tol=1e-6)
+    assert enabled_out.v_final_b[1, 2].item() == 1.0
+    assert enabled_out.metrics["safety_filter_height_active"].reshape(-1).tolist() == [1.0, 0.0]
+
+
 def test_history_accessor_copy_ordering_and_source_wrapper():
     obs_mod = _load_observation()
     builder = obs_mod.MID360ObservationBuilder(
@@ -267,7 +353,7 @@ def test_history_accessor_copy_ordering_and_source_wrapper():
 
 def test_source_level_safety_and_integration_contracts():
     ics_source = open(ICS_PATH, encoding="utf-8").read().lower()
-    for token in ["surface_", "map", "odom", "slam", "dynamic_obstacle"]:
+    for token in ["surface_", "map", "odom", "slam", "dynamic_obstacle", "root"]:
         assert token not in ics_source
 
     env_source = open(ENV_PATH, encoding="utf-8").read()
@@ -275,11 +361,12 @@ def test_source_level_safety_and_integration_contracts():
     actor_block = actor_block.split("# ============================================", 1)[0]
     assert '"lidar_grid": obs_hist["lidar_grid"]' in actor_block
     assert '"state_vec": obs_hist["state_vec"]' in actor_block
-    for token in ['"ics_', '"anchor_', '"observability_', '"map', '"odom', '"root_state']:
+    for token in ['"ics_', '"anchor_', '"observability_', '"map', '"odom', '"root_state', '"safety_filter']:
         assert token not in actor_block
 
     train_source = open(TRAIN_PATH, encoding="utf-8").read()
     assert "v_final_body = ics_out.v_final_b" in train_source
+    assert "safety_out = safety_filter(v_final_body, root_height_w)" in train_source
     assert "env.set_prev_issued_action_body(v_final_body)" in train_source
     assert "v_final_world = adapter(v_final_body, drone_quat)" in train_source
     assert train_source.index("v_final_body = ics_out.v_final_b") < train_source.index(

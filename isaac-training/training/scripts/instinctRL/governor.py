@@ -77,9 +77,15 @@ class TrainableGovernorDecoder(nn.Module):
         null_vcorr_gate_enabled: bool = False,
         null_vcorr_gate_eps: float = 0.25,
         null_vcorr_gate_min: float = 0.25,
+        null_vcorr_axis_split_enabled: bool = False,
+        null_vcorr_xy_gate_min: float = 0.25,
+        null_vcorr_z_gate_min: float = 0.25,
         tracking_vcorr_z_gate_enabled: bool = False,
         tracking_vcorr_z_gate_eps: float = 1e-3,
         tracking_vcorr_z_gain: float = 1.0,
+        tracking_vcorr_z_sign_gate_enabled: bool = False,
+        tracking_vcorr_z_opposing_gain: float = 1.0,
+        tracking_vcorr_z_reinforcing_gain: float = 1.0,
     ):
         super().__init__()
         if not torch.isfinite(torch.tensor(float(v_corr_limit))):
@@ -105,6 +111,14 @@ class TrainableGovernorDecoder(nn.Module):
                 "null_vcorr_gate_min must satisfy 0.0 <= value <= 1.0, "
                 f"got {null_vcorr_gate_min}"
             )
+        for name, value in (
+            ("null_vcorr_xy_gate_min", null_vcorr_xy_gate_min),
+            ("null_vcorr_z_gate_min", null_vcorr_z_gate_min),
+        ):
+            if not 0.0 <= float(value) <= 1.0:
+                raise ValueError(
+                    f"{name} must satisfy 0.0 <= value <= 1.0, got {value}"
+                )
         if not torch.isfinite(torch.tensor(float(tracking_vcorr_z_gate_eps))):
             raise ValueError("tracking_vcorr_z_gate_eps must be finite")
         if tracking_vcorr_z_gate_eps <= 0.0:
@@ -119,6 +133,16 @@ class TrainableGovernorDecoder(nn.Module):
                 "tracking_vcorr_z_gain must satisfy 0.0 <= value <= 1.0, "
                 f"got {tracking_vcorr_z_gain}"
             )
+        for name, value in (
+            ("tracking_vcorr_z_opposing_gain", tracking_vcorr_z_opposing_gain),
+            ("tracking_vcorr_z_reinforcing_gain", tracking_vcorr_z_reinforcing_gain),
+        ):
+            if not torch.isfinite(torch.tensor(float(value))):
+                raise ValueError(f"{name} must be finite")
+            if not 0.0 <= float(value) <= 1.0:
+                raise ValueError(
+                    f"{name} must satisfy 0.0 <= value <= 1.0, got {value}"
+                )
         self.v_corr_limit = float(v_corr_limit)
         self.v_corr_z_limit = float(v_corr_z_limit)
         self.velocity_limit = float(velocity_limit)
@@ -126,9 +150,19 @@ class TrainableGovernorDecoder(nn.Module):
         self.null_vcorr_gate_enabled = bool(null_vcorr_gate_enabled)
         self.null_vcorr_gate_eps = float(null_vcorr_gate_eps)
         self.null_vcorr_gate_min = float(null_vcorr_gate_min)
+        self.null_vcorr_axis_split_enabled = bool(null_vcorr_axis_split_enabled)
+        self.null_vcorr_xy_gate_min = float(null_vcorr_xy_gate_min)
+        self.null_vcorr_z_gate_min = float(null_vcorr_z_gate_min)
         self.tracking_vcorr_z_gate_enabled = bool(tracking_vcorr_z_gate_enabled)
         self.tracking_vcorr_z_gate_eps = float(tracking_vcorr_z_gate_eps)
         self.tracking_vcorr_z_gain = float(tracking_vcorr_z_gain)
+        self.tracking_vcorr_z_sign_gate_enabled = bool(
+            tracking_vcorr_z_sign_gate_enabled
+        )
+        self.tracking_vcorr_z_opposing_gain = float(tracking_vcorr_z_opposing_gain)
+        self.tracking_vcorr_z_reinforcing_gain = float(
+            tracking_vcorr_z_reinforcing_gain
+        )
 
     def forward(
         self,
@@ -154,17 +188,39 @@ class TrainableGovernorDecoder(nn.Module):
         v_cmd_b = extract_latest_v_cmd_b(state_vec)
         if self.null_vcorr_gate_enabled:
             command_norm = v_cmd_b.norm(dim=-1, keepdim=True)
-            gate = (command_norm / self.null_vcorr_gate_eps).clamp(
-                self.null_vcorr_gate_min,
-                1.0,
-            )
-            v_corr = v_corr * gate
+            gate_ramp = command_norm / self.null_vcorr_gate_eps
+            if self.null_vcorr_axis_split_enabled:
+                xy_gate = gate_ramp.clamp(self.null_vcorr_xy_gate_min, 1.0)
+                z_gate = gate_ramp.clamp(self.null_vcorr_z_gate_min, 1.0)
+                v_corr = torch.cat(
+                    (v_corr[..., :2] * xy_gate, v_corr[..., 2:3] * z_gate),
+                    dim=-1,
+                )
+            else:
+                gate = gate_ramp.clamp(self.null_vcorr_gate_min, 1.0)
+                v_corr = v_corr * gate
         if self.tracking_vcorr_z_gate_enabled:
             tracking_active = v_cmd_b[..., 2:3].abs() > self.tracking_vcorr_z_gate_eps
             z_gain = torch.where(
                 tracking_active,
                 torch.full_like(v_corr[..., 2:3], self.tracking_vcorr_z_gain),
                 torch.ones_like(v_corr[..., 2:3]),
+            )
+            v_corr = torch.cat((v_corr[..., :2], v_corr[..., 2:3] * z_gain), dim=-1)
+        if self.tracking_vcorr_z_sign_gate_enabled:
+            tracking_active = v_cmd_b[..., 2:3].abs() > self.tracking_vcorr_z_gate_eps
+            sign_product = v_cmd_b[..., 2:3] * v_corr[..., 2:3]
+            opposing = tracking_active & (sign_product < 0.0)
+            reinforcing = tracking_active & (sign_product > 0.0)
+            z_gain = torch.where(
+                opposing,
+                torch.full_like(v_corr[..., 2:3], self.tracking_vcorr_z_opposing_gain),
+                torch.ones_like(v_corr[..., 2:3]),
+            )
+            z_gain = torch.where(
+                reinforcing,
+                torch.full_like(v_corr[..., 2:3], self.tracking_vcorr_z_reinforcing_gain),
+                z_gain,
             )
             v_corr = torch.cat((v_corr[..., :2], v_corr[..., 2:3] * z_gain), dim=-1)
         if prev_action_b is None:

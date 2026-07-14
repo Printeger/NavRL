@@ -27,12 +27,13 @@ FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "cfg")
 class InstinctRLEvalPolicy(torch.nn.Module):
     """Eval wrapper matching the learned-governor collector path used in training."""
 
-    def __init__(self, policy, env, adapter, ics_attenuator=None):
+    def __init__(self, policy, env, adapter, ics_attenuator=None, safety_filter=None):
         super().__init__()
         self.policy = policy
         self.env = env
         self.adapter = adapter
         self.ics_attenuator = ics_attenuator
+        self.safety_filter = safety_filter
 
     def forward(self, tensordict):
         self.policy(tensordict)
@@ -53,6 +54,11 @@ class InstinctRLEvalPolicy(torch.nn.Module):
             )
             v_final_body = ics_out.v_final_b
             self.env.record_instinctrl_ics_output(ics_out)
+
+        if self.safety_filter is not None:
+            root_height_w = tensordict["info", "drone_state"][..., 2:3]
+            safety_out = self.safety_filter(v_final_body, root_height_w)
+            v_final_body = safety_out.v_final_b
 
         self.env.set_prev_issued_action_body(v_final_body)
         drone_quat = tensordict["info", "drone_state"][..., 3:7]
@@ -391,6 +397,7 @@ def main(cfg):
 
     adapter = None
     ics_attenuator = None
+    safety_filter = None
     if instinct_enabled:
         from instinctRL.command_adapter import BodyToWorldVelocityAdapter
 
@@ -404,6 +411,25 @@ def main(cfg):
                 device=cfg.device,
             )
             print("[instinctRL-E] ICS attenuation enabled (brake_mode=zero)", flush=True)
+        safety_filter_cfg = getattr(cfg.instinctRL, "safety_filter", None)
+        if (
+            safety_filter_cfg is not None
+            and getattr(safety_filter_cfg, "privileged_height_floor_enabled", False)
+        ):
+            from instinctRL.safety_filter import (
+                PrivilegedHeightFloorSafetyFilter,
+                PrivilegedHeightSafetyFilterConfig,
+            )
+
+            safety_filter = PrivilegedHeightFloorSafetyFilter(
+                PrivilegedHeightSafetyFilterConfig.from_namespace(safety_filter_cfg),
+                device=cfg.device,
+            )
+            print(
+                "[instinctRL-R5F] Privileged height safety filter enabled "
+                "(sim/eval-only)",
+                flush=True,
+            )
     
     # ============================================
     # 第 5 步：创建策略网络（PPO）
@@ -434,6 +460,7 @@ def main(cfg):
             env=env,
             adapter=adapter,
             ics_attenuator=ics_attenuator,
+            safety_filter=safety_filter,
         ).to(cfg.device)
         print("[instinctRL-A2] Learned governor eval wrapper enabled.", flush=True)
 

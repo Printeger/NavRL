@@ -99,6 +99,17 @@ instinctRL:
     range_rate_mode: "finite_difference"
     empty_active_set_beta: 1.0
     brake_mode: "zero"
+    downward_attenuation_enabled: false
+    downward_ray_min_z: 0.25
+    downward_clearance_margin: 0.0
+
+  # R5F sim/eval-only privileged safety-filter hook. Disabled by default and
+  # not part of the deployable actor method.
+  safety_filter:
+    privileged_height_floor_enabled: false
+    height_floor: 0.5
+    attenuation_band: 0.3
+    min_downward_scale: 0.0
 
   # instinctRL-F: Reward integration/readiness, not convergence proof
   reward:
@@ -115,6 +126,8 @@ instinctRL:
     proxy_tracking_weight: 0.25
     preservation_low_weight: 0.5
     preservation_high_weight: 0.5
+    horizontal_preservation_weight: 0.0
+    vertical_preservation_weight: 0.0
     preservation_lower: 0.75
     preservation_upper: 1.05
     command_amplification_weight: 0.5

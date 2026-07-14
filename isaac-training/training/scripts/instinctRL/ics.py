@@ -49,6 +49,9 @@ class ICSConfig:
     range_rate_mode: str = "finite_difference"
     empty_active_set_beta: float = 1.0
     brake_mode: str = "zero"
+    downward_attenuation_enabled: bool = False
+    downward_ray_min_z: float = 0.25
+    downward_clearance_margin: float = 0.0
     eps: float = 1e-6
     history_dt: float = 1.0
 
@@ -69,6 +72,8 @@ class ICSConfig:
             "range_rate_eps",
             "velocity_limit",
             "empty_active_set_beta",
+            "downward_ray_min_z",
+            "downward_clearance_margin",
             "eps",
             "history_dt",
         ):
@@ -100,6 +105,10 @@ class ICSConfig:
             raise ValueError("velocity_limit must be > 0")
         if not (0.0 <= self.empty_active_set_beta <= 1.0):
             raise ValueError("empty_active_set_beta must satisfy 0.0 <= value <= 1.0")
+        if not (0.0 <= self.downward_ray_min_z <= 1.0):
+            raise ValueError("downward_ray_min_z must satisfy 0.0 <= value <= 1.0")
+        if self.downward_clearance_margin < 0.0:
+            raise ValueError("downward_clearance_margin must be >= 0")
         if self.eps <= 0.0:
             raise ValueError("eps must be > 0")
         if self.history_dt <= 0.0:
@@ -123,6 +132,13 @@ class ICSConfig:
             range_rate_mode=str(getattr(cfg, "range_rate_mode", "finite_difference")),
             empty_active_set_beta=float(getattr(cfg, "empty_active_set_beta", 1.0)),
             brake_mode=str(getattr(cfg, "brake_mode", "zero")),
+            downward_attenuation_enabled=bool(
+                getattr(cfg, "downward_attenuation_enabled", False)
+            ),
+            downward_ray_min_z=float(getattr(cfg, "downward_ray_min_z", 0.25)),
+            downward_clearance_margin=float(
+                getattr(cfg, "downward_clearance_margin", 0.0)
+            ),
         )
 
 
@@ -242,6 +258,14 @@ class RangeHistoryICSAttenuator:
 
         brake = torch.zeros_like(command)
         v_att = beta * command + (1.0 - beta) * brake
+        v_att, downward_cache = self._apply_downward_attenuator(
+            v_att,
+            command,
+            latest_range,
+            latest_mask,
+            reliable,
+            rays,
+        )
         v_final, clip_ratio = self._clip_command(v_att)
         final_speed = v_final.norm(dim=-1, keepdim=True)
 
@@ -285,6 +309,7 @@ class RangeHistoryICSAttenuator:
             "ics_worst_beam_index": worst_beam_index,
             "ics_effective_clearance": effective_clearance,
         }
+        cache.update(downward_cache)
         return ICSOutput(v_final_b=v_final.reshape(output_shape), metrics=metrics, cache=cache)
 
     def _validate_history(self, name: str, value: torch.Tensor) -> torch.Tensor:
@@ -370,3 +395,58 @@ class RangeHistoryICSAttenuator:
             torch.ones_like(speed),
         )
         return clipped, clip_ratio
+
+    def _apply_downward_attenuator(
+        self,
+        command_after_beta: torch.Tensor,
+        command_before_beta: torch.Tensor,
+        latest_range: torch.Tensor,
+        latest_mask: torch.Tensor,
+        reliable: torch.Tensor,
+        rays: torch.Tensor,
+    ):
+        N = command_after_beta.shape[0]
+        ones = torch.ones(N, 1, dtype=command_after_beta.dtype, device=self.device)
+        zeros = torch.zeros_like(ones)
+        if not self.cfg.downward_attenuation_enabled:
+            return command_after_beta, {
+                "ics_downward_beta": ones,
+                "ics_downward_active": zeros,
+                "ics_downward_min_clearance": zeros,
+            }
+
+        ray_down_component = (-rays[..., 2]).clamp_min(0.0)
+        downward_ray = ray_down_component >= self.cfg.downward_ray_min_z
+        valid_downward = latest_mask & reliable & downward_ray
+        vertical_clearance = (
+            latest_range * ray_down_component - self.cfg.downward_clearance_margin
+        )
+        valid_clearance = torch.where(
+            valid_downward,
+            vertical_clearance,
+            torch.full_like(vertical_clearance, float("inf")),
+        )
+        min_clearance = valid_clearance.min(dim=1, keepdim=True).values
+        has_downward = torch.isfinite(min_clearance)
+        min_clearance = torch.where(has_downward, min_clearance, torch.zeros_like(min_clearance))
+
+        downward_speed = (-command_before_beta[..., 2:3]).clamp_min(0.0)
+        clearance_over_emergency = (
+            min_clearance - self.cfg.emergency_clearance
+        ).clamp_min(0.0)
+        v_safe_down = torch.sqrt(2.0 * self.cfg.a_max * clearance_over_emergency)
+        downward_beta = (v_safe_down / downward_speed.clamp_min(self.cfg.eps)).clamp(0.0, 1.0)
+        active = has_downward & (downward_speed > self.cfg.approach_eps)
+        downward_beta = torch.where(active, downward_beta, torch.ones_like(downward_beta))
+
+        filtered_z = torch.where(
+            command_after_beta[..., 2:3] < 0.0,
+            command_after_beta[..., 2:3] * downward_beta,
+            command_after_beta[..., 2:3],
+        )
+        filtered = torch.cat((command_after_beta[..., :2], filtered_z), dim=-1)
+        return filtered, {
+            "ics_downward_beta": downward_beta,
+            "ics_downward_active": active.to(command_after_beta.dtype),
+            "ics_downward_min_clearance": min_clearance,
+        }

@@ -736,6 +736,87 @@ R5E replay result:
 - R5D failed gates remain failed: null speed `0.1638`, anchor error `2.9254`, preservation `0.7015`, clearance p05 `0.7922`, ICS violation `0.0486`, below-bound termination `0.3125`.
 - Interpretation: preservation loss is mostly pre-ICS/governor-side rather than ICS-only, while near-floor samples show strong downward commands, partial governor/ICS attenuation, poor clearance tail, and high near-floor ICS violation rate. This supports mechanism diagnosis only; it does not authorize promotion, 1M, a sweep, or a behavior-changing patch.
 
+## A2-R5F Mechanism Design Plan - 2026-07-14
+
+R5F scope:
+
+- R5F is mechanism design, documentation backfill, default-off/default-equivalent code readiness, and unit tests only.
+- Do not train, do not sweep, do not run 1M, do not warm-start, do not promote, and do not modify `training/scripts/instinctRL/gates.py`.
+- Preserve the Paper-1 method boundary: TASLAB_UAV, Livox MID360, body-frame velocity-governor command method, actor observation `lidar_grid + state_vec`, and learned-governor action `[alpha, v_corr_x, v_corr_y, v_corr_z]`.
+
+R5E evidence decomposition:
+
+- Station/null behavior is not solved by the R5D best branch. R5E top-level null split showed actual XY speed `0.1482`, actual |z| `0.0697`, output XY `0.0373`, and output |z| `0.0114`; station drift and anchor error remained failed.
+- Tracking preservation loss is mostly pre-ICS/governor-side. R5E top-level preservation split showed pre-ICS `0.6869`, post-ICS `0.6620`, ICS loss `0.0249`, horizontal `0.7525`, and vertical |z| `0.5581`.
+- Near-floor safety is a separate mechanism line. R5E top-level near-floor split showed near-floor rate `0.0724`, `v_cmd_z=-0.1611`, `v_gov_z=-0.0499`, `v_final_z=-0.0328`, beta `0.6486`, clearance p05 `0.4143`, and near-floor ICS violation rate `0.5838`.
+
+R5F mechanism lines:
+
+1. Station/null XY drift plus anchor error:
+   - Add a default-off axis-split null correction authority hook in the decoder.
+   - Keep the existing scalar null gate as the default behavior when the new hook is off.
+   - Use only actor-clean `||v_cmd_b||`; do not read actual velocity, root state, anchor internals, map, SLAM, or privileged simulator state.
+
+2. Tracking preservation, especially vertical preservation:
+   - Add a default-off sign-aware vertical correction hook in the decoder.
+   - Keep the existing 4D action and current R5D tracking-z gain behavior unchanged unless explicitly enabled.
+   - Add reward-only horizontal/vertical preservation terms with zero default weights and ICS-safe command gating.
+
+3. Near-floor clearance and ICS safety:
+   - Add a default-off MID360-derived downward attenuator inside ICS.
+   - Add a privileged root-height floor filter helper only as a sim/eval-only safety filter at the controller/eval boundary.
+   - The root-height filter is not deployable under the handbook and must not be described as Paper-1 actor evidence.
+
+Candidate classification:
+
+| Candidate | Class | Deployable under handbook | Default behavior | Targets | Main risk |
+|---|---|---:|---:|---|---|
+| Null XY axis-split correction authority | actor-clean governor-action constraint | Yes | unchanged/off | null XY actual drift, anchor error | more null correction may create biased motion |
+| Null-mode damping | actor-clean governor-action constraint | Yes | unchanged/off | null output bias | R5E says output is already small; may worsen drift |
+| Actual-speed station penalty split | reward-only privileged actual velocity | Reward-only yes, actor no | off/zero | XY drift source | reward conflict with tracking/safety |
+| Sign-aware vertical correction gate | actor-clean governor-action constraint | Yes | unchanged/off | vertical preservation, pre-ICS loss | may remove useful stabilization or worsen near-floor descent |
+| Axis preservation reward terms | reward-only | Yes | zero weight | horizontal/vertical preservation | can fight safety attenuation if ungated |
+| Range-derived downward attenuator | actor-clean ICS/safety filter | Yes | unchanged/off | near-floor clearance, ICS violation | MID360 floor visibility / false positives |
+| Root-height floor clamp | privileged safety-filter | No; sim/eval-only | unchanged/off | below-bound, near-floor diagnosis | invalid deployable claim if misused |
+
+Implemented code readiness:
+
+- Governor decoder:
+  - Added `null_vcorr_axis_split_enabled=false`, `null_vcorr_xy_gate_min=0.25`, and `null_vcorr_z_gate_min=0.25`.
+  - Added `tracking_vcorr_z_sign_gate_enabled=false`, `tracking_vcorr_z_opposing_gain=1.0`, and `tracking_vcorr_z_reinforcing_gain=1.0`.
+  - `PPO` passes the new config through without changing actor inputs or action dimension.
+- ICS:
+  - Added `downward_attenuation_enabled=false`, `downward_ray_min_z=0.25`, and `downward_clearance_margin=0.0`.
+  - The enabled path uses only MID360 range, mask, weight, ray direction, and body-frame governor command z.
+- Safety filter:
+  - Added `training/scripts/instinctRL/safety_filter.py` with `PrivilegedHeightFloorSafetyFilter`.
+  - It is wired at the train/eval controller boundary only when `instinctRL.safety_filter.privileged_height_floor_enabled=true`.
+  - It reads root height only from controller/eval-boundary info and is marked sim/eval-only.
+- Rewards and audits:
+  - Added zero-weight `reward_horizontal_preservation` and `reward_vertical_preservation`.
+  - Actor audit explicitly rejects `r5f_*` and `safety_filter*` actor-observation keys.
+
+Validation commands for R5F:
+
+```bash
+cd /home/mint/rl_dev/NavRL/isaac-training
+python -m py_compile training/scripts/instinctRL/governor.py training/scripts/instinctRL/ics.py training/scripts/instinctRL/rewards.py training/scripts/instinctRL/safety_filter.py training/scripts/ppo.py training/scripts/train.py training/scripts/eval.py training/scripts/env.py training/scripts/utils.py
+python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_ppo_hybrid.py
+```
+
+Validation backfill:
+
+- `python -m py_compile training/scripts/instinctRL/governor.py training/scripts/instinctRL/ics.py training/scripts/instinctRL/rewards.py training/scripts/instinctRL/safety_filter.py training/scripts/ppo.py training/scripts/train.py training/scripts/eval.py training/scripts/env.py training/scripts/utils.py`: passed.
+- Focused pre-doc test: `python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_ppo_hybrid.py`: passed, `60 passed, 5 warnings`.
+- Final R5F validation: `python -m pytest -q training/unit_test/test_instinctrl_governor.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_rewards.py training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_ppo_hybrid.py`: passed, `64 passed, 5 warnings`.
+- Broader instinctRL suite: `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `125 passed, 12 warnings`.
+
+Next-step decision:
+
+- R5F code readiness is not evidence for promotion or 1M.
+- The next round may design R5F dry-run sweep variants only after validation remains clean.
+- Any privileged height-filter variant must be labeled sim/eval-only and excluded from deployable Paper-1 claims.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:

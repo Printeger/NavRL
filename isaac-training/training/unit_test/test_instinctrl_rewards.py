@@ -36,6 +36,8 @@ def _computer(**kwargs):
         "proxy_tracking_weight": 0.0,
         "preservation_low_weight": 0.0,
         "preservation_high_weight": 0.0,
+        "horizontal_preservation_weight": 0.0,
+        "vertical_preservation_weight": 0.0,
         "preservation_lower": 0.75,
         "preservation_upper": 1.05,
         "command_amplification_weight": 0.0,
@@ -84,6 +86,8 @@ def test_config_validation():
         {"min_anchor_valid_fraction": -0.1},
         {"min_anchor_valid_fraction": 1.1},
         {"preservation_low_weight": -0.1},
+        {"horizontal_preservation_weight": -0.1},
+        {"vertical_preservation_weight": -0.1},
         {"preservation_lower": -0.1},
         {"preservation_lower": 1.1, "preservation_upper": 1.0},
         {"command_eps": 0.0},
@@ -333,6 +337,49 @@ def test_preservation_band_penalizes_command_loss_and_gain_only_when_ics_clear()
     assert too_slow.total.item() < inside.total.item()
 
 
+def test_axis_preservation_terms_default_to_zero_and_do_not_change_reward():
+    _, computer = _computer()
+    out = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 1.0]]),
+        v_final_b=torch.tensor([[0.2, 0.0, 0.2]]),
+    ))
+
+    assert out.components["reward_horizontal_preservation"].item() == 0.0
+    assert out.components["reward_vertical_preservation"].item() == 0.0
+    assert out.cache["horizontal_preservation_violation"].item() > 0.0
+    assert out.cache["vertical_preservation_violation"].item() > 0.0
+
+
+def test_axis_preservation_terms_are_command_and_ics_safety_gated():
+    _, computer = _computer(
+        horizontal_preservation_weight=2.0,
+        vertical_preservation_weight=3.0,
+        preservation_lower=0.75,
+        preservation_upper=1.05,
+    )
+
+    active = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 1.0]]),
+        v_final_b=torch.tensor([[0.5, 0.0, 0.5]]),
+    ))
+    attenuated_by_ics = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 1.0]]),
+        v_final_b=torch.tensor([[0.5, 0.0, 0.5]]),
+        ics_beta=torch.full((1, 1), 0.2),
+    ))
+    horizontal_only = computer.compute(**_base_inputs(
+        v_cmd_b=torch.tensor([[1.0, 0.0, 0.0]]),
+        v_final_b=torch.tensor([[0.5, 0.0, 0.0]]),
+    ))
+
+    assert abs(active.components["reward_horizontal_preservation"].item() + 0.5) < 1e-6
+    assert abs(active.components["reward_vertical_preservation"].item() + 0.75) < 1e-6
+    assert attenuated_by_ics.components["reward_horizontal_preservation"].item() == 0.0
+    assert attenuated_by_ics.components["reward_vertical_preservation"].item() == 0.0
+    assert abs(horizontal_only.components["reward_horizontal_preservation"].item() + 0.5) < 1e-6
+    assert horizontal_only.components["reward_vertical_preservation"].item() == 0.0
+
+
 def test_total_is_component_sum_and_clipped_with_scaled_components():
     _, computer = _computer(max_reward_abs=1.0, collision_weight=10.0)
     out = computer.compute(**_base_inputs(collision=torch.ones(1, 1, dtype=torch.bool)))
@@ -403,6 +450,8 @@ def test_source_level_actor_privileged_and_env_integration_contracts():
     assert "height_floor_weight: 8.0" in cfg_source
     assert "height_ceiling: 4.0" in cfg_source
     assert "height_ceiling_weight: 0.0" in cfg_source
+    assert "horizontal_preservation_weight: 0.0" in cfg_source
+    assert "vertical_preservation_weight: 0.0" in cfg_source
 
 
 def test_train_eval_semantics_are_handbook_aligned_by_default():
@@ -423,6 +472,8 @@ def test_train_eval_semantics_are_handbook_aligned_by_default():
     assert "height_floor_weight: 8.0" in cfg_source
     assert "height_ceiling: 4.0" in cfg_source
     assert "height_ceiling_weight: 0.0" in cfg_source
+    assert "horizontal_preservation_weight: 0.0" in cfg_source
+    assert "vertical_preservation_weight: 0.0" in cfg_source
     assert "actual_velocity_b=actual_velocity_b" in env_source
     assert "height_w=self.root_state[..., 2].reshape(self.num_envs, 1)" in env_source
     assert "compute_termination_stats(" in env_source

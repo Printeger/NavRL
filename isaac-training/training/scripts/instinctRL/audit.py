@@ -14,7 +14,8 @@ FORBIDDEN_ACTOR_KEY_PATTERNS = [
     "pose", "pos", "position", "odom", "velocity",
     "vel_g", "vel_w", "root_state", "map", "slam",
     "privileged", "direction", "distance", "dynamic_obstacle",
-    "r5e", "governor", "ics", "clearance", "height", "root",
+    "r5e", "r5f", "governor", "ics", "clearance", "height", "root",
+    "safety_filter",
 ]
 
 

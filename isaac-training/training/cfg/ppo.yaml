@@ -47,6 +47,12 @@ algo:
       null_vcorr_gate_enabled: true    # Soft null prior: allow small station correction at null command
       null_vcorr_gate_eps: 0.25        # Ramp v_corr from soft minimum to full strength by this command norm
       null_vcorr_gate_min: 0.25        # Retain 25% correction authority at exactly null command
+      null_vcorr_axis_split_enabled: false # R5F default-off XY/Z split for null-command correction authority
+      null_vcorr_xy_gate_min: 0.25     # Used only when null_vcorr_axis_split_enabled=true
+      null_vcorr_z_gate_min: 0.25      # Used only when null_vcorr_axis_split_enabled=true
       tracking_vcorr_z_gate_enabled: false # Default-off vertical correction attenuation during vertical tracking
       tracking_vcorr_z_gate_eps: 1e-3   # Tracking-active when abs(v_cmd_b.z) exceeds this threshold
       tracking_vcorr_z_gain: 1.0        # 1.0 preserves current behavior; 0.0 hard-gates active tracking z correction
+      tracking_vcorr_z_sign_gate_enabled: false # R5F default-off sign-aware vertical correction gate
+      tracking_vcorr_z_opposing_gain: 1.0 # Used only when sign gate is enabled and v_corr_z opposes v_cmd_z
+      tracking_vcorr_z_reinforcing_gain: 1.0 # Used only when sign gate is enabled and v_corr_z reinforces v_cmd_z

@@ -113,17 +113,29 @@ def test_ppo_learned_governor_passes_r5d_decoder_config_and_keeps_4d_schema():
     cfg = _cfg()
     cfg.instinctRL.governor.v_corr_z_limit = 0.2
     cfg.instinctRL.governor.null_vcorr_gate_enabled = False
+    cfg.instinctRL.governor.null_vcorr_axis_split_enabled = True
+    cfg.instinctRL.governor.null_vcorr_xy_gate_min = 0.5
+    cfg.instinctRL.governor.null_vcorr_z_gate_min = 0.0
     cfg.instinctRL.governor.tracking_vcorr_z_gate_enabled = True
     cfg.instinctRL.governor.tracking_vcorr_z_gate_eps = 0.1
     cfg.instinctRL.governor.tracking_vcorr_z_gain = 0.0
+    cfg.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled = True
+    cfg.instinctRL.governor.tracking_vcorr_z_opposing_gain = 0.25
+    cfg.instinctRL.governor.tracking_vcorr_z_reinforcing_gain = 0.5
     policy = PPO(cfg, _obs_spec(), _ActionSpec(), "cpu")
 
     assert policy.action_dim == 4
     assert policy.governor_decoder.v_corr_limit == 0.5
     assert policy.governor_decoder.v_corr_z_limit == 0.2
+    assert policy.governor_decoder.null_vcorr_axis_split_enabled
+    assert policy.governor_decoder.null_vcorr_xy_gate_min == 0.5
+    assert policy.governor_decoder.null_vcorr_z_gate_min == 0.0
     assert policy.governor_decoder.tracking_vcorr_z_gate_enabled
     assert policy.governor_decoder.tracking_vcorr_z_gate_eps == 0.1
     assert policy.governor_decoder.tracking_vcorr_z_gain == 0.0
+    assert policy.governor_decoder.tracking_vcorr_z_sign_gate_enabled
+    assert policy.governor_decoder.tracking_vcorr_z_opposing_gain == 0.25
+    assert policy.governor_decoder.tracking_vcorr_z_reinforcing_gain == 0.5
 
     td = _obs_spec().zero().clone()
     td["agents", "action_normalized"] = torch.tensor([

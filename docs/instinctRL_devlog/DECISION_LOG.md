@@ -520,3 +520,13 @@
 - C. Single eval episode — too narrow; doesn't test env reset or multi-step stability
 
 **Rationale**: B0 is a baseline, not a learned policy. The smoke test proves the command path works end-to-end. Learning comes later.
+
+---
+
+## D-2026-07-14-001: R5F Default-Off Mechanism Hooks and Privileged Height Boundary
+
+**Decision**: R5F may prepare default-off/default-equivalent governor, ICS, safety-filter, and reward hooks for mechanism screening, but privileged root-height filtering is sim/eval-only and cannot be claimed as a Paper-1 deployable actor method.
+
+**Rationale**: R5E evidence splits the remaining failures into station/null XY drift and anchor error, tracking preservation, and near-floor clearance/ICS safety. Actor-clean hooks may be screened later without changing actor inputs. A root-height floor filter can diagnose controller-boundary safety behavior in simulation/evaluation, but root height is privileged and must never enter the deployed actor observation or deployable-method claim.
+
+**Guardrails**: Actor observation remains exactly `lidar_grid + state_vec`; learned-governor action remains `[alpha, v_corr_x, v_corr_y, v_corr_z]`; hard gates remain unchanged; no training, sweep, 1M, warm-start, or promotion is authorized by this decision.
