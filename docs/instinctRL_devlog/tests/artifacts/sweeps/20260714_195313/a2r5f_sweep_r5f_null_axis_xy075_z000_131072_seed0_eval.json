@@ -1,0 +1,3744 @@
+{
+  "checkpoint_path": "/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_200613-ybgfftj7/files/checkpoint_final.pt",
+  "deterministic_exploration_type": "MEAN",
+  "env_dyn_num_obstacles": 0,
+  "env_max_episode_length": 1000,
+  "env_num_envs": 32,
+  "env_num_obstacles": 350,
+  "eval/handbook.anchor_active_fraction": 0.999,
+  "eval/handbook.anchor_error_max": 37.72184371948242,
+  "eval/handbook.anchor_error_mean": 3.4447928663156926,
+  "eval/handbook.anchor_loss": 0.249702511921525,
+  "eval/handbook.command_amplification_horizontal_mean": 0.0822696988992393,
+  "eval/handbook.command_amplification_horizontal_rate": 0.14384375,
+  "eval/handbook.command_amplification_mean": 0.062483160585165023,
+  "eval/handbook.command_amplification_rate": 0.09475,
+  "eval/handbook.command_amplification_vertical_mean": 0.028315488189458848,
+  "eval/handbook.command_amplification_vertical_rate": 0.039875,
+  "eval/handbook.command_mode_fraction.adversarial": 0.03690625,
+  "eval/handbook.command_mode_fraction.aggressive": 0.15878125,
+  "eval/handbook.command_mode_fraction.normal": 0.46984375,
+  "eval/handbook.command_mode_fraction.oscillation": 0.2008125,
+  "eval/handbook.command_mode_fraction.recovery": 0.13365625,
+  "eval/handbook.command_preservation_ratio": 0.6480802716314793,
+  "eval/handbook.height_ceiling_margin_mean": 2.57678125166893,
+  "eval/handbook.height_ceiling_margin_min": 1.677736759185791,
+  "eval/handbook.height_ceiling_margin_p05": 1.9319427013397217,
+  "eval/handbook.height_ceiling_violation_max": 0.0,
+  "eval/handbook.height_ceiling_violation_mean": 0.0,
+  "eval/handbook.height_ceiling_violation_p95": 0.0,
+  "eval/handbook.height_floor_violation_max": 0.2998732328414917,
+  "eval/handbook.height_floor_violation_mean": 0.012209920537658035,
+  "eval/handbook.height_floor_violation_p95": 0.11511943489313126,
+  "eval/handbook.height_world_z_max": 2.322263240814209,
+  "eval/handbook.height_world_z_mean": 1.423218758583069,
+  "eval/handbook.height_world_z_min": 0.2001267820596695,
+  "eval/handbook.height_world_z_p05": 0.38488051295280457,
+  "eval/handbook.height_world_z_p95": 2.068057060241699,
+  "eval/handbook.ics_beta_mean": 0.8658750727176666,
+  "eval/handbook.ics_emergency_rate": 0.00903125,
+  "eval/handbook.ics_intervention_frequency": 0.13496875,
+  "eval/handbook.ics_violation_rate": 0.09984375,
+  "eval/handbook.null_command_output_speed_mean": 0.08666216740757227,
+  "eval/handbook.null_command_speed_mean": 0.2340634652241133,
+  "eval/handbook.observability_condition_number_mean": 2.7640548832416534,
+  "eval/handbook.observability_drift_norm_mean": 1.8074448838531816,
+  "eval/handbook.observability_drift_projection_mean": 1.2661057479963147,
+  "eval/handbook.observability_is_proxy": 1.0,
+  "eval/handbook.observability_mode_code_mean": 0.0,
+  "eval/handbook.observability_rank_mean": 3.0,
+  "eval/handbook.observability_score_mean": 0.36580931943655015,
+  "eval/handbook.observability_sigma_max_mean": 66.20370254516601,
+  "eval/handbook.observability_sigma_min_mean": 24.286839595794678,
+  "eval/handbook.observability_valid_fraction_mean": 0.3840167963206768,
+  "eval/handbook.observability_weighted_valid_fraction_mean": 0.3718268466889858,
+  "eval/handbook.r5e_command_preservation_horizontal_ratio": 0.622777719974036,
+  "eval/handbook.r5e_command_preservation_ics_loss_ratio": 0.10545442420977849,
+  "eval/handbook.r5e_command_preservation_post_ics_ratio": 0.5915296544792272,
+  "eval/handbook.r5e_command_preservation_pre_ics_ratio": 0.6969840790266787,
+  "eval/handbook.r5e_command_preservation_vertical_abs_ratio": 0.46857154231184506,
+  "eval/handbook.r5e_ics_violation_near_floor_rate": 0.7370531239558971,
+  "eval/handbook.r5e_near_floor_clearance_p05": 0.41153836250305176,
+  "eval/handbook.r5e_near_floor_ics_beta_mean": 0.09819554970927992,
+  "eval/handbook.r5e_near_floor_rate": 0.09353125,
+  "eval/handbook.r5e_near_floor_v_cmd_z_mean": -0.23828523481346237,
+  "eval/handbook.r5e_near_floor_v_final_z_mean": -0.017523818980044237,
+  "eval/handbook.r5e_near_floor_v_gov_z_mean": -0.1417543601121466,
+  "eval/handbook.r5e_null_actual_speed_xy_mean": 0.2198931136423489,
+  "eval/handbook.r5e_null_actual_speed_z_abs_mean": 0.07989239156595432,
+  "eval/handbook.r5e_null_output_speed_xy_mean": 0.086715940002352,
+  "eval/handbook.r5e_null_output_speed_z_abs_mean": 0.0,
+  "eval/handbook.safety_collision_rate": 0.00025,
+  "eval/handbook.safety_min_clearance_mean": 2.2212814044952394,
+  "eval/handbook.safety_min_clearance_p05": 0.5695891976356506,
+  "eval/handbook.station_keeping_drift_max": 4.1271538734436035,
+  "eval/handbook.station_keeping_drift_mean": 1.8074448817022886,
+  "eval/handbook.station_keeping_drift_p95": 3.5500552654266357,
+  "eval/handbook.termination_above_bound": 0.0,
+  "eval/handbook.termination_below_bound": 0.40625,
+  "eval/handbook.termination_collision": 0.125,
+  "eval/handbook.termination_timeout": 0.46875,
+  "eval/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.42723853550792185,
+  "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.3342811310330975,
+  "eval/handbook.vertical_corr_opposing_fraction": 0.39221875,
+  "eval/handbook.vertical_corr_reinforcing_fraction": 0.44359375,
+  "eval/handbook.vertical_corr_z_abs_mean": 0.01806747877970338,
+  "eval/handbook.vertical_corr_z_mean": -0.01806747877970338,
+  "eval/handbook.vertical_corr_z_negative_fraction": 0.86640625,
+  "eval/handbook.vertical_corr_z_positive_fraction": 0.0,
+  "eval/handbook.vertical_corr_z_saturation_rate": 0.0,
+  "eval/handbook.vertical_final_minus_cmd_z_abs_mean": 0.11638642227649688,
+  "eval/handbook.vertical_gov_minus_cmd_z_abs_mean": 0.09721789269894361,
+  "eval/handbook.vertical_ics_delta_z_abs_mean": 0.019363613051828,
+  "eval/handbook.vertical_null_corr_abs_mean": 0.0,
+  "eval/handbook.vertical_null_corr_active_rate": 0.0,
+  "eval/handbook.vertical_tracking_amplification_mean_when_corr_active": 0.034275787617350846,
+  "eval/handbook.vertical_tracking_corr_active_rate": 0.9883347042548418,
+  "eval/handbook.vertical_tracking_preservation_mean_when_corr_active": 0.5669658341530078,
+  "eval/handbook.vertical_v_corr_limit": 0.35,
+  "eval/scenario_id": "static_mid360_short_diag",
+  "eval/scenario_id_code": 1,
+  "eval/station/diagnostics.actual_velocity_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.25757697224617004,
+    "mean": 0.036939452587937315,
+    "min": -0.15939806401729584,
+    "std": 0.1314183962023002
+  },
+  "eval/station/diagnostics.anchor_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.999,
+    "min": 0.0,
+    "std": 0.031606961258557775
+  },
+  "eval/station/diagnostics.anchor_error_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 37.72184371948242,
+    "mean": 32.19541293907166,
+    "min": 0.0,
+    "std": 3.5539877446952843
+  },
+  "eval/station/diagnostics.anchor_error_mean": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 6.297796249389648,
+    "mean": 3.4447928663156926,
+    "min": 0.0,
+    "std": 1.5018651333935615
+  },
+  "eval/station/diagnostics.anchor_loss": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.4769066274166107,
+    "mean": 0.249702511921525,
+    "min": 0.0,
+    "std": 0.11407405585415348
+  },
+  "eval/station/diagnostics.command_amplification": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_amplification_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_amplification_horizontal": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_amplification_horizontal_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_amplification_vertical": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_amplification_vertical_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.0,
+    "mean": 4.0,
+    "min": 4.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.command_preservation_ratio": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.governor_alpha": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.6734943985939026,
+    "mean": 0.507890230089426,
+    "min": 0.44844111800193787,
+    "std": 0.061635026233200906
+  },
+  "eval/station/diagnostics.governor_v_cmd_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.governor_v_cmd_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.governor_v_corr": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.11392296850681305,
+    "mean": 0.025490685351192952,
+    "min": -0.11940660327672958,
+    "std": 0.04662841518225673
+  },
+  "eval/station/diagnostics.governor_v_corr_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": -0.0,
+    "mean": 0.0,
+    "min": -0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.governor_v_final_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.11392296850681305,
+    "mean": 0.024903919287025927,
+    "min": -0.11940660327672958,
+    "std": 0.046291337762939866
+  },
+  "eval/station/diagnostics.governor_v_final_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.governor_v_gov_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.11392296850681305,
+    "mean": 0.025490685351192952,
+    "min": -0.11940660327672958,
+    "std": 0.04662841518225673
+  },
+  "eval/station/diagnostics.governor_v_gov_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.height_ceiling_margin": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.311727523803711,
+    "mean": 2.6402780418395997,
+    "min": 2.0,
+    "std": 0.3848497171717105
+  },
+  "eval/station/diagnostics.height_ceiling_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.height_floor_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.height_world_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 1.359721963763237,
+    "min": 0.6882723569869995,
+    "std": 0.38484975429375023
+  },
+  "eval/station/diagnostics.ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.98462483304739,
+    "min": 0.0,
+    "std": 0.12294709566151972
+  },
+  "eval/station/diagnostics.ics_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.15207438170909882,
+    "mean": 0.088345049880445,
+    "min": 0.020582787692546844,
+    "std": 0.025828367538584255
+  },
+  "eval/station/diagnostics.ics_emergency": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.ics_final_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.15207438170909882,
+    "mean": 0.086715940002352,
+    "min": 0.0,
+    "std": 0.02774211891667066
+  },
+  "eval/station/diagnostics.ics_intervention": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.0155,
+    "min": 0.0,
+    "std": 0.12353036064061337
+  },
+  "eval/station/diagnostics.ics_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.00434375,
+    "min": 0.0,
+    "std": 0.06576383379896203
+  },
+  "eval/station/diagnostics.min_clearance": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.3699820041656494,
+    "mean": 2.2632404539585114,
+    "min": 0.6008570194244385,
+    "std": 0.6714381882180629
+  },
+  "eval/station/diagnostics.null_command_output_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.15207438170909882,
+    "mean": 0.08666216740757227,
+    "min": 0.0,
+    "std": 0.027808273972175387
+  },
+  "eval/station/diagnostics.null_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.2764563262462616,
+    "mean": 0.2340634652241133,
+    "min": 0.0,
+    "std": 0.03347011062040424
+  },
+  "eval/station/diagnostics.observability_condition_number": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.5039103031158447,
+    "mean": 2.7640548832416534,
+    "min": 2.0220022201538086,
+    "std": 0.28643082332385156
+  },
+  "eval/station/diagnostics.observability_drift_norm": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.1271538734436035,
+    "mean": 1.8074448838531816,
+    "min": 0.0,
+    "std": 1.1078076896592213
+  },
+  "eval/station/diagnostics.observability_drift_projection": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.90329909324646,
+    "mean": 1.2661057479963147,
+    "min": 0.0,
+    "std": 0.8027836906290582
+  },
+  "eval/station/diagnostics.observability_is_proxy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_rank": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_scenario_id": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.observability_score": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.49455931782722473,
+    "mean": 0.36580931943655015,
+    "min": 0.28539544343948364,
+    "std": 0.039086854607813123
+  },
+  "eval/station/diagnostics.observability_sigma_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 70.60234832763672,
+    "mean": 66.20370254516601,
+    "min": 59.929718017578125,
+    "std": 1.9554170362838241
+  },
+  "eval/station/diagnostics.observability_sigma_min": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 33.910736083984375,
+    "mean": 24.286839595794678,
+    "min": 17.103668212890625,
+    "std": 3.2570116052260762
+  },
+  "eval/station/diagnostics.observability_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.49580979347229004,
+    "mean": 0.3840167963206768,
+    "min": 0.26690205931663513,
+    "std": 0.047463126474691204
+  },
+  "eval/station/diagnostics.observability_weighted_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.48007112741470337,
+    "mean": 0.3718268466889858,
+    "min": 0.25842973589897156,
+    "std": 0.045956500712104005
+  },
+  "eval/station/diagnostics.r5e_command_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_horizontal_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_preservation_horizontal": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_preservation_ics_loss": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_preservation_post_ics": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_preservation_pre_ics": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_preservation_vertical_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_command_vertical_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_ics_violation_near_floor": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_near_floor": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_near_floor_clearance": {
+    "count": 32000,
+    "finite_count": 0
+  },
+  "eval/station/diagnostics.r5e_near_floor_ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_near_floor_v_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_near_floor_v_final_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_near_floor_v_gov_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_null_actual_speed_xy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.2640537917613983,
+    "mean": 0.2198931136423489,
+    "min": 0.0,
+    "std": 0.03300762328193419
+  },
+  "eval/station/diagnostics.r5e_null_actual_speed_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.08613212406635284,
+    "mean": 0.07989239156595432,
+    "min": 0.0,
+    "std": 0.008981930206325149
+  },
+  "eval/station/diagnostics.r5e_null_command": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.r5e_null_output_speed_xy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.15207438170909882,
+    "mean": 0.086715940002352,
+    "min": 0.0,
+    "std": 0.02774211891667066
+  },
+  "eval/station/diagnostics.r5e_null_output_speed_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.safety_collision": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.safety_min_clearance": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.3699820041656494,
+    "mean": 2.2632404539585114,
+    "min": 0.6008570194244385,
+    "std": 0.6714381882180629
+  },
+  "eval/station/diagnostics.station_keeping_drift": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.1271538734436035,
+    "mean": 1.8074448817022886,
+    "min": 0.0,
+    "std": 1.1078076945309003
+  },
+  "eval/station/diagnostics.tracking_actual_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.tracking_proxy_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.v_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.v_final_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_command_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_command_null": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_opposes_command": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_reinforces_command": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": -0.0,
+    "mean": 0.0,
+    "min": -0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_z_negative": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_z_positive": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_corr_z_saturated": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_final_minus_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_final_minus_cmd_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_gov_minus_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_gov_minus_cmd_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.98462483304739,
+    "min": 0.0,
+    "std": 0.12294709566151972
+  },
+  "eval/station/diagnostics.vertical_ics_delta_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_ics_delta_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_ics_emergency": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_null_corr_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_null_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_null_station_drift_when_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_tracking_amplification_when_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_tracking_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/diagnostics.vertical_tracking_preservation_when_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/station/episodes_expected": 32,
+  "eval/station/episodes_recorded": 32,
+  "eval/station/handbook.anchor_active_fraction": 0.999,
+  "eval/station/handbook.anchor_error_max": 37.72184371948242,
+  "eval/station/handbook.anchor_error_mean": 3.4447928663156926,
+  "eval/station/handbook.anchor_loss": 0.249702511921525,
+  "eval/station/handbook.command_amplification_horizontal_mean": 0.0,
+  "eval/station/handbook.command_amplification_horizontal_rate": 0.0,
+  "eval/station/handbook.command_amplification_mean": 0.0,
+  "eval/station/handbook.command_amplification_rate": 0.0,
+  "eval/station/handbook.command_amplification_vertical_mean": 0.0,
+  "eval/station/handbook.command_amplification_vertical_rate": 0.0,
+  "eval/station/handbook.command_mode_fraction.adversarial": 0.0,
+  "eval/station/handbook.command_mode_fraction.aggressive": 0.0,
+  "eval/station/handbook.command_mode_fraction.normal": 0.0,
+  "eval/station/handbook.command_mode_fraction.oscillation": 0.0,
+  "eval/station/handbook.command_mode_fraction.recovery": 1.0,
+  "eval/station/handbook.command_preservation_ratio": 1.0,
+  "eval/station/handbook.height_ceiling_margin_mean": 2.6402780418395997,
+  "eval/station/handbook.height_ceiling_margin_min": 2.0,
+  "eval/station/handbook.height_ceiling_margin_p05": 2.040900230407715,
+  "eval/station/handbook.height_ceiling_violation_max": 0.0,
+  "eval/station/handbook.height_ceiling_violation_mean": 0.0,
+  "eval/station/handbook.height_ceiling_violation_p95": 0.0,
+  "eval/station/handbook.height_floor_violation_max": 0.0,
+  "eval/station/handbook.height_floor_violation_mean": 0.0,
+  "eval/station/handbook.height_floor_violation_p95": 0.0,
+  "eval/station/handbook.height_world_z_max": 2.0,
+  "eval/station/handbook.height_world_z_mean": 1.359721963763237,
+  "eval/station/handbook.height_world_z_min": 0.6882723569869995,
+  "eval/station/handbook.height_world_z_p05": 0.7585322856903076,
+  "eval/station/handbook.height_world_z_p95": 1.9590994119644165,
+  "eval/station/handbook.ics_beta_mean": 0.98462483304739,
+  "eval/station/handbook.ics_emergency_rate": 0.0,
+  "eval/station/handbook.ics_intervention_frequency": 0.0155,
+  "eval/station/handbook.ics_violation_rate": 0.00434375,
+  "eval/station/handbook.null_command_output_speed_mean": 0.08666216740757227,
+  "eval/station/handbook.null_command_speed_mean": 0.2340634652241133,
+  "eval/station/handbook.observability_condition_number_mean": 2.7640548832416534,
+  "eval/station/handbook.observability_drift_norm_mean": 1.8074448838531816,
+  "eval/station/handbook.observability_drift_projection_mean": 1.2661057479963147,
+  "eval/station/handbook.observability_is_proxy": 1.0,
+  "eval/station/handbook.observability_mode_code_mean": 0.0,
+  "eval/station/handbook.observability_rank_mean": 3.0,
+  "eval/station/handbook.observability_score_mean": 0.36580931943655015,
+  "eval/station/handbook.observability_sigma_max_mean": 66.20370254516601,
+  "eval/station/handbook.observability_sigma_min_mean": 24.286839595794678,
+  "eval/station/handbook.observability_valid_fraction_mean": 0.3840167963206768,
+  "eval/station/handbook.observability_weighted_valid_fraction_mean": 0.3718268466889858,
+  "eval/station/handbook.r5e_command_preservation_horizontal_ratio": null,
+  "eval/station/handbook.r5e_command_preservation_ics_loss_ratio": null,
+  "eval/station/handbook.r5e_command_preservation_post_ics_ratio": null,
+  "eval/station/handbook.r5e_command_preservation_pre_ics_ratio": null,
+  "eval/station/handbook.r5e_command_preservation_vertical_abs_ratio": null,
+  "eval/station/handbook.r5e_ics_violation_near_floor_rate": null,
+  "eval/station/handbook.r5e_near_floor_clearance_p05": null,
+  "eval/station/handbook.r5e_near_floor_ics_beta_mean": null,
+  "eval/station/handbook.r5e_near_floor_rate": 0.0,
+  "eval/station/handbook.r5e_near_floor_v_cmd_z_mean": null,
+  "eval/station/handbook.r5e_near_floor_v_final_z_mean": null,
+  "eval/station/handbook.r5e_near_floor_v_gov_z_mean": null,
+  "eval/station/handbook.r5e_null_actual_speed_xy_mean": 0.2198931136423489,
+  "eval/station/handbook.r5e_null_actual_speed_z_abs_mean": 0.07989239156595432,
+  "eval/station/handbook.r5e_null_output_speed_xy_mean": 0.086715940002352,
+  "eval/station/handbook.r5e_null_output_speed_z_abs_mean": 0.0,
+  "eval/station/handbook.safety_collision_rate": 0.0,
+  "eval/station/handbook.safety_min_clearance_mean": 2.2632404539585114,
+  "eval/station/handbook.safety_min_clearance_p05": 1.1553928852081299,
+  "eval/station/handbook.station_keeping_drift_max": 4.1271538734436035,
+  "eval/station/handbook.station_keeping_drift_mean": 1.8074448817022886,
+  "eval/station/handbook.station_keeping_drift_p95": 3.5500552654266357,
+  "eval/station/handbook.termination_above_bound": 0.0,
+  "eval/station/handbook.termination_below_bound": 0.0,
+  "eval/station/handbook.termination_collision": 0.0,
+  "eval/station/handbook.termination_timeout": 1.0,
+  "eval/station/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.0,
+  "eval/station/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.0,
+  "eval/station/handbook.vertical_corr_opposing_fraction": 0.0,
+  "eval/station/handbook.vertical_corr_reinforcing_fraction": 0.0,
+  "eval/station/handbook.vertical_corr_z_abs_mean": 0.0,
+  "eval/station/handbook.vertical_corr_z_mean": 0.0,
+  "eval/station/handbook.vertical_corr_z_negative_fraction": 0.0,
+  "eval/station/handbook.vertical_corr_z_positive_fraction": 0.0,
+  "eval/station/handbook.vertical_corr_z_saturation_rate": 0.0,
+  "eval/station/handbook.vertical_final_minus_cmd_z_abs_mean": 0.0,
+  "eval/station/handbook.vertical_gov_minus_cmd_z_abs_mean": 0.0,
+  "eval/station/handbook.vertical_ics_delta_z_abs_mean": 0.0,
+  "eval/station/handbook.vertical_null_corr_abs_mean": 0.0,
+  "eval/station/handbook.vertical_null_corr_active_rate": 0.0,
+  "eval/station/handbook.vertical_v_corr_limit": 0.35,
+  "eval/station/pass_command_curriculum_profile": "station_first",
+  "eval/station/pass_command_frame_count": 0,
+  "eval/station/pass_command_source": "scripted_eval",
+  "eval/station/pass_name": "station_static_mid360",
+  "eval/station/reward": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": -0.026012703776359558,
+    "mean": -1.952221132002771,
+    "min": -3.4838757514953613,
+    "std": 0.5537233550786566,
+    "sum": -62471.07622408867
+  },
+  "eval/station/stats.collision": 0.0,
+  "eval/station/stats.episode_len": 1000.0,
+  "eval/station/stats.legacy_reach_goal": 0.0,
+  "eval/station/stats.return": -1952.23828125,
+  "eval/station/stats.reward_anchor": -1000.472412109375,
+  "eval/station/stats.reward_collision": 0.0,
+  "eval/station/stats.reward_command_amplification": 0.0,
+  "eval/station/stats.reward_height_ceiling": 0.0,
+  "eval/station/stats.reward_height_floor": 0.0,
+  "eval/station/stats.reward_horizontal_preservation": 0.0,
+  "eval/station/stats.reward_ics_compliance": 0.0,
+  "eval/station/stats.reward_intervention": -0.7687582969665527,
+  "eval/station/stats.reward_null_command_output": -0.6096442937850952,
+  "eval/station/stats.reward_null_command_speed": -937.2156982421875,
+  "eval/station/stats.reward_preservation_high": 0.0,
+  "eval/station/stats.reward_preservation_low": 0.0,
+  "eval/station/stats.reward_proxy_tracking": 0.0,
+  "eval/station/stats.reward_safety": -13.141373634338379,
+  "eval/station/stats.reward_smoothness": -0.030186809599399567,
+  "eval/station/stats.reward_total": -1952.23828125,
+  "eval/station/stats.reward_tracking": 0.0,
+  "eval/station/stats.reward_vertical_preservation": 0.0,
+  "eval/station/stats.terminated_above_bound": 0.0,
+  "eval/station/stats.terminated_below_bound": 0.0,
+  "eval/station/stats.terminated_collision": 0.0,
+  "eval/station/stats.termination_reason_code": 4.0,
+  "eval/station/stats.truncated": 1.0,
+  "eval/station/stats.truncated_timeout": 1.0,
+  "eval/suite": "short_diagnostic",
+  "eval/tracking/diagnostics.actual_velocity_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.81489098072052,
+    "mean": 0.036168391303780176,
+    "min": -0.5778891444206238,
+    "std": 0.1734735803925246
+  },
+  "eval/tracking/diagnostics.anchor_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.20984375,
+    "min": 0.0,
+    "std": 0.4071969432423793
+  },
+  "eval/tracking/diagnostics.anchor_error_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 36.33747863769531,
+    "mean": 5.920899919390679,
+    "min": 0.0,
+    "std": 11.770052354939484
+  },
+  "eval/tracking/diagnostics.anchor_error_mean": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.6865298748016357,
+    "mean": 0.24975855690194293,
+    "min": 0.0,
+    "std": 0.6121058639634708
+  },
+  "eval/tracking/diagnostics.anchor_loss": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.32420769333839417,
+    "mean": 0.01966783340474649,
+    "min": 0.0,
+    "std": 0.04964405704566014
+  },
+  "eval/tracking/diagnostics.command_amplification": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.062483160585165023,
+    "min": 0.0,
+    "std": 0.22903472474170944
+  },
+  "eval/tracking/diagnostics.command_amplification_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.09475,
+    "min": 0.0,
+    "std": 0.2928693181267031
+  },
+  "eval/tracking/diagnostics.command_amplification_horizontal": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.0822696988992393,
+    "min": 0.0,
+    "std": 0.2526092568268312
+  },
+  "eval/tracking/diagnostics.command_amplification_horizontal_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.14384375,
+    "min": 0.0,
+    "std": 0.3509312262907613
+  },
+  "eval/tracking/diagnostics.command_amplification_vertical": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.028315488189458848,
+    "min": 0.0,
+    "std": 0.15757333016307262
+  },
+  "eval/tracking/diagnostics.command_amplification_vertical_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.039875,
+    "min": 0.0,
+    "std": 0.19566549101719494
+  },
+  "eval/tracking/diagnostics.command_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 4.0,
+    "mean": 1.36965625,
+    "min": 0.0,
+    "std": 1.5415124089140306
+  },
+  "eval/tracking/diagnostics.command_preservation_ratio": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.6480802716314793,
+    "min": 0.0,
+    "std": 0.4570247239662168
+  },
+  "eval/tracking/diagnostics.governor_alpha": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.6765440106391907,
+    "mean": 0.4999366001486778,
+    "min": 0.44444069266319275,
+    "std": 0.05266842048499966
+  },
+  "eval/tracking/diagnostics.governor_v_cmd_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 1.0,
+    "mean": 0.004761998888881256,
+    "min": -0.9293860793113708,
+    "std": 0.29626859684909806
+  },
+  "eval/tracking/diagnostics.governor_v_cmd_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.795850396156311,
+    "mean": -0.005310012241825462,
+    "min": -0.9293860793113708,
+    "std": 0.2817801610812833
+  },
+  "eval/tracking/diagnostics.governor_v_corr": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.15871073305606842,
+    "mean": 0.027392697304487228,
+    "min": -0.16146433353424072,
+    "std": 0.05667416624306726
+  },
+  "eval/tracking/diagnostics.governor_v_corr_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": -0.0,
+    "mean": -0.01806747877970338,
+    "min": -0.031178763136267662,
+    "std": 0.009718686884540775
+  },
+  "eval/tracking/diagnostics.governor_v_final_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.7019104361534119,
+    "mean": 0.02526453401412194,
+    "min": -0.5813369750976562,
+    "std": 0.14330652521467194
+  },
+  "eval/tracking/diagnostics.governor_v_final_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.42627835273742676,
+    "mean": -0.011939424152486026,
+    "min": -0.5479242205619812,
+    "std": 0.12661680921740018
+  },
+  "eval/tracking/diagnostics.governor_v_gov_b": {
+    "count": 96000,
+    "finite_count": 96000,
+    "max": 0.7019104361534119,
+    "mean": 0.029292383556098988,
+    "min": -0.5813369750976562,
+    "std": 0.15900396502326677
+  },
+  "eval/tracking/diagnostics.governor_v_gov_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.42627835273742676,
+    "mean": -0.023124003181117587,
+    "min": -0.5529519319534302,
+    "std": 0.14351549082464615
+  },
+  "eval/tracking/diagnostics.height_ceiling_margin": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.799873113632202,
+    "mean": 2.57678125166893,
+    "min": 1.677736759185791,
+    "std": 0.528252505744
+  },
+  "eval/tracking/diagnostics.height_ceiling_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.height_floor_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.2998732328414917,
+    "mean": 0.012209920537658035,
+    "min": 0.0,
+    "std": 0.04848197164403193
+  },
+  "eval/tracking/diagnostics.height_world_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.322263240814209,
+    "mean": 1.423218758583069,
+    "min": 0.2001267820596695,
+    "std": 0.5282525298008477
+  },
+  "eval/tracking/diagnostics.ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.8658750727176666,
+    "min": 0.0,
+    "std": 0.3405031081400285
+  },
+  "eval/tracking/diagnostics.ics_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.7259515523910522,
+    "mean": 0.23393461583554745,
+    "min": 0.004911627154797316,
+    "std": 0.15393397733775438
+  },
+  "eval/tracking/diagnostics.ics_emergency": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.00903125,
+    "min": 0.0,
+    "std": 0.09460278285250123
+  },
+  "eval/tracking/diagnostics.ics_final_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.7259515523910522,
+    "mean": 0.19490031256526708,
+    "min": 0.0,
+    "std": 0.15980882110112307
+  },
+  "eval/tracking/diagnostics.ics_intervention": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.13496875,
+    "min": 0.0,
+    "std": 0.3416901908504801
+  },
+  "eval/tracking/diagnostics.ics_violation": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.09984375,
+    "min": 0.0,
+    "std": 0.2997915535600319
+  },
+  "eval/tracking/diagnostics.min_clearance": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.788222551345825,
+    "mean": 2.2212814044952394,
+    "min": 0.29768335819244385,
+    "std": 0.9260130011441174
+  },
+  "eval/tracking/diagnostics.null_command_output_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.6184901595115662,
+    "mean": 0.010969526073895395,
+    "min": 0.0,
+    "std": 0.03128382465821131
+  },
+  "eval/tracking/diagnostics.null_command_speed": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.7233652472496033,
+    "mean": 0.03302369631989859,
+    "min": 0.0,
+    "std": 0.08896743365979909
+  },
+  "eval/tracking/diagnostics.observability_condition_number": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.7372498512268066,
+    "mean": 2.818678676843643,
+    "min": 1.793727159500122,
+    "std": 0.31027443829133866
+  },
+  "eval/tracking/diagnostics.observability_drift_norm": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 5.232175350189209,
+    "mean": 1.660958624308125,
+    "min": 0.0,
+    "std": 1.176647721196048
+  },
+  "eval/tracking/diagnostics.observability_drift_projection": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.754570960998535,
+    "mean": 1.1152070502559217,
+    "min": 0.0,
+    "std": 0.8703156628172384
+  },
+  "eval/tracking/diagnostics.observability_is_proxy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_mode_code": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_rank": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_scenario_id": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.observability_score": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.5574983954429626,
+    "mean": 0.3594190077483654,
+    "min": 0.2675764262676239,
+    "std": 0.042748305278255974
+  },
+  "eval/tracking/diagnostics.observability_sigma_max": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 77.99835205078125,
+    "mean": 65.86683542251586,
+    "min": 58.52240753173828,
+    "std": 2.2035815611515326
+  },
+  "eval/tracking/diagnostics.observability_sigma_min": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 43.48395538330078,
+    "mean": 23.75830516052246,
+    "min": 15.65921688079834,
+    "std": 3.604006777819639
+  },
+  "eval/tracking/diagnostics.observability_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.6181732416152954,
+    "mean": 0.3767807546854019,
+    "min": 0.2594161927700043,
+    "std": 0.050813354678115104
+  },
+  "eval/tracking/diagnostics.observability_weighted_valid_fraction": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.5985504388809204,
+    "mean": 0.36482050037384034,
+    "min": 0.2511814534664154,
+    "std": 0.04920037630916508
+  },
+  "eval/tracking/diagnostics.r5e_command_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.86603125,
+    "min": 0.0,
+    "std": 0.3406187370410463
+  },
+  "eval/tracking/diagnostics.r5e_command_horizontal_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.865875,
+    "min": 0.0,
+    "std": 0.34078656718685374
+  },
+  "eval/tracking/diagnostics.r5e_command_preservation_horizontal": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.5392476582825184,
+    "min": 0.0,
+    "std": 0.5281436859387474
+  },
+  "eval/tracking/diagnostics.r5e_command_preservation_ics_loss": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.09132682681642473,
+    "min": 0.0,
+    "std": 0.27896132663005485
+  },
+  "eval/tracking/diagnostics.r5e_command_preservation_post_ics": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.5122831660807132,
+    "min": 0.0,
+    "std": 0.47865285180470735
+  },
+  "eval/tracking/diagnostics.r5e_command_preservation_pre_ics": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.6036099931895733,
+    "min": 0.0,
+    "std": 0.4620733561706736
+  },
+  "eval/tracking/diagnostics.r5e_command_preservation_vertical_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.391637952208519,
+    "min": 0.0,
+    "std": 0.3807545810452491
+  },
+  "eval/tracking/diagnostics.r5e_command_vertical_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.8358125,
+    "min": 0.0,
+    "std": 0.37044563007781595
+  },
+  "eval/tracking/diagnostics.r5e_ics_violation_near_floor": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.0689375,
+    "min": 0.0,
+    "std": 0.25334782630555563
+  },
+  "eval/tracking/diagnostics.r5e_near_floor": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.09353125,
+    "min": 0.0,
+    "std": 0.291175471620529
+  },
+  "eval/tracking/diagnostics.r5e_near_floor_clearance": {
+    "count": 32000,
+    "finite_count": 2993,
+    "max": 1.0899888277053833,
+    "mean": 0.6705613875424945,
+    "min": 0.3856205940246582,
+    "std": 0.17734704861983316
+  },
+  "eval/tracking/diagnostics.r5e_near_floor_ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.009184352508746087,
+    "min": 0.0,
+    "std": 0.09520765730439572
+  },
+  "eval/tracking/diagnostics.r5e_near_floor_v_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.2986887991428375,
+    "mean": -0.02228711586864665,
+    "min": -0.9293860793113708,
+    "std": 0.10863578083083292
+  },
+  "eval/tracking/diagnostics.r5e_near_floor_v_final_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.05784159153699875,
+    "mean": -0.0016390246939772624,
+    "min": -0.5479242205619812,
+    "std": 0.022717966087645636
+  },
+  "eval/tracking/diagnostics.r5e_near_floor_v_gov_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.11859002709388733,
+    "mean": -0.01325846249423921,
+    "min": -0.5529519319534302,
+    "std": 0.060076707674450065
+  },
+  "eval/tracking/diagnostics.r5e_null_actual_speed_xy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.704170823097229,
+    "mean": 0.03067147823209234,
+    "min": 0.0,
+    "std": 0.0832919955311254
+  },
+  "eval/tracking/diagnostics.r5e_null_actual_speed_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.23498520255088806,
+    "mean": 0.011308685152966064,
+    "min": 0.0,
+    "std": 0.030199161626576338
+  },
+  "eval/tracking/diagnostics.r5e_null_command": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.13396875,
+    "min": 0.0,
+    "std": 0.3406187370410464
+  },
+  "eval/tracking/diagnostics.r5e_null_output_speed_xy": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.12583811581134796,
+    "mean": 0.010818690121290274,
+    "min": 0.0,
+    "std": 0.030001582180395867
+  },
+  "eval/tracking/diagnostics.r5e_null_output_speed_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.00034236814826726913,
+    "mean": 5.188424707114336e-08,
+    "min": 0.0,
+    "std": 3.2559278299205733e-06
+  },
+  "eval/tracking/diagnostics.safety_collision": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.00025,
+    "min": 0.0,
+    "std": 0.015809411753762378
+  },
+  "eval/tracking/diagnostics.safety_min_clearance": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 3.788222551345825,
+    "mean": 2.2212814044952394,
+    "min": 0.29768335819244385,
+    "std": 0.9260130011441174
+  },
+  "eval/tracking/diagnostics.station_keeping_drift": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 5.232175350189209,
+    "mean": 1.6609586256003386,
+    "min": 0.0,
+    "std": 1.176647720922511
+  },
+  "eval/tracking/diagnostics.tracking_actual_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0256853103637695,
+    "mean": 0.1825327662229538,
+    "min": 0.0,
+    "std": 0.21468666111687196
+  },
+  "eval/tracking/diagnostics.tracking_proxy_error_sq": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.032329559326172,
+    "mean": 0.11174387456476688,
+    "min": 0.0,
+    "std": 0.1856973233331056
+  },
+  "eval/tracking/diagnostics.v_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.795850396156311,
+    "mean": -0.005398573531769216,
+    "min": -0.9293860793113708,
+    "std": 0.2818165387798
+  },
+  "eval/tracking/diagnostics.v_final_b_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.679013192653656,
+    "mean": -0.011881852543447168,
+    "min": -0.867713987827301,
+    "std": 0.1269647798981742
+  },
+  "eval/tracking/diagnostics.vertical_command_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.8358125,
+    "min": 0.0,
+    "std": 0.37044563007781595
+  },
+  "eval/tracking/diagnostics.vertical_command_null": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.1641875,
+    "min": 0.0,
+    "std": 0.3704456300778159
+  },
+  "eval/tracking/diagnostics.vertical_corr_opposes_command": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.39221875,
+    "min": 0.0,
+    "std": 0.48824502265608144
+  },
+  "eval/tracking/diagnostics.vertical_corr_reinforces_command": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.44359375,
+    "min": 0.0,
+    "std": 0.49680814703559106
+  },
+  "eval/tracking/diagnostics.vertical_corr_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": -0.0,
+    "mean": -0.01806747877970338,
+    "min": -0.031178763136267662,
+    "std": 0.009718686884540775
+  },
+  "eval/tracking/diagnostics.vertical_corr_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.031178763136267662,
+    "mean": 0.01806747877970338,
+    "min": 0.0,
+    "std": 0.009718686884540775
+  },
+  "eval/tracking/diagnostics.vertical_corr_z_negative": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.86640625,
+    "min": 0.0,
+    "std": 0.34021531411877604
+  },
+  "eval/tracking/diagnostics.vertical_corr_z_positive": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.vertical_corr_z_saturated": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "std": 0.0
+  },
+  "eval/tracking/diagnostics.vertical_final_minus_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.9293860793113708,
+    "mean": -0.006629412253387272,
+    "min": -0.7032659649848938,
+    "std": 0.18247938343945885
+  },
+  "eval/tracking/diagnostics.vertical_final_minus_cmd_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.9293860793113708,
+    "mean": 0.11638642227649688,
+    "min": 0.0,
+    "std": 0.14070136885242931
+  },
+  "eval/tracking/diagnostics.vertical_gov_minus_cmd_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.47363388538360596,
+    "mean": -0.017813991213683038,
+    "min": -0.4252428114414215,
+    "std": 0.14069552163675986
+  },
+  "eval/tracking/diagnostics.vertical_gov_minus_cmd_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.47363388538360596,
+    "mean": 0.09721789269894361,
+    "min": 0.0,
+    "std": 0.10325332648771089
+  },
+  "eval/tracking/diagnostics.vertical_ics_beta": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.8658750727176666,
+    "min": 0.0,
+    "std": 0.3405031081400285
+  },
+  "eval/tracking/diagnostics.vertical_ics_delta_z": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.5529519319534302,
+    "mean": 0.011184579042717814,
+    "min": -0.29758355021476746,
+    "std": 0.06941329281892006
+  },
+  "eval/tracking/diagnostics.vertical_ics_delta_z_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.5529519319534302,
+    "mean": 0.019363613051828,
+    "min": 0.0,
+    "std": 0.06758957403259039
+  },
+  "eval/tracking/diagnostics.vertical_ics_emergency": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.00903125,
+    "min": 0.0,
+    "std": 0.09460278285250123
+  },
+  "eval/tracking/diagnostics.vertical_null_corr_abs": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.026088472455739975,
+    "mean": 0.000462101078856108,
+    "min": 0.0,
+    "std": 0.003266931990061581
+  },
+  "eval/tracking/diagnostics.vertical_null_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.02596875,
+    "min": 0.0,
+    "std": 0.15904205111679584
+  },
+  "eval/tracking/diagnostics.vertical_null_station_drift_when_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.443664312362671,
+    "mean": 0.015290977689184729,
+    "min": 0.0,
+    "std": 0.11517536117927503
+  },
+  "eval/tracking/diagnostics.vertical_tracking_amplification_when_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.028313942808657885,
+    "min": 0.0,
+    "std": 0.15757336535803115
+  },
+  "eval/tracking/diagnostics.vertical_tracking_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 1.0,
+    "mean": 0.8260625,
+    "min": 0.0,
+    "std": 0.3790557295355789
+  },
+  "eval/tracking/diagnostics.vertical_tracking_preservation_when_corr_active": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 2.0,
+    "mean": 0.4683492143750191,
+    "min": 0.0,
+    "std": 0.4422103661365958
+  },
+  "eval/tracking/episodes_expected": 32,
+  "eval/tracking/episodes_recorded": 32,
+  "eval/tracking/handbook.anchor_active_fraction": 0.20984375,
+  "eval/tracking/handbook.anchor_error_max": 36.33747863769531,
+  "eval/tracking/handbook.anchor_error_mean": 0.24975855690194293,
+  "eval/tracking/handbook.anchor_loss": 0.01966783340474649,
+  "eval/tracking/handbook.command_amplification_horizontal_mean": 0.0822696988992393,
+  "eval/tracking/handbook.command_amplification_horizontal_rate": 0.14384375,
+  "eval/tracking/handbook.command_amplification_mean": 0.062483160585165023,
+  "eval/tracking/handbook.command_amplification_rate": 0.09475,
+  "eval/tracking/handbook.command_amplification_vertical_mean": 0.028315488189458848,
+  "eval/tracking/handbook.command_amplification_vertical_rate": 0.039875,
+  "eval/tracking/handbook.command_mode_fraction.adversarial": 0.03690625,
+  "eval/tracking/handbook.command_mode_fraction.aggressive": 0.15878125,
+  "eval/tracking/handbook.command_mode_fraction.normal": 0.46984375,
+  "eval/tracking/handbook.command_mode_fraction.oscillation": 0.2008125,
+  "eval/tracking/handbook.command_mode_fraction.recovery": 0.13365625,
+  "eval/tracking/handbook.command_preservation_ratio": 0.6480802716314793,
+  "eval/tracking/handbook.height_ceiling_margin_mean": 2.57678125166893,
+  "eval/tracking/handbook.height_ceiling_margin_min": 1.677736759185791,
+  "eval/tracking/handbook.height_ceiling_margin_p05": 1.9319427013397217,
+  "eval/tracking/handbook.height_ceiling_violation_max": 0.0,
+  "eval/tracking/handbook.height_ceiling_violation_mean": 0.0,
+  "eval/tracking/handbook.height_ceiling_violation_p95": 0.0,
+  "eval/tracking/handbook.height_floor_violation_max": 0.2998732328414917,
+  "eval/tracking/handbook.height_floor_violation_mean": 0.012209920537658035,
+  "eval/tracking/handbook.height_floor_violation_p95": 0.11511943489313126,
+  "eval/tracking/handbook.height_world_z_max": 2.322263240814209,
+  "eval/tracking/handbook.height_world_z_mean": 1.423218758583069,
+  "eval/tracking/handbook.height_world_z_min": 0.2001267820596695,
+  "eval/tracking/handbook.height_world_z_p05": 0.38488051295280457,
+  "eval/tracking/handbook.height_world_z_p95": 2.068057060241699,
+  "eval/tracking/handbook.ics_beta_mean": 0.8658750727176666,
+  "eval/tracking/handbook.ics_emergency_rate": 0.00903125,
+  "eval/tracking/handbook.ics_intervention_frequency": 0.13496875,
+  "eval/tracking/handbook.ics_violation_rate": 0.09984375,
+  "eval/tracking/handbook.null_command_output_speed_mean": 0.010969526073895395,
+  "eval/tracking/handbook.null_command_speed_mean": 0.03302369631989859,
+  "eval/tracking/handbook.observability_condition_number_mean": 2.818678676843643,
+  "eval/tracking/handbook.observability_drift_norm_mean": 1.660958624308125,
+  "eval/tracking/handbook.observability_drift_projection_mean": 1.1152070502559217,
+  "eval/tracking/handbook.observability_is_proxy": 1.0,
+  "eval/tracking/handbook.observability_mode_code_mean": 0.0,
+  "eval/tracking/handbook.observability_rank_mean": 3.0,
+  "eval/tracking/handbook.observability_score_mean": 0.3594190077483654,
+  "eval/tracking/handbook.observability_sigma_max_mean": 65.86683542251586,
+  "eval/tracking/handbook.observability_sigma_min_mean": 23.75830516052246,
+  "eval/tracking/handbook.observability_valid_fraction_mean": 0.3767807546854019,
+  "eval/tracking/handbook.observability_weighted_valid_fraction_mean": 0.36482050037384034,
+  "eval/tracking/handbook.r5e_command_preservation_horizontal_ratio": 0.622777719974036,
+  "eval/tracking/handbook.r5e_command_preservation_ics_loss_ratio": 0.10545442420977849,
+  "eval/tracking/handbook.r5e_command_preservation_post_ics_ratio": 0.5915296544792272,
+  "eval/tracking/handbook.r5e_command_preservation_pre_ics_ratio": 0.6969840790266787,
+  "eval/tracking/handbook.r5e_command_preservation_vertical_abs_ratio": 0.46857154231184506,
+  "eval/tracking/handbook.r5e_ics_violation_near_floor_rate": 0.7370531239558971,
+  "eval/tracking/handbook.r5e_near_floor_clearance_p05": 0.41153836250305176,
+  "eval/tracking/handbook.r5e_near_floor_ics_beta_mean": 0.09819554970927992,
+  "eval/tracking/handbook.r5e_near_floor_rate": 0.09353125,
+  "eval/tracking/handbook.r5e_near_floor_v_cmd_z_mean": -0.23828523481346237,
+  "eval/tracking/handbook.r5e_near_floor_v_final_z_mean": -0.017523818980044237,
+  "eval/tracking/handbook.r5e_near_floor_v_gov_z_mean": -0.1417543601121466,
+  "eval/tracking/handbook.r5e_null_actual_speed_xy_mean": 0.2289450206267681,
+  "eval/tracking/handbook.r5e_null_actual_speed_z_abs_mean": 0.08441285861789458,
+  "eval/tracking/handbook.r5e_null_output_speed_xy_mean": 0.08075532630774172,
+  "eval/tracking/handbook.r5e_null_output_speed_z_abs_mean": 3.8728619227352173e-07,
+  "eval/tracking/handbook.safety_collision_rate": 0.00025,
+  "eval/tracking/handbook.safety_min_clearance_mean": 2.2212814044952394,
+  "eval/tracking/handbook.safety_min_clearance_p05": 0.5695891976356506,
+  "eval/tracking/handbook.station_keeping_drift_max": 5.232175350189209,
+  "eval/tracking/handbook.station_keeping_drift_mean": 1.6609586256003386,
+  "eval/tracking/handbook.station_keeping_drift_p95": 3.8010447025299072,
+  "eval/tracking/handbook.termination_above_bound": 0.0,
+  "eval/tracking/handbook.termination_below_bound": 0.40625,
+  "eval/tracking/handbook.termination_collision": 0.125,
+  "eval/tracking/handbook.termination_timeout": 0.46875,
+  "eval/tracking/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.42723853550792185,
+  "eval/tracking/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.3342811310330975,
+  "eval/tracking/handbook.vertical_corr_opposing_fraction": 0.39221875,
+  "eval/tracking/handbook.vertical_corr_reinforcing_fraction": 0.44359375,
+  "eval/tracking/handbook.vertical_corr_z_abs_mean": 0.01806747877970338,
+  "eval/tracking/handbook.vertical_corr_z_mean": -0.01806747877970338,
+  "eval/tracking/handbook.vertical_corr_z_negative_fraction": 0.86640625,
+  "eval/tracking/handbook.vertical_corr_z_positive_fraction": 0.0,
+  "eval/tracking/handbook.vertical_corr_z_saturation_rate": 0.0,
+  "eval/tracking/handbook.vertical_final_minus_cmd_z_abs_mean": 0.11638642227649688,
+  "eval/tracking/handbook.vertical_gov_minus_cmd_z_abs_mean": 0.09721789269894361,
+  "eval/tracking/handbook.vertical_ics_delta_z_abs_mean": 0.019363613051828,
+  "eval/tracking/handbook.vertical_null_corr_abs_mean": 0.002814471740273212,
+  "eval/tracking/handbook.vertical_null_corr_active_rate": 0.15816520746098212,
+  "eval/tracking/handbook.vertical_null_station_drift_mean_when_corr_active": 0.5888222455522398,
+  "eval/tracking/handbook.vertical_tracking_amplification_mean_when_corr_active": 0.034275787617350846,
+  "eval/tracking/handbook.vertical_tracking_corr_active_rate": 0.9883347042548418,
+  "eval/tracking/handbook.vertical_tracking_preservation_mean_when_corr_active": 0.5669658341530078,
+  "eval/tracking/handbook.vertical_v_corr_limit": 0.35,
+  "eval/tracking/pass_command_curriculum_profile": "diagnostic_mixed",
+  "eval/tracking/pass_command_frame_count": 600000,
+  "eval/tracking/pass_command_source": "curriculum_generator",
+  "eval/tracking/pass_name": "tracking_static_mid360",
+  "eval/tracking/reward": {
+    "count": 32000,
+    "finite_count": 32000,
+    "max": 0.9009878635406494,
+    "mean": -1.4390648245215416,
+    "min": -20.000003814697266,
+    "std": 3.191334821052631,
+    "sum": -46050.07438468933
+  },
+  "eval/tracking/stats.collision": 0.125,
+  "eval/tracking/stats.episode_len": 884.09375,
+  "eval/tracking/stats.legacy_reach_goal": 0.0,
+  "eval/tracking/stats.return": -1234.5472412109375,
+  "eval/tracking/stats.reward_anchor": -65.0687255859375,
+  "eval/tracking/stats.reward_collision": -1.25,
+  "eval/tracking/stats.reward_command_amplification": -324.2930908203125,
+  "eval/tracking/stats.reward_height_ceiling": 0.0,
+  "eval/tracking/stats.reward_height_floor": -20.752487182617188,
+  "eval/tracking/stats.reward_horizontal_preservation": 0.0,
+  "eval/tracking/stats.reward_ics_compliance": 61.364158630371094,
+  "eval/tracking/stats.reward_intervention": -6.87975549697876,
+  "eval/tracking/stats.reward_null_command_output": -0.24222412705421448,
+  "eval/tracking/stats.reward_null_command_speed": -117.69097900390625,
+  "eval/tracking/stats.reward_preservation_high": -252.71572875976562,
+  "eval/tracking/stats.reward_preservation_low": -60.664031982421875,
+  "eval/tracking/stats.reward_proxy_tracking": -84.84297943115234,
+  "eval/tracking/stats.reward_safety": -99.78423309326172,
+  "eval/tracking/stats.reward_smoothness": -0.2178139090538025,
+  "eval/tracking/stats.reward_total": -1234.5472412109375,
+  "eval/tracking/stats.reward_tracking": -261.5094299316406,
+  "eval/tracking/stats.reward_vertical_preservation": 0.0,
+  "eval/tracking/stats.terminated_above_bound": 0.0,
+  "eval/tracking/stats.terminated_below_bound": 0.40625,
+  "eval/tracking/stats.terminated_collision": 0.125,
+  "eval/tracking/stats.termination_reason_code": 2.65625,
+  "eval/tracking/stats.truncated": 0.46875,
+  "eval/tracking/stats.truncated_timeout": 0.46875,
+  "headless": true,
+  "instinctRL_enabled": true,
+  "instinctRL_eval_suite": "short_diagnostic",
+  "instinctRL_mode": "train",
+  "learned_governor": true,
+  "max_frame_num": 10000,
+  "passes": {
+    "station_static_mid360": {
+      "eval/diagnostics.actual_velocity_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.25757697224617004,
+        "mean": 0.036939452587937315,
+        "min": -0.15939806401729584,
+        "std": 0.1314183962023002
+      },
+      "eval/diagnostics.anchor_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.999,
+        "min": 0.0,
+        "std": 0.031606961258557775
+      },
+      "eval/diagnostics.anchor_error_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 37.72184371948242,
+        "mean": 32.19541293907166,
+        "min": 0.0,
+        "std": 3.5539877446952843
+      },
+      "eval/diagnostics.anchor_error_mean": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 6.297796249389648,
+        "mean": 3.4447928663156926,
+        "min": 0.0,
+        "std": 1.5018651333935615
+      },
+      "eval/diagnostics.anchor_loss": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.4769066274166107,
+        "mean": 0.249702511921525,
+        "min": 0.0,
+        "std": 0.11407405585415348
+      },
+      "eval/diagnostics.command_amplification": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_amplification_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_amplification_horizontal": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_amplification_horizontal_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_amplification_vertical": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_amplification_vertical_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.0,
+        "mean": 4.0,
+        "min": 4.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.command_preservation_ratio": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.governor_alpha": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.6734943985939026,
+        "mean": 0.507890230089426,
+        "min": 0.44844111800193787,
+        "std": 0.061635026233200906
+      },
+      "eval/diagnostics.governor_v_cmd_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.governor_v_cmd_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.governor_v_corr": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.11392296850681305,
+        "mean": 0.025490685351192952,
+        "min": -0.11940660327672958,
+        "std": 0.04662841518225673
+      },
+      "eval/diagnostics.governor_v_corr_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": -0.0,
+        "mean": 0.0,
+        "min": -0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.governor_v_final_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.11392296850681305,
+        "mean": 0.024903919287025927,
+        "min": -0.11940660327672958,
+        "std": 0.046291337762939866
+      },
+      "eval/diagnostics.governor_v_final_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.governor_v_gov_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.11392296850681305,
+        "mean": 0.025490685351192952,
+        "min": -0.11940660327672958,
+        "std": 0.04662841518225673
+      },
+      "eval/diagnostics.governor_v_gov_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.height_ceiling_margin": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.311727523803711,
+        "mean": 2.6402780418395997,
+        "min": 2.0,
+        "std": 0.3848497171717105
+      },
+      "eval/diagnostics.height_ceiling_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.height_floor_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.height_world_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 1.359721963763237,
+        "min": 0.6882723569869995,
+        "std": 0.38484975429375023
+      },
+      "eval/diagnostics.ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.98462483304739,
+        "min": 0.0,
+        "std": 0.12294709566151972
+      },
+      "eval/diagnostics.ics_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.15207438170909882,
+        "mean": 0.088345049880445,
+        "min": 0.020582787692546844,
+        "std": 0.025828367538584255
+      },
+      "eval/diagnostics.ics_emergency": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.ics_final_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.15207438170909882,
+        "mean": 0.086715940002352,
+        "min": 0.0,
+        "std": 0.02774211891667066
+      },
+      "eval/diagnostics.ics_intervention": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.0155,
+        "min": 0.0,
+        "std": 0.12353036064061337
+      },
+      "eval/diagnostics.ics_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.00434375,
+        "min": 0.0,
+        "std": 0.06576383379896203
+      },
+      "eval/diagnostics.min_clearance": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.3699820041656494,
+        "mean": 2.2632404539585114,
+        "min": 0.6008570194244385,
+        "std": 0.6714381882180629
+      },
+      "eval/diagnostics.null_command_output_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.15207438170909882,
+        "mean": 0.08666216740757227,
+        "min": 0.0,
+        "std": 0.027808273972175387
+      },
+      "eval/diagnostics.null_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.2764563262462616,
+        "mean": 0.2340634652241133,
+        "min": 0.0,
+        "std": 0.03347011062040424
+      },
+      "eval/diagnostics.observability_condition_number": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.5039103031158447,
+        "mean": 2.7640548832416534,
+        "min": 2.0220022201538086,
+        "std": 0.28643082332385156
+      },
+      "eval/diagnostics.observability_drift_norm": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.1271538734436035,
+        "mean": 1.8074448838531816,
+        "min": 0.0,
+        "std": 1.1078076896592213
+      },
+      "eval/diagnostics.observability_drift_projection": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.90329909324646,
+        "mean": 1.2661057479963147,
+        "min": 0.0,
+        "std": 0.8027836906290582
+      },
+      "eval/diagnostics.observability_is_proxy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_rank": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.0,
+        "mean": 3.0,
+        "min": 3.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_scenario_id": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_score": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.49455931782722473,
+        "mean": 0.36580931943655015,
+        "min": 0.28539544343948364,
+        "std": 0.039086854607813123
+      },
+      "eval/diagnostics.observability_sigma_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 70.60234832763672,
+        "mean": 66.20370254516601,
+        "min": 59.929718017578125,
+        "std": 1.9554170362838241
+      },
+      "eval/diagnostics.observability_sigma_min": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 33.910736083984375,
+        "mean": 24.286839595794678,
+        "min": 17.103668212890625,
+        "std": 3.2570116052260762
+      },
+      "eval/diagnostics.observability_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.49580979347229004,
+        "mean": 0.3840167963206768,
+        "min": 0.26690205931663513,
+        "std": 0.047463126474691204
+      },
+      "eval/diagnostics.observability_weighted_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.48007112741470337,
+        "mean": 0.3718268466889858,
+        "min": 0.25842973589897156,
+        "std": 0.045956500712104005
+      },
+      "eval/diagnostics.r5e_command_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_horizontal_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_preservation_horizontal": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_preservation_ics_loss": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_preservation_post_ics": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_preservation_pre_ics": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_preservation_vertical_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_command_vertical_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_ics_violation_near_floor": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_near_floor": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_near_floor_clearance": {
+        "count": 32000,
+        "finite_count": 0
+      },
+      "eval/diagnostics.r5e_near_floor_ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_near_floor_v_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_near_floor_v_final_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_near_floor_v_gov_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_null_actual_speed_xy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.2640537917613983,
+        "mean": 0.2198931136423489,
+        "min": 0.0,
+        "std": 0.03300762328193419
+      },
+      "eval/diagnostics.r5e_null_actual_speed_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.08613212406635284,
+        "mean": 0.07989239156595432,
+        "min": 0.0,
+        "std": 0.008981930206325149
+      },
+      "eval/diagnostics.r5e_null_command": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.r5e_null_output_speed_xy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.15207438170909882,
+        "mean": 0.086715940002352,
+        "min": 0.0,
+        "std": 0.02774211891667066
+      },
+      "eval/diagnostics.r5e_null_output_speed_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.safety_collision": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.safety_min_clearance": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.3699820041656494,
+        "mean": 2.2632404539585114,
+        "min": 0.6008570194244385,
+        "std": 0.6714381882180629
+      },
+      "eval/diagnostics.station_keeping_drift": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.1271538734436035,
+        "mean": 1.8074448817022886,
+        "min": 0.0,
+        "std": 1.1078076945309003
+      },
+      "eval/diagnostics.tracking_actual_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.tracking_proxy_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.v_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.v_final_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_command_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_command_null": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_opposes_command": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_reinforces_command": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": -0.0,
+        "mean": 0.0,
+        "min": -0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_z_negative": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_z_positive": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_z_saturated": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_final_minus_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_final_minus_cmd_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_gov_minus_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_gov_minus_cmd_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.98462483304739,
+        "min": 0.0,
+        "std": 0.12294709566151972
+      },
+      "eval/diagnostics.vertical_ics_delta_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_ics_delta_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_ics_emergency": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_null_corr_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_null_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_null_station_drift_when_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_tracking_amplification_when_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_tracking_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_tracking_preservation_when_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/episodes_expected": 32,
+      "eval/episodes_recorded": 32,
+      "eval/handbook.anchor_active_fraction": 0.999,
+      "eval/handbook.anchor_error_max": 37.72184371948242,
+      "eval/handbook.anchor_error_mean": 3.4447928663156926,
+      "eval/handbook.anchor_loss": 0.249702511921525,
+      "eval/handbook.command_amplification_horizontal_mean": 0.0,
+      "eval/handbook.command_amplification_horizontal_rate": 0.0,
+      "eval/handbook.command_amplification_mean": 0.0,
+      "eval/handbook.command_amplification_rate": 0.0,
+      "eval/handbook.command_amplification_vertical_mean": 0.0,
+      "eval/handbook.command_amplification_vertical_rate": 0.0,
+      "eval/handbook.command_mode_fraction.adversarial": 0.0,
+      "eval/handbook.command_mode_fraction.aggressive": 0.0,
+      "eval/handbook.command_mode_fraction.normal": 0.0,
+      "eval/handbook.command_mode_fraction.oscillation": 0.0,
+      "eval/handbook.command_mode_fraction.recovery": 1.0,
+      "eval/handbook.command_preservation_ratio": 1.0,
+      "eval/handbook.height_ceiling_margin_mean": 2.6402780418395997,
+      "eval/handbook.height_ceiling_margin_min": 2.0,
+      "eval/handbook.height_ceiling_margin_p05": 2.040900230407715,
+      "eval/handbook.height_ceiling_violation_max": 0.0,
+      "eval/handbook.height_ceiling_violation_mean": 0.0,
+      "eval/handbook.height_ceiling_violation_p95": 0.0,
+      "eval/handbook.height_floor_violation_max": 0.0,
+      "eval/handbook.height_floor_violation_mean": 0.0,
+      "eval/handbook.height_floor_violation_p95": 0.0,
+      "eval/handbook.height_world_z_max": 2.0,
+      "eval/handbook.height_world_z_mean": 1.359721963763237,
+      "eval/handbook.height_world_z_min": 0.6882723569869995,
+      "eval/handbook.height_world_z_p05": 0.7585322856903076,
+      "eval/handbook.height_world_z_p95": 1.9590994119644165,
+      "eval/handbook.ics_beta_mean": 0.98462483304739,
+      "eval/handbook.ics_emergency_rate": 0.0,
+      "eval/handbook.ics_intervention_frequency": 0.0155,
+      "eval/handbook.ics_violation_rate": 0.00434375,
+      "eval/handbook.null_command_output_speed_mean": 0.08666216740757227,
+      "eval/handbook.null_command_speed_mean": 0.2340634652241133,
+      "eval/handbook.observability_condition_number_mean": 2.7640548832416534,
+      "eval/handbook.observability_drift_norm_mean": 1.8074448838531816,
+      "eval/handbook.observability_drift_projection_mean": 1.2661057479963147,
+      "eval/handbook.observability_is_proxy": 1.0,
+      "eval/handbook.observability_mode_code_mean": 0.0,
+      "eval/handbook.observability_rank_mean": 3.0,
+      "eval/handbook.observability_score_mean": 0.36580931943655015,
+      "eval/handbook.observability_sigma_max_mean": 66.20370254516601,
+      "eval/handbook.observability_sigma_min_mean": 24.286839595794678,
+      "eval/handbook.observability_valid_fraction_mean": 0.3840167963206768,
+      "eval/handbook.observability_weighted_valid_fraction_mean": 0.3718268466889858,
+      "eval/handbook.r5e_command_preservation_horizontal_ratio": null,
+      "eval/handbook.r5e_command_preservation_ics_loss_ratio": null,
+      "eval/handbook.r5e_command_preservation_post_ics_ratio": null,
+      "eval/handbook.r5e_command_preservation_pre_ics_ratio": null,
+      "eval/handbook.r5e_command_preservation_vertical_abs_ratio": null,
+      "eval/handbook.r5e_ics_violation_near_floor_rate": null,
+      "eval/handbook.r5e_near_floor_clearance_p05": null,
+      "eval/handbook.r5e_near_floor_ics_beta_mean": null,
+      "eval/handbook.r5e_near_floor_rate": 0.0,
+      "eval/handbook.r5e_near_floor_v_cmd_z_mean": null,
+      "eval/handbook.r5e_near_floor_v_final_z_mean": null,
+      "eval/handbook.r5e_near_floor_v_gov_z_mean": null,
+      "eval/handbook.r5e_null_actual_speed_xy_mean": 0.2198931136423489,
+      "eval/handbook.r5e_null_actual_speed_z_abs_mean": 0.07989239156595432,
+      "eval/handbook.r5e_null_output_speed_xy_mean": 0.086715940002352,
+      "eval/handbook.r5e_null_output_speed_z_abs_mean": 0.0,
+      "eval/handbook.safety_collision_rate": 0.0,
+      "eval/handbook.safety_min_clearance_mean": 2.2632404539585114,
+      "eval/handbook.safety_min_clearance_p05": 1.1553928852081299,
+      "eval/handbook.station_keeping_drift_max": 4.1271538734436035,
+      "eval/handbook.station_keeping_drift_mean": 1.8074448817022886,
+      "eval/handbook.station_keeping_drift_p95": 3.5500552654266357,
+      "eval/handbook.termination_above_bound": 0.0,
+      "eval/handbook.termination_below_bound": 0.0,
+      "eval/handbook.termination_collision": 0.0,
+      "eval/handbook.termination_timeout": 1.0,
+      "eval/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.0,
+      "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.0,
+      "eval/handbook.vertical_corr_opposing_fraction": 0.0,
+      "eval/handbook.vertical_corr_reinforcing_fraction": 0.0,
+      "eval/handbook.vertical_corr_z_abs_mean": 0.0,
+      "eval/handbook.vertical_corr_z_mean": 0.0,
+      "eval/handbook.vertical_corr_z_negative_fraction": 0.0,
+      "eval/handbook.vertical_corr_z_positive_fraction": 0.0,
+      "eval/handbook.vertical_corr_z_saturation_rate": 0.0,
+      "eval/handbook.vertical_final_minus_cmd_z_abs_mean": 0.0,
+      "eval/handbook.vertical_gov_minus_cmd_z_abs_mean": 0.0,
+      "eval/handbook.vertical_ics_delta_z_abs_mean": 0.0,
+      "eval/handbook.vertical_null_corr_abs_mean": 0.0,
+      "eval/handbook.vertical_null_corr_active_rate": 0.0,
+      "eval/handbook.vertical_v_corr_limit": 0.35,
+      "eval/pass_command_curriculum_profile": "station_first",
+      "eval/pass_command_frame_count": 0,
+      "eval/pass_command_source": "scripted_eval",
+      "eval/pass_name": "station_static_mid360",
+      "eval/reward": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": -0.026012703776359558,
+        "mean": -1.952221132002771,
+        "min": -3.4838757514953613,
+        "std": 0.5537233550786566,
+        "sum": -62471.07622408867
+      },
+      "eval/stats.collision": 0.0,
+      "eval/stats.episode_len": 1000.0,
+      "eval/stats.legacy_reach_goal": 0.0,
+      "eval/stats.return": -1952.23828125,
+      "eval/stats.reward_anchor": -1000.472412109375,
+      "eval/stats.reward_collision": 0.0,
+      "eval/stats.reward_command_amplification": 0.0,
+      "eval/stats.reward_height_ceiling": 0.0,
+      "eval/stats.reward_height_floor": 0.0,
+      "eval/stats.reward_horizontal_preservation": 0.0,
+      "eval/stats.reward_ics_compliance": 0.0,
+      "eval/stats.reward_intervention": -0.7687582969665527,
+      "eval/stats.reward_null_command_output": -0.6096442937850952,
+      "eval/stats.reward_null_command_speed": -937.2156982421875,
+      "eval/stats.reward_preservation_high": 0.0,
+      "eval/stats.reward_preservation_low": 0.0,
+      "eval/stats.reward_proxy_tracking": 0.0,
+      "eval/stats.reward_safety": -13.141373634338379,
+      "eval/stats.reward_smoothness": -0.030186809599399567,
+      "eval/stats.reward_total": -1952.23828125,
+      "eval/stats.reward_tracking": 0.0,
+      "eval/stats.reward_vertical_preservation": 0.0,
+      "eval/stats.terminated_above_bound": 0.0,
+      "eval/stats.terminated_below_bound": 0.0,
+      "eval/stats.terminated_collision": 0.0,
+      "eval/stats.termination_reason_code": 4.0,
+      "eval/stats.truncated": 1.0,
+      "eval/stats.truncated_timeout": 1.0
+    },
+    "tracking_static_mid360": {
+      "eval/diagnostics.actual_velocity_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.81489098072052,
+        "mean": 0.036168391303780176,
+        "min": -0.5778891444206238,
+        "std": 0.1734735803925246
+      },
+      "eval/diagnostics.anchor_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.20984375,
+        "min": 0.0,
+        "std": 0.4071969432423793
+      },
+      "eval/diagnostics.anchor_error_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 36.33747863769531,
+        "mean": 5.920899919390679,
+        "min": 0.0,
+        "std": 11.770052354939484
+      },
+      "eval/diagnostics.anchor_error_mean": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.6865298748016357,
+        "mean": 0.24975855690194293,
+        "min": 0.0,
+        "std": 0.6121058639634708
+      },
+      "eval/diagnostics.anchor_loss": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.32420769333839417,
+        "mean": 0.01966783340474649,
+        "min": 0.0,
+        "std": 0.04964405704566014
+      },
+      "eval/diagnostics.command_amplification": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.062483160585165023,
+        "min": 0.0,
+        "std": 0.22903472474170944
+      },
+      "eval/diagnostics.command_amplification_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.09475,
+        "min": 0.0,
+        "std": 0.2928693181267031
+      },
+      "eval/diagnostics.command_amplification_horizontal": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.0822696988992393,
+        "min": 0.0,
+        "std": 0.2526092568268312
+      },
+      "eval/diagnostics.command_amplification_horizontal_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.14384375,
+        "min": 0.0,
+        "std": 0.3509312262907613
+      },
+      "eval/diagnostics.command_amplification_vertical": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.028315488189458848,
+        "min": 0.0,
+        "std": 0.15757333016307262
+      },
+      "eval/diagnostics.command_amplification_vertical_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.039875,
+        "min": 0.0,
+        "std": 0.19566549101719494
+      },
+      "eval/diagnostics.command_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 4.0,
+        "mean": 1.36965625,
+        "min": 0.0,
+        "std": 1.5415124089140306
+      },
+      "eval/diagnostics.command_preservation_ratio": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.6480802716314793,
+        "min": 0.0,
+        "std": 0.4570247239662168
+      },
+      "eval/diagnostics.governor_alpha": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.6765440106391907,
+        "mean": 0.4999366001486778,
+        "min": 0.44444069266319275,
+        "std": 0.05266842048499966
+      },
+      "eval/diagnostics.governor_v_cmd_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 1.0,
+        "mean": 0.004761998888881256,
+        "min": -0.9293860793113708,
+        "std": 0.29626859684909806
+      },
+      "eval/diagnostics.governor_v_cmd_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.795850396156311,
+        "mean": -0.005310012241825462,
+        "min": -0.9293860793113708,
+        "std": 0.2817801610812833
+      },
+      "eval/diagnostics.governor_v_corr": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.15871073305606842,
+        "mean": 0.027392697304487228,
+        "min": -0.16146433353424072,
+        "std": 0.05667416624306726
+      },
+      "eval/diagnostics.governor_v_corr_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": -0.0,
+        "mean": -0.01806747877970338,
+        "min": -0.031178763136267662,
+        "std": 0.009718686884540775
+      },
+      "eval/diagnostics.governor_v_final_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.7019104361534119,
+        "mean": 0.02526453401412194,
+        "min": -0.5813369750976562,
+        "std": 0.14330652521467194
+      },
+      "eval/diagnostics.governor_v_final_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.42627835273742676,
+        "mean": -0.011939424152486026,
+        "min": -0.5479242205619812,
+        "std": 0.12661680921740018
+      },
+      "eval/diagnostics.governor_v_gov_b": {
+        "count": 96000,
+        "finite_count": 96000,
+        "max": 0.7019104361534119,
+        "mean": 0.029292383556098988,
+        "min": -0.5813369750976562,
+        "std": 0.15900396502326677
+      },
+      "eval/diagnostics.governor_v_gov_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.42627835273742676,
+        "mean": -0.023124003181117587,
+        "min": -0.5529519319534302,
+        "std": 0.14351549082464615
+      },
+      "eval/diagnostics.height_ceiling_margin": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.799873113632202,
+        "mean": 2.57678125166893,
+        "min": 1.677736759185791,
+        "std": 0.528252505744
+      },
+      "eval/diagnostics.height_ceiling_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.height_floor_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.2998732328414917,
+        "mean": 0.012209920537658035,
+        "min": 0.0,
+        "std": 0.04848197164403193
+      },
+      "eval/diagnostics.height_world_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.322263240814209,
+        "mean": 1.423218758583069,
+        "min": 0.2001267820596695,
+        "std": 0.5282525298008477
+      },
+      "eval/diagnostics.ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.8658750727176666,
+        "min": 0.0,
+        "std": 0.3405031081400285
+      },
+      "eval/diagnostics.ics_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.7259515523910522,
+        "mean": 0.23393461583554745,
+        "min": 0.004911627154797316,
+        "std": 0.15393397733775438
+      },
+      "eval/diagnostics.ics_emergency": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.00903125,
+        "min": 0.0,
+        "std": 0.09460278285250123
+      },
+      "eval/diagnostics.ics_final_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.7259515523910522,
+        "mean": 0.19490031256526708,
+        "min": 0.0,
+        "std": 0.15980882110112307
+      },
+      "eval/diagnostics.ics_intervention": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.13496875,
+        "min": 0.0,
+        "std": 0.3416901908504801
+      },
+      "eval/diagnostics.ics_violation": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.09984375,
+        "min": 0.0,
+        "std": 0.2997915535600319
+      },
+      "eval/diagnostics.min_clearance": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.788222551345825,
+        "mean": 2.2212814044952394,
+        "min": 0.29768335819244385,
+        "std": 0.9260130011441174
+      },
+      "eval/diagnostics.null_command_output_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.6184901595115662,
+        "mean": 0.010969526073895395,
+        "min": 0.0,
+        "std": 0.03128382465821131
+      },
+      "eval/diagnostics.null_command_speed": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.7233652472496033,
+        "mean": 0.03302369631989859,
+        "min": 0.0,
+        "std": 0.08896743365979909
+      },
+      "eval/diagnostics.observability_condition_number": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.7372498512268066,
+        "mean": 2.818678676843643,
+        "min": 1.793727159500122,
+        "std": 0.31027443829133866
+      },
+      "eval/diagnostics.observability_drift_norm": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 5.232175350189209,
+        "mean": 1.660958624308125,
+        "min": 0.0,
+        "std": 1.176647721196048
+      },
+      "eval/diagnostics.observability_drift_projection": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.754570960998535,
+        "mean": 1.1152070502559217,
+        "min": 0.0,
+        "std": 0.8703156628172384
+      },
+      "eval/diagnostics.observability_is_proxy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_mode_code": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_rank": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.0,
+        "mean": 3.0,
+        "min": 3.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_scenario_id": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 1.0,
+        "min": 1.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.observability_score": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.5574983954429626,
+        "mean": 0.3594190077483654,
+        "min": 0.2675764262676239,
+        "std": 0.042748305278255974
+      },
+      "eval/diagnostics.observability_sigma_max": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 77.99835205078125,
+        "mean": 65.86683542251586,
+        "min": 58.52240753173828,
+        "std": 2.2035815611515326
+      },
+      "eval/diagnostics.observability_sigma_min": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 43.48395538330078,
+        "mean": 23.75830516052246,
+        "min": 15.65921688079834,
+        "std": 3.604006777819639
+      },
+      "eval/diagnostics.observability_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.6181732416152954,
+        "mean": 0.3767807546854019,
+        "min": 0.2594161927700043,
+        "std": 0.050813354678115104
+      },
+      "eval/diagnostics.observability_weighted_valid_fraction": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.5985504388809204,
+        "mean": 0.36482050037384034,
+        "min": 0.2511814534664154,
+        "std": 0.04920037630916508
+      },
+      "eval/diagnostics.r5e_command_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.86603125,
+        "min": 0.0,
+        "std": 0.3406187370410463
+      },
+      "eval/diagnostics.r5e_command_horizontal_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.865875,
+        "min": 0.0,
+        "std": 0.34078656718685374
+      },
+      "eval/diagnostics.r5e_command_preservation_horizontal": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.5392476582825184,
+        "min": 0.0,
+        "std": 0.5281436859387474
+      },
+      "eval/diagnostics.r5e_command_preservation_ics_loss": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.09132682681642473,
+        "min": 0.0,
+        "std": 0.27896132663005485
+      },
+      "eval/diagnostics.r5e_command_preservation_post_ics": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.5122831660807132,
+        "min": 0.0,
+        "std": 0.47865285180470735
+      },
+      "eval/diagnostics.r5e_command_preservation_pre_ics": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.6036099931895733,
+        "min": 0.0,
+        "std": 0.4620733561706736
+      },
+      "eval/diagnostics.r5e_command_preservation_vertical_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.391637952208519,
+        "min": 0.0,
+        "std": 0.3807545810452491
+      },
+      "eval/diagnostics.r5e_command_vertical_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.8358125,
+        "min": 0.0,
+        "std": 0.37044563007781595
+      },
+      "eval/diagnostics.r5e_ics_violation_near_floor": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.0689375,
+        "min": 0.0,
+        "std": 0.25334782630555563
+      },
+      "eval/diagnostics.r5e_near_floor": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.09353125,
+        "min": 0.0,
+        "std": 0.291175471620529
+      },
+      "eval/diagnostics.r5e_near_floor_clearance": {
+        "count": 32000,
+        "finite_count": 2993,
+        "max": 1.0899888277053833,
+        "mean": 0.6705613875424945,
+        "min": 0.3856205940246582,
+        "std": 0.17734704861983316
+      },
+      "eval/diagnostics.r5e_near_floor_ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.009184352508746087,
+        "min": 0.0,
+        "std": 0.09520765730439572
+      },
+      "eval/diagnostics.r5e_near_floor_v_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.2986887991428375,
+        "mean": -0.02228711586864665,
+        "min": -0.9293860793113708,
+        "std": 0.10863578083083292
+      },
+      "eval/diagnostics.r5e_near_floor_v_final_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.05784159153699875,
+        "mean": -0.0016390246939772624,
+        "min": -0.5479242205619812,
+        "std": 0.022717966087645636
+      },
+      "eval/diagnostics.r5e_near_floor_v_gov_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.11859002709388733,
+        "mean": -0.01325846249423921,
+        "min": -0.5529519319534302,
+        "std": 0.060076707674450065
+      },
+      "eval/diagnostics.r5e_null_actual_speed_xy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.704170823097229,
+        "mean": 0.03067147823209234,
+        "min": 0.0,
+        "std": 0.0832919955311254
+      },
+      "eval/diagnostics.r5e_null_actual_speed_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.23498520255088806,
+        "mean": 0.011308685152966064,
+        "min": 0.0,
+        "std": 0.030199161626576338
+      },
+      "eval/diagnostics.r5e_null_command": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.13396875,
+        "min": 0.0,
+        "std": 0.3406187370410464
+      },
+      "eval/diagnostics.r5e_null_output_speed_xy": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.12583811581134796,
+        "mean": 0.010818690121290274,
+        "min": 0.0,
+        "std": 0.030001582180395867
+      },
+      "eval/diagnostics.r5e_null_output_speed_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.00034236814826726913,
+        "mean": 5.188424707114336e-08,
+        "min": 0.0,
+        "std": 3.2559278299205733e-06
+      },
+      "eval/diagnostics.safety_collision": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.00025,
+        "min": 0.0,
+        "std": 0.015809411753762378
+      },
+      "eval/diagnostics.safety_min_clearance": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 3.788222551345825,
+        "mean": 2.2212814044952394,
+        "min": 0.29768335819244385,
+        "std": 0.9260130011441174
+      },
+      "eval/diagnostics.station_keeping_drift": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 5.232175350189209,
+        "mean": 1.6609586256003386,
+        "min": 0.0,
+        "std": 1.176647720922511
+      },
+      "eval/diagnostics.tracking_actual_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0256853103637695,
+        "mean": 0.1825327662229538,
+        "min": 0.0,
+        "std": 0.21468666111687196
+      },
+      "eval/diagnostics.tracking_proxy_error_sq": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.032329559326172,
+        "mean": 0.11174387456476688,
+        "min": 0.0,
+        "std": 0.1856973233331056
+      },
+      "eval/diagnostics.v_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.795850396156311,
+        "mean": -0.005398573531769216,
+        "min": -0.9293860793113708,
+        "std": 0.2818165387798
+      },
+      "eval/diagnostics.v_final_b_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.679013192653656,
+        "mean": -0.011881852543447168,
+        "min": -0.867713987827301,
+        "std": 0.1269647798981742
+      },
+      "eval/diagnostics.vertical_command_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.8358125,
+        "min": 0.0,
+        "std": 0.37044563007781595
+      },
+      "eval/diagnostics.vertical_command_null": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.1641875,
+        "min": 0.0,
+        "std": 0.3704456300778159
+      },
+      "eval/diagnostics.vertical_corr_opposes_command": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.39221875,
+        "min": 0.0,
+        "std": 0.48824502265608144
+      },
+      "eval/diagnostics.vertical_corr_reinforces_command": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.44359375,
+        "min": 0.0,
+        "std": 0.49680814703559106
+      },
+      "eval/diagnostics.vertical_corr_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": -0.0,
+        "mean": -0.01806747877970338,
+        "min": -0.031178763136267662,
+        "std": 0.009718686884540775
+      },
+      "eval/diagnostics.vertical_corr_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.031178763136267662,
+        "mean": 0.01806747877970338,
+        "min": 0.0,
+        "std": 0.009718686884540775
+      },
+      "eval/diagnostics.vertical_corr_z_negative": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.86640625,
+        "min": 0.0,
+        "std": 0.34021531411877604
+      },
+      "eval/diagnostics.vertical_corr_z_positive": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_corr_z_saturated": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.0,
+        "mean": 0.0,
+        "min": 0.0,
+        "std": 0.0
+      },
+      "eval/diagnostics.vertical_final_minus_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.9293860793113708,
+        "mean": -0.006629412253387272,
+        "min": -0.7032659649848938,
+        "std": 0.18247938343945885
+      },
+      "eval/diagnostics.vertical_final_minus_cmd_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.9293860793113708,
+        "mean": 0.11638642227649688,
+        "min": 0.0,
+        "std": 0.14070136885242931
+      },
+      "eval/diagnostics.vertical_gov_minus_cmd_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.47363388538360596,
+        "mean": -0.017813991213683038,
+        "min": -0.4252428114414215,
+        "std": 0.14069552163675986
+      },
+      "eval/diagnostics.vertical_gov_minus_cmd_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.47363388538360596,
+        "mean": 0.09721789269894361,
+        "min": 0.0,
+        "std": 0.10325332648771089
+      },
+      "eval/diagnostics.vertical_ics_beta": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.8658750727176666,
+        "min": 0.0,
+        "std": 0.3405031081400285
+      },
+      "eval/diagnostics.vertical_ics_delta_z": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.5529519319534302,
+        "mean": 0.011184579042717814,
+        "min": -0.29758355021476746,
+        "std": 0.06941329281892006
+      },
+      "eval/diagnostics.vertical_ics_delta_z_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.5529519319534302,
+        "mean": 0.019363613051828,
+        "min": 0.0,
+        "std": 0.06758957403259039
+      },
+      "eval/diagnostics.vertical_ics_emergency": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.00903125,
+        "min": 0.0,
+        "std": 0.09460278285250123
+      },
+      "eval/diagnostics.vertical_null_corr_abs": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.026088472455739975,
+        "mean": 0.000462101078856108,
+        "min": 0.0,
+        "std": 0.003266931990061581
+      },
+      "eval/diagnostics.vertical_null_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.02596875,
+        "min": 0.0,
+        "std": 0.15904205111679584
+      },
+      "eval/diagnostics.vertical_null_station_drift_when_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.443664312362671,
+        "mean": 0.015290977689184729,
+        "min": 0.0,
+        "std": 0.11517536117927503
+      },
+      "eval/diagnostics.vertical_tracking_amplification_when_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.028313942808657885,
+        "min": 0.0,
+        "std": 0.15757336535803115
+      },
+      "eval/diagnostics.vertical_tracking_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 1.0,
+        "mean": 0.8260625,
+        "min": 0.0,
+        "std": 0.3790557295355789
+      },
+      "eval/diagnostics.vertical_tracking_preservation_when_corr_active": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 2.0,
+        "mean": 0.4683492143750191,
+        "min": 0.0,
+        "std": 0.4422103661365958
+      },
+      "eval/episodes_expected": 32,
+      "eval/episodes_recorded": 32,
+      "eval/handbook.anchor_active_fraction": 0.20984375,
+      "eval/handbook.anchor_error_max": 36.33747863769531,
+      "eval/handbook.anchor_error_mean": 0.24975855690194293,
+      "eval/handbook.anchor_loss": 0.01966783340474649,
+      "eval/handbook.command_amplification_horizontal_mean": 0.0822696988992393,
+      "eval/handbook.command_amplification_horizontal_rate": 0.14384375,
+      "eval/handbook.command_amplification_mean": 0.062483160585165023,
+      "eval/handbook.command_amplification_rate": 0.09475,
+      "eval/handbook.command_amplification_vertical_mean": 0.028315488189458848,
+      "eval/handbook.command_amplification_vertical_rate": 0.039875,
+      "eval/handbook.command_mode_fraction.adversarial": 0.03690625,
+      "eval/handbook.command_mode_fraction.aggressive": 0.15878125,
+      "eval/handbook.command_mode_fraction.normal": 0.46984375,
+      "eval/handbook.command_mode_fraction.oscillation": 0.2008125,
+      "eval/handbook.command_mode_fraction.recovery": 0.13365625,
+      "eval/handbook.command_preservation_ratio": 0.6480802716314793,
+      "eval/handbook.height_ceiling_margin_mean": 2.57678125166893,
+      "eval/handbook.height_ceiling_margin_min": 1.677736759185791,
+      "eval/handbook.height_ceiling_margin_p05": 1.9319427013397217,
+      "eval/handbook.height_ceiling_violation_max": 0.0,
+      "eval/handbook.height_ceiling_violation_mean": 0.0,
+      "eval/handbook.height_ceiling_violation_p95": 0.0,
+      "eval/handbook.height_floor_violation_max": 0.2998732328414917,
+      "eval/handbook.height_floor_violation_mean": 0.012209920537658035,
+      "eval/handbook.height_floor_violation_p95": 0.11511943489313126,
+      "eval/handbook.height_world_z_max": 2.322263240814209,
+      "eval/handbook.height_world_z_mean": 1.423218758583069,
+      "eval/handbook.height_world_z_min": 0.2001267820596695,
+      "eval/handbook.height_world_z_p05": 0.38488051295280457,
+      "eval/handbook.height_world_z_p95": 2.068057060241699,
+      "eval/handbook.ics_beta_mean": 0.8658750727176666,
+      "eval/handbook.ics_emergency_rate": 0.00903125,
+      "eval/handbook.ics_intervention_frequency": 0.13496875,
+      "eval/handbook.ics_violation_rate": 0.09984375,
+      "eval/handbook.null_command_output_speed_mean": 0.010969526073895395,
+      "eval/handbook.null_command_speed_mean": 0.03302369631989859,
+      "eval/handbook.observability_condition_number_mean": 2.818678676843643,
+      "eval/handbook.observability_drift_norm_mean": 1.660958624308125,
+      "eval/handbook.observability_drift_projection_mean": 1.1152070502559217,
+      "eval/handbook.observability_is_proxy": 1.0,
+      "eval/handbook.observability_mode_code_mean": 0.0,
+      "eval/handbook.observability_rank_mean": 3.0,
+      "eval/handbook.observability_score_mean": 0.3594190077483654,
+      "eval/handbook.observability_sigma_max_mean": 65.86683542251586,
+      "eval/handbook.observability_sigma_min_mean": 23.75830516052246,
+      "eval/handbook.observability_valid_fraction_mean": 0.3767807546854019,
+      "eval/handbook.observability_weighted_valid_fraction_mean": 0.36482050037384034,
+      "eval/handbook.r5e_command_preservation_horizontal_ratio": 0.622777719974036,
+      "eval/handbook.r5e_command_preservation_ics_loss_ratio": 0.10545442420977849,
+      "eval/handbook.r5e_command_preservation_post_ics_ratio": 0.5915296544792272,
+      "eval/handbook.r5e_command_preservation_pre_ics_ratio": 0.6969840790266787,
+      "eval/handbook.r5e_command_preservation_vertical_abs_ratio": 0.46857154231184506,
+      "eval/handbook.r5e_ics_violation_near_floor_rate": 0.7370531239558971,
+      "eval/handbook.r5e_near_floor_clearance_p05": 0.41153836250305176,
+      "eval/handbook.r5e_near_floor_ics_beta_mean": 0.09819554970927992,
+      "eval/handbook.r5e_near_floor_rate": 0.09353125,
+      "eval/handbook.r5e_near_floor_v_cmd_z_mean": -0.23828523481346237,
+      "eval/handbook.r5e_near_floor_v_final_z_mean": -0.017523818980044237,
+      "eval/handbook.r5e_near_floor_v_gov_z_mean": -0.1417543601121466,
+      "eval/handbook.r5e_null_actual_speed_xy_mean": 0.2289450206267681,
+      "eval/handbook.r5e_null_actual_speed_z_abs_mean": 0.08441285861789458,
+      "eval/handbook.r5e_null_output_speed_xy_mean": 0.08075532630774172,
+      "eval/handbook.r5e_null_output_speed_z_abs_mean": 3.8728619227352173e-07,
+      "eval/handbook.safety_collision_rate": 0.00025,
+      "eval/handbook.safety_min_clearance_mean": 2.2212814044952394,
+      "eval/handbook.safety_min_clearance_p05": 0.5695891976356506,
+      "eval/handbook.station_keeping_drift_max": 5.232175350189209,
+      "eval/handbook.station_keeping_drift_mean": 1.6609586256003386,
+      "eval/handbook.station_keeping_drift_p95": 3.8010447025299072,
+      "eval/handbook.termination_above_bound": 0.0,
+      "eval/handbook.termination_below_bound": 0.40625,
+      "eval/handbook.termination_collision": 0.125,
+      "eval/handbook.termination_timeout": 0.46875,
+      "eval/handbook.tracking_rmse_actual_body_vs_v_cmd": 0.42723853550792185,
+      "eval/handbook.tracking_rmse_v_final_body_vs_v_cmd": 0.3342811310330975,
+      "eval/handbook.vertical_corr_opposing_fraction": 0.39221875,
+      "eval/handbook.vertical_corr_reinforcing_fraction": 0.44359375,
+      "eval/handbook.vertical_corr_z_abs_mean": 0.01806747877970338,
+      "eval/handbook.vertical_corr_z_mean": -0.01806747877970338,
+      "eval/handbook.vertical_corr_z_negative_fraction": 0.86640625,
+      "eval/handbook.vertical_corr_z_positive_fraction": 0.0,
+      "eval/handbook.vertical_corr_z_saturation_rate": 0.0,
+      "eval/handbook.vertical_final_minus_cmd_z_abs_mean": 0.11638642227649688,
+      "eval/handbook.vertical_gov_minus_cmd_z_abs_mean": 0.09721789269894361,
+      "eval/handbook.vertical_ics_delta_z_abs_mean": 0.019363613051828,
+      "eval/handbook.vertical_null_corr_abs_mean": 0.002814471740273212,
+      "eval/handbook.vertical_null_corr_active_rate": 0.15816520746098212,
+      "eval/handbook.vertical_null_station_drift_mean_when_corr_active": 0.5888222455522398,
+      "eval/handbook.vertical_tracking_amplification_mean_when_corr_active": 0.034275787617350846,
+      "eval/handbook.vertical_tracking_corr_active_rate": 0.9883347042548418,
+      "eval/handbook.vertical_tracking_preservation_mean_when_corr_active": 0.5669658341530078,
+      "eval/handbook.vertical_v_corr_limit": 0.35,
+      "eval/pass_command_curriculum_profile": "diagnostic_mixed",
+      "eval/pass_command_frame_count": 600000,
+      "eval/pass_command_source": "curriculum_generator",
+      "eval/pass_name": "tracking_static_mid360",
+      "eval/reward": {
+        "count": 32000,
+        "finite_count": 32000,
+        "max": 0.9009878635406494,
+        "mean": -1.4390648245215416,
+        "min": -20.000003814697266,
+        "std": 3.191334821052631,
+        "sum": -46050.07438468933
+      },
+      "eval/stats.collision": 0.125,
+      "eval/stats.episode_len": 884.09375,
+      "eval/stats.legacy_reach_goal": 0.0,
+      "eval/stats.return": -1234.5472412109375,
+      "eval/stats.reward_anchor": -65.0687255859375,
+      "eval/stats.reward_collision": -1.25,
+      "eval/stats.reward_command_amplification": -324.2930908203125,
+      "eval/stats.reward_height_ceiling": 0.0,
+      "eval/stats.reward_height_floor": -20.752487182617188,
+      "eval/stats.reward_horizontal_preservation": 0.0,
+      "eval/stats.reward_ics_compliance": 61.364158630371094,
+      "eval/stats.reward_intervention": -6.87975549697876,
+      "eval/stats.reward_null_command_output": -0.24222412705421448,
+      "eval/stats.reward_null_command_speed": -117.69097900390625,
+      "eval/stats.reward_preservation_high": -252.71572875976562,
+      "eval/stats.reward_preservation_low": -60.664031982421875,
+      "eval/stats.reward_proxy_tracking": -84.84297943115234,
+      "eval/stats.reward_safety": -99.78423309326172,
+      "eval/stats.reward_smoothness": -0.2178139090538025,
+      "eval/stats.reward_total": -1234.5472412109375,
+      "eval/stats.reward_tracking": -261.5094299316406,
+      "eval/stats.reward_vertical_preservation": 0.0,
+      "eval/stats.terminated_above_bound": 0.0,
+      "eval/stats.terminated_below_bound": 0.40625,
+      "eval/stats.terminated_collision": 0.125,
+      "eval/stats.termination_reason_code": 2.65625,
+      "eval/stats.truncated": 0.46875,
+      "eval/stats.truncated_timeout": 0.46875
+    }
+  },
+  "result_path": "/home/mint/rl_dev/NavRL/isaac-training/../docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_null_axis_xy075_z000_131072_seed0_eval.json",
+  "wandb_mode": "offline"
+}

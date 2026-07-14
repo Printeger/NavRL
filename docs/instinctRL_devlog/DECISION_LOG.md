@@ -538,3 +538,11 @@
 **Rationale**: The first R5F screen should compare actor-clean/default-off mechanisms: null-axis split, sign-aware z correction, MID360 range-derived downward attenuation, and reward-only axis preservation. Including a privileged root-height filter in the default set would mix deployable actor-method evidence with a simulator-bound diagnostic.
 
 **Guardrails**: R5F sweep defaults keep TASLAB_UAV + Livox MID360, actor observation `lidar_grid + state_vec`, 4D learned action `[alpha, v_corr_x, v_corr_y, v_corr_z]`, body-frame velocity governance, unchanged hard gates, and dry-run default behavior. A later privileged-height diagnostic, if ever run, must be explicitly labeled sim/eval-only and cannot support deployable-method claims.
+
+## D-2026-07-14-003: R5F 128k Execute Sweep Has No Promotable Candidate
+
+**Decision**: R5F 128k produced no promotable candidate; no 1M confirmation is authorized, and the next action follows the R5 mechanism-diagnosis branch rather than a bounded micro-sweep.
+
+**Evidence**: The controlled R5F execution artifact `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/summary.json` contains six completed jobs with embedded `gate_report` results. No job has `passed=true` or `14/14`; the best ranked job is `r5f_zsign_opp100_reinf050` with `6/14`, `passed=false`, `safety_passed=false`, and failures in station, safety, collision termination, below-bound termination, clearance, and ICS.
+
+**Consequence**: Do not promote by score alone, do not run 1M, and do not run an R5F micro-sweep. Continue mechanism diagnosis because the best candidate is below `10/14`, fails station gates, has collision and below-bound terminations, and has `ics_violation_rate=0.05428125`, more than 2x the `0.005` gate.

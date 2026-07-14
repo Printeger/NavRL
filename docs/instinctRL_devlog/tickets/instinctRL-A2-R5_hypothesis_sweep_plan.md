@@ -920,6 +920,131 @@ Next step:
 - R5F 128k execute sweep is allowed only after this dry-run is reviewed and only with explicit `--execute` in a later turn.
 - No 1M, promotion, warm-start, hard-gate change, actor-observation change, platform/sensor change, reward-default change, or body-frame velocity-governor method change is authorized by this dry-run backfill.
 
+## R5F Execution Backfill - 2026-07-14
+
+Execution:
+
+- Preflight found a clean tracked worktree at baseline commit `1fb251bb9da6f9000b04b9b358e4988d92397bea`.
+- Re-read the handbook, decision log, R5 ticket, `training/scripts/instinctRL/gates.py`, `training/scripts/instinctRL/sweep.py`, R5D summary, and R5E diagnostic artifact before execution.
+- Verified `training/scripts/instinctRL/sweep.py` default tag was `a2r5f_sweep`.
+- Verified the R5F variant set was exactly `r5f_null_axis_xy050_z000`, `r5f_null_axis_xy075_z000`, `r5f_zsign_opp050_reinf100`, `r5f_zsign_opp100_reinf050`, `r5f_downatten`, and `r5f_preserve_h050_v100`.
+- Verified no default variant contained `instinctRL.safety_filter.privileged_height_floor_enabled=true`.
+- Command run exactly once: `python training/scripts/instinctRL/sweep.py --execute --frames 131072 --seeds 0 --limit 6`.
+- Artifact directory: `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/`.
+- Summary: `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/summary.json`.
+- Summary validation: `execute=true`, `frames=131072`, six jobs, all with `error=null`, non-null checkpoints, non-null eval JSON artifacts, and embedded `gate_report`.
+- Gate truth source: only embedded `job.gate_report` in the new `summary.json`, produced by `training/scripts/instinctRL/gates.py`.
+- Train and eval commands retained the TASLAB_UAV + Livox MID360, command-governor, station-first, short-diagnostic, proxy-observability assumptions and propagated each R5F override to eval.
+- No 1M, formal long training, warm-start, code change, hard-gate change, actor-observation change, platform/sensor change, method change, reward-default change, or privileged height-filter sweep was executed.
+
+Execution decision:
+
+- No candidate passed all 14 hard gates.
+- No job has `gate_report.passed=true`, `passed_count=14`, and `total_count=14`.
+- Best ranked job by embedded hard-gate report was `r5f_zsign_opp100_reinf050`, seed `0`, with `6/14`, score `4.842`, `passed=false`, and `safety_passed=false`.
+- No 1M confirmation command is written because there is no `passed=true`, `14/14` candidate.
+- R5F micro-sweep is not allowed: the best candidate is below `10/14`, fails station gates, has collision and below-bound terminations, fails clearance, and has `ics_violation_rate=0.05428125`, more than 2x the `0.005` gate.
+- Continue mechanism diagnosis. The remaining blockers are station/null-anchor behavior, clearance/ICS, collision termination, and below-bound height/safety behavior.
+
+Rows below are ranked as written in `summary.json`.
+
+| Variant | Seed | Gates | Score | Passed | Safety passed | Failed gates |
+|---|---:|---:|---:|---|---|---|
+| `r5f_zsign_opp100_reinf050` | 0 | 6/14 | 4.842 | false | false | `station_drift_mean`, `station_null_speed_mean`, `station_anchor_error_mean`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+| `r5f_zsign_opp050_reinf100` | 0 | 5/14 | 2.918 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+| `r5f_preserve_h050_v100` | 0 | 4/14 | 2.027 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+| `r5f_downatten` | 0 | 4/14 | 1.754 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+| `r5f_null_axis_xy075_z000` | 0 | 3/14 | 0.197 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `tracking_command_amplification_mean`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+| `r5f_null_axis_xy050_z000` | 0 | 2/14 | -1.401 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_rmse_actual`, `tracking_preservation_ratio`, `tracking_command_amplification_mean`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+
+Checkpoint and eval artifacts:
+
+| Variant | Checkpoint | Eval artifact |
+|---|---|---|
+| `r5f_zsign_opp100_reinf050` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_203127-dar23kry/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_zsign_opp100_reinf050_131072_seed0_eval.json` |
+| `r5f_zsign_opp050_reinf100` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_201707-vrsci8pr/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_zsign_opp050_reinf100_131072_seed0_eval.json` |
+| `r5f_preserve_h050_v100` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_210024-egnker17/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_preserve_h050_v100_131072_seed0_eval.json` |
+| `r5f_downatten` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_204344-6gata2y4/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_downatten_131072_seed0_eval.json` |
+| `r5f_null_axis_xy075_z000` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_200613-ybgfftj7/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_null_axis_xy075_z000_131072_seed0_eval.json` |
+| `r5f_null_axis_xy050_z000` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_195318-t7v41msm/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/a2r5f_sweep_r5f_null_axis_xy050_z000_131072_seed0_eval.json` |
+
+Station/null/anchor diagnostics:
+
+| Variant | Station drift mean/p95 | Null actual | Null output | Anchor error |
+|---|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 1.334 / 2.596 | 0.1697 | 0.0304 | 2.978 |
+| `r5f_zsign_opp050_reinf100` | 1.591 / 3.100 | 0.2026 | 0.0382 | 3.195 |
+| `r5f_preserve_h050_v100` | 1.513 / 2.941 | 0.1922 | 0.00910 | 3.190 |
+| `r5f_downatten` | 1.520 / 2.957 | 0.1933 | 0.00619 | 3.223 |
+| `r5f_null_axis_xy075_z000` | 1.807 / 3.550 | 0.2341 | 0.0867 | 3.445 |
+| `r5f_null_axis_xy050_z000` | 2.109 / 4.044 | 0.2629 | 0.0792 | 3.682 |
+
+R5E null split diagnostics:
+
+| Variant | Null actual xy | Null actual z abs | Null output xy | Null output z abs |
+|---|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.1548 | 0.0694 | 0.0281 | 0.0117 |
+| `r5f_zsign_opp050_reinf100` | 0.1894 | 0.0717 | 0.0371 | 0.00909 |
+| `r5f_preserve_h050_v100` | 0.1764 | 0.0762 | 0.00811 | 0.00411 |
+| `r5f_downatten` | 0.1760 | 0.0796 | 0.00619 | 0.000287 |
+| `r5f_null_axis_xy075_z000` | 0.2199 | 0.0799 | 0.0867 | 0.0000 |
+| `r5f_null_axis_xy050_z000` | 0.2503 | 0.0800 | 0.0793 | 0.0000 |
+
+Tracking and command-preservation diagnostics:
+
+| Variant | RMSE | Preservation | Pre-ICS | Post-ICS | ICS loss | Horizontal | Vertical abs | Amp mean/rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.3212 | 0.7893 | 0.7971 | 0.7576 | 0.0395 | 0.7959 | 0.6826 | 0.0406 / 0.1186 |
+| `r5f_zsign_opp050_reinf100` | 0.4004 | 0.7547 | 0.8316 | 0.7184 | 0.1132 | 0.7375 | 0.6990 | 0.0437 / 0.1494 |
+| `r5f_preserve_h050_v100` | 0.4172 | 0.5425 | 0.5001 | 0.4693 | 0.0308 | 0.4757 | 0.4798 | 0.00978 / 0.0162 |
+| `r5f_downatten` | 0.4238 | 0.5193 | 0.5037 | 0.4612 | 0.0425 | 0.4772 | 0.4491 | 0.00358 / 0.00706 |
+| `r5f_null_axis_xy075_z000` | 0.4272 | 0.6481 | 0.6970 | 0.5915 | 0.1055 | 0.6228 | 0.4686 | 0.0625 / 0.0948 |
+| `r5f_null_axis_xy050_z000` | 0.4598 | 0.7100 | 0.8135 | 0.6651 | 0.1484 | 0.7060 | 0.5612 | 0.0694 / 0.1481 |
+
+Safety and termination diagnostics:
+
+| Variant | Clearance p05 | Collision | ICS | Term below | Term above | Term collision |
+|---|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.7466 | 0.000125 | 0.0543 | 0.1875 | 0.0000 | 0.0625 |
+| `r5f_zsign_opp050_reinf100` | 0.5570 | 0.000188 | 0.1013 | 0.3125 | 0.0000 | 0.0938 |
+| `r5f_preserve_h050_v100` | 0.6749 | 0.000125 | 0.0680 | 0.3125 | 0.0000 | 0.0625 |
+| `r5f_downatten` | 0.5976 | 0.000219 | 0.0863 | 0.3750 | 0.0000 | 0.1250 |
+| `r5f_null_axis_xy075_z000` | 0.5696 | 0.000250 | 0.0998 | 0.4062 | 0.0000 | 0.1250 |
+| `r5f_null_axis_xy050_z000` | 0.4938 | 0.000563 | 0.1279 | 0.2188 | 0.0000 | 0.2812 |
+
+Vertical diagnostics:
+
+| Variant | Corr z mean/abs | Pos/neg frac | Sat | Null abs | Null active | Null drift | Tracking active | Tracking amp | Tracking preserve | ICS dz abs |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.0314 / 0.0314 | 1.000 / 0.000 | 0.000 | 0.0117 | 1.000 | 1.334 | 1.000 | 0.0558 | 0.7499 | 0.0107 |
+| `r5f_zsign_opp050_reinf100` | 0.0222 / 0.0222 | 1.000 / 0.000031 | 0.000 | 0.00909 | 1.000 | 1.591 | 1.000 | 0.0604 | 0.7114 | 0.0224 |
+| `r5f_preserve_h050_v100` | 0.0130 / 0.0130 | 1.000 / 0.000031 | 0.000 | 0.00411 | 0.9999 | 1.513 | 0.9999 | 0.0358 | 0.4727 | 0.00797 |
+| `r5f_downatten` | 0.00329 / 0.00352 | 0.717 / 0.283 | 0.000 | 0.000287 | 0.00231 | 0.00130 | 0.482 | 0.0249 | 0.4495 | 0.0101 |
+| `r5f_null_axis_xy075_z000` | -0.0181 / 0.0181 | 0.000 / 0.866 | 0.000 | 0.0000 | 0.0000 | n/a | 0.988 | 0.0343 | 0.5670 | 0.0194 |
+| `r5f_null_axis_xy050_z000` | 0.0265 / 0.0267 | 0.868 / 0.00263 | 0.000 | 0.0000 | 0.0000 | n/a | 0.998 | 0.0489 | 0.6542 | 0.0221 |
+
+Near-floor diagnostics:
+
+| Variant | Near-floor rate | v_cmd_z | v_gov_z | v_final_z | Beta | Clearance p05 | Near-floor ICS |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.0498 | -0.0848 | -0.0255 | -0.00718 | 0.4001 | 0.4175 | 0.5881 |
+| `r5f_zsign_opp050_reinf100` | 0.1114 | -0.1360 | -0.0763 | -0.00362 | 0.1873 | 0.4215 | 0.7246 |
+| `r5f_preserve_h050_v100` | 0.0961 | -0.0427 | -0.00582 | 0.00302 | 0.4927 | 0.4193 | 0.5982 |
+| `r5f_downatten` | 0.1184 | -0.0932 | -0.0415 | -0.000768 | 0.3684 | 0.4042 | 0.6269 |
+| `r5f_null_axis_xy075_z000` | 0.0935 | -0.2383 | -0.1418 | -0.0175 | 0.0982 | 0.4115 | 0.7371 |
+| `r5f_null_axis_xy050_z000` | 0.0704 | -0.1414 | -0.0588 | 0.00205 | 0.1214 | 0.3695 | 0.6701 |
+
+Interpretation:
+
+- The sign-aware vertical branch `r5f_zsign_opp100_reinf050` was best ranked and recovered tracking preservation (`0.7893`) and norm-level amplification gates, but it still failed station drift mean, null speed, anchor error, collision, clearance, ICS, collision termination, and below-bound termination.
+- The null-axis variants regressed station drift, null actual speed, anchor error, safety, and terminations, so increased null XY authority is not a useful follow-up anchor from this seed.
+- `r5f_downatten` did not solve near-floor safety: near-floor rate was `0.1184`, near-floor clearance p05 was `0.4042`, near-floor ICS was `0.6269`, and total ICS remained `0.0863`.
+- Axis preservation reward reduced amplification but drove preservation below the gate (`0.5425`) and did not solve station or safety failures.
+
+Stop condition:
+
+Hard gates unchanged; `training/scripts/instinctRL/gates.py` unchanged; no actor observation, learned action method, platform/sensor, reward default, height clamp, privileged height filter, or body-frame velocity-governor method was modified; no 1M/formal/warm-start run executed.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -954,4 +1079,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-R5F default-off readiness is complete and the R5F dry-run sweep design has passed validation. The next allowed action is a controlled R5F 128k execute sweep only after explicit review, still requiring `--execute` in a later turn. Do not run 1M, promote, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set.
+R5F 128k execution produced no promotable candidate. No 1M confirmation and no bounded micro-sweep are authorized because the best candidate reached only `6/14`, failed station and safety gates, had collision and below-bound terminations, and had ICS more than 2x above the `0.005` gate. Continue mechanism diagnosis for station/null-anchor behavior and near-floor clearance/ICS/termination behavior; do not promote, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set.
