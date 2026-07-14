@@ -395,3 +395,79 @@ def test_r5e_metrics_mask_near_floor_and_report_near_floor_ics_violation():
         True,
     ]
     assert abs(summary["r5e_ics_violation_near_floor"].sum().item() / near_count - 0.5) < 1e-6
+
+
+def test_r5g_station_anchor_metrics_split_command_motion_and_anchor_conditions():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5g_station_anchor_step_metrics(
+        v_cmd_b=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+        ]),
+        actual_velocity_b=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [9.0, 0.0, 0.0],
+        ]),
+        v_final_b=torch.tensor([
+            [0.25, 0.0, 0.0],
+            [0.0, 0.0, 0.2],
+            [9.0, 0.0, 0.0],
+        ]),
+        station_drift=torch.tensor([[2.0], [3.0], [4.0]]),
+        anchor_active=torch.tensor([[1.0], [1.0], [0.0]]),
+        anchor_valid_fraction=torch.tensor([[0.2], [0.05], [0.0]]),
+        anchor_error_mean=torch.tensor([[1.0], [2.0], [0.0]]),
+        anchor_loss=torch.tensor([[0.1], [0.0], [0.0]]),
+        observability_valid_fraction=torch.tensor([[0.02], [0.0], [0.0]]),
+        command_eps=0.05,
+        min_anchor_valid_fraction=0.1,
+        anchor_loss_high_threshold=0.05,
+        observability_min_valid_fraction=0.01,
+    )
+
+    null_count = summary["r5g_station_null_command"].sum().item()
+    assert null_count == 2.0
+    assert abs(summary["r5g_station_null_mismatch_xy"].sum().item() / null_count - 0.375) < 1e-6
+    assert abs(summary["r5g_station_null_mismatch_z_abs"].sum().item() / null_count - 0.4) < 1e-6
+    assert summary["r5g_station_null_alignment_xy_active"].sum().item() == 1.0
+    assert abs(summary["r5g_station_null_alignment_xy"].sum().item() - 1.0) < 1e-6
+    assert summary["r5g_station_null_output_xy_active"].sum().item() == 1.0
+    assert abs(summary["r5g_station_null_actual_output_xy_ratio"].sum().item() - 4.0) < 1e-6
+    assert summary["r5g_anchor_active"].sum().item() == 2.0
+    assert summary["r5g_anchor_valid"].sum().item() == 1.0
+    assert summary["r5g_anchor_invalid"].sum().item() == 1.0
+    assert summary["r5g_anchor_high_loss"].sum().item() == 1.0
+    assert summary["r5g_anchor_obs_valid"].sum().item() == 1.0
+    assert summary["r5g_anchor_obs_poor"].sum().item() == 1.0
+    assert abs(summary["r5g_anchor_station_drift_when_valid"].sum().item() - 2.0) < 1e-6
+    assert abs(summary["r5g_anchor_error_when_invalid"].sum().item() - 2.0) < 1e-6
+
+
+def test_r5g_downward_metrics_mask_active_effectiveness():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5g_downward_step_metrics(
+        downward_active=torch.tensor([[1.0], [0.0], [1.0]]),
+        downward_has_ray=torch.tensor([[1.0], [1.0], [0.0]]),
+        downward_beta=torch.tensor([[0.5], [1.0], [0.2]]),
+        downward_min_clearance=torch.tensor([[0.3], [0.4], [0.5]]),
+        downward_pre_z=torch.tensor([[-1.0], [0.0], [-2.0]]),
+        downward_post_z=torch.tensor([[-0.5], [0.0], [-0.4]]),
+        downward_z_delta_abs=torch.tensor([[0.5], [0.0], [1.6]]),
+        downward_attenuation_ratio=torch.tensor([[0.5], [0.0], [0.8]]),
+    )
+
+    active = summary["r5g_downward_active"].sum().item()
+    assert active == 2.0
+    assert summary["r5g_downward_has_ray"].sum().item() == 2.0
+    assert abs(summary["r5g_downward_beta_when_active"].sum().item() / active - 0.35) < 1e-6
+    assert torch.isfinite(
+        summary["r5g_downward_min_clearance_when_active"].reshape(-1)
+    ).tolist() == [True, False, True]
+    assert abs(summary["r5g_downward_z_delta_abs_when_active"].sum().item() / active - 1.05) < 1e-6
+    assert abs(
+        summary["r5g_downward_attenuation_ratio_when_active"].sum().item() / active - 0.65
+    ) < 1e-6

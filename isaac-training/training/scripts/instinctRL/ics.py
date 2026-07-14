@@ -27,6 +27,14 @@ ICS_METRIC_KEYS = (
     "ics_brake_speed",
     "ics_final_speed",
     "ics_clip_ratio",
+    "ics_downward_beta",
+    "ics_downward_active",
+    "ics_downward_has_ray",
+    "ics_downward_min_clearance",
+    "ics_downward_pre_z",
+    "ics_downward_post_z",
+    "ics_downward_z_delta_abs",
+    "ics_downward_attenuation_ratio",
 )
 
 
@@ -297,6 +305,11 @@ class RangeHistoryICSAttenuator:
             "ics_final_speed": final_speed,
             "ics_clip_ratio": clip_ratio,
         }
+        metrics.update({
+            key: value
+            for key, value in downward_cache.items()
+            if key.startswith("ics_downward_")
+        })
         for key, value in list(metrics.items()):
             metrics[key] = torch.nan_to_num(value, nan=0.0, posinf=0.0, neginf=0.0)
 
@@ -412,7 +425,12 @@ class RangeHistoryICSAttenuator:
             return command_after_beta, {
                 "ics_downward_beta": ones,
                 "ics_downward_active": zeros,
+                "ics_downward_has_ray": zeros,
                 "ics_downward_min_clearance": zeros,
+                "ics_downward_pre_z": command_after_beta[..., 2:3],
+                "ics_downward_post_z": command_after_beta[..., 2:3],
+                "ics_downward_z_delta_abs": zeros,
+                "ics_downward_attenuation_ratio": zeros,
             }
 
         ray_down_component = (-rays[..., 2]).clamp_min(0.0)
@@ -445,8 +463,22 @@ class RangeHistoryICSAttenuator:
             command_after_beta[..., 2:3],
         )
         filtered = torch.cat((command_after_beta[..., :2], filtered_z), dim=-1)
+        pre_z = command_after_beta[..., 2:3]
+        post_z = filtered_z
+        z_delta_abs = (post_z - pre_z).abs()
+        pre_down_abs = (-pre_z).clamp_min(0.0)
+        attenuation_ratio = torch.where(
+            pre_down_abs > self.cfg.eps,
+            (z_delta_abs / pre_down_abs.clamp_min(self.cfg.eps)).clamp(0.0, 1.0),
+            torch.zeros_like(z_delta_abs),
+        )
         return filtered, {
             "ics_downward_beta": downward_beta,
             "ics_downward_active": active.to(command_after_beta.dtype),
+            "ics_downward_has_ray": has_downward.to(command_after_beta.dtype),
             "ics_downward_min_clearance": min_clearance,
+            "ics_downward_pre_z": pre_z,
+            "ics_downward_post_z": post_z,
+            "ics_downward_z_delta_abs": z_delta_abs,
+            "ics_downward_attenuation_ratio": attenuation_ratio,
         }

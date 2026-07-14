@@ -471,6 +471,189 @@ def compute_r5e_mechanism_step_metrics(
     }
 
 
+def compute_r5g_station_anchor_step_metrics(
+    *,
+    v_cmd_b: torch.Tensor,
+    actual_velocity_b: torch.Tensor,
+    v_final_b: torch.Tensor,
+    station_drift: torch.Tensor,
+    anchor_active: Optional[torch.Tensor] = None,
+    anchor_valid_fraction: Optional[torch.Tensor] = None,
+    anchor_error_mean: Optional[torch.Tensor] = None,
+    anchor_loss: Optional[torch.Tensor] = None,
+    observability_valid_fraction: Optional[torch.Tensor] = None,
+    command_eps: float = 1e-3,
+    min_anchor_valid_fraction: float = 0.1,
+    anchor_loss_high_threshold: float = 0.05,
+    observability_min_valid_fraction: float = 0.01,
+) -> Dict[str, torch.Tensor]:
+    """R5G eval-only station/null and anchor root-cause diagnostics."""
+    v_cmd = _as_vector_flat(v_cmd_b, "v_cmd_b")
+    N = v_cmd.shape[0]
+    device = v_cmd.device
+    actual = _as_vector_flat(actual_velocity_b, "actual_velocity_b").to(device=device)
+    final = _as_vector_flat(v_final_b, "v_final_b").to(device=device)
+    if actual.shape[0] != N or final.shape[0] != N:
+        raise ValueError("R5G station vector inputs must flatten to the same length")
+
+    drift = _as_scalar_flat(station_drift, "station_drift", N, device=device).clamp_min(0.0)
+    active = _as_scalar_flat(anchor_active, "anchor_active", N, default=0.0, device=device).clamp(0.0, 1.0)
+    valid_fraction = _as_scalar_flat(
+        anchor_valid_fraction,
+        "anchor_valid_fraction",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    anchor_error = _as_scalar_flat(
+        anchor_error_mean,
+        "anchor_error_mean",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+    anchor_loss_value = _as_scalar_flat(
+        anchor_loss,
+        "anchor_loss",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+    observability_valid = _as_scalar_flat(
+        observability_valid_fraction,
+        "observability_valid_fraction",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+
+    eps = float(command_eps)
+    if not math.isfinite(eps) or eps <= 0.0:
+        raise ValueError("command_eps must be finite and > 0")
+    min_anchor_valid = float(min_anchor_valid_fraction)
+    if not math.isfinite(min_anchor_valid) or not (0.0 <= min_anchor_valid <= 1.0):
+        raise ValueError("min_anchor_valid_fraction must be finite and in [0, 1]")
+    high_loss_threshold = float(anchor_loss_high_threshold)
+    if not math.isfinite(high_loss_threshold) or high_loss_threshold < 0.0:
+        raise ValueError("anchor_loss_high_threshold must be finite and >= 0")
+    min_observability_valid = float(observability_min_valid_fraction)
+    if not math.isfinite(min_observability_valid) or not (0.0 <= min_observability_valid <= 1.0):
+        raise ValueError("observability_min_valid_fraction must be finite and in [0, 1]")
+
+    command_active = (v_cmd.norm(dim=-1, keepdim=True) > eps).float()
+    null_command = 1.0 - command_active
+    actual_xy = actual[..., :2]
+    final_xy = final[..., :2]
+    actual_xy_norm = actual_xy.norm(dim=-1, keepdim=True)
+    final_xy_norm = final_xy.norm(dim=-1, keepdim=True)
+    mismatch_xy = (actual_xy - final_xy).norm(dim=-1, keepdim=True)
+    mismatch_z_abs = (actual[..., 2:3] - final[..., 2:3]).abs()
+    alignment_active = null_command * (actual_xy_norm > eps).float() * (final_xy_norm > eps).float()
+    alignment_xy = torch.where(
+        alignment_active.bool(),
+        (actual_xy * final_xy).sum(dim=-1, keepdim=True)
+        / (actual_xy_norm * final_xy_norm).clamp_min(eps),
+        torch.zeros_like(actual_xy_norm),
+    ).clamp(-1.0, 1.0)
+    output_xy_active = null_command * (final_xy_norm > eps).float()
+    ratio_xy = torch.where(
+        output_xy_active.bool(),
+        actual_xy_norm / final_xy_norm.clamp_min(eps),
+        torch.zeros_like(actual_xy_norm),
+    ).clamp(0.0, 100.0)
+
+    anchor_is_active = (active >= 0.5).float()
+    anchor_is_valid = anchor_is_active * (valid_fraction >= min_anchor_valid).float()
+    anchor_is_invalid = anchor_is_active * (1.0 - (valid_fraction >= min_anchor_valid).float())
+    anchor_high_loss = anchor_is_active * (anchor_loss_value > high_loss_threshold).float()
+    observability_good = anchor_is_active * (observability_valid >= min_observability_valid).float()
+    observability_poor = anchor_is_active * (1.0 - (observability_valid >= min_observability_valid).float())
+
+    result = {
+        "r5g_station_null_command": null_command,
+        "r5g_station_null_actual_speed_xy": actual_xy_norm * null_command,
+        "r5g_station_null_output_speed_xy": final_xy_norm * null_command,
+        "r5g_station_null_mismatch_xy": mismatch_xy * null_command,
+        "r5g_station_null_mismatch_z_abs": mismatch_z_abs * null_command,
+        "r5g_station_null_alignment_xy": alignment_xy * alignment_active,
+        "r5g_station_null_alignment_xy_active": alignment_active,
+        "r5g_station_null_actual_output_xy_ratio": ratio_xy * output_xy_active,
+        "r5g_station_null_output_xy_active": output_xy_active,
+    }
+    for name, mask in (
+        ("active", anchor_is_active),
+        ("valid", anchor_is_valid),
+        ("invalid", anchor_is_invalid),
+        ("high_loss", anchor_high_loss),
+        ("obs_valid", observability_good),
+        ("obs_poor", observability_poor),
+    ):
+        result[f"r5g_anchor_{name}"] = mask
+        result[f"r5g_anchor_station_drift_when_{name}"] = drift * mask
+        result[f"r5g_anchor_error_when_{name}"] = anchor_error * mask
+        result[f"r5g_anchor_loss_when_{name}"] = anchor_loss_value * mask
+    return result
+
+
+def compute_r5g_downward_step_metrics(
+    *,
+    downward_active: torch.Tensor,
+    downward_has_ray: Optional[torch.Tensor] = None,
+    downward_beta: Optional[torch.Tensor] = None,
+    downward_min_clearance: Optional[torch.Tensor] = None,
+    downward_pre_z: Optional[torch.Tensor] = None,
+    downward_post_z: Optional[torch.Tensor] = None,
+    downward_z_delta_abs: Optional[torch.Tensor] = None,
+    downward_attenuation_ratio: Optional[torch.Tensor] = None,
+) -> Dict[str, torch.Tensor]:
+    """R5G eval-only scalar diagnostics for MID360 downward attenuation."""
+    active = downward_active.float().reshape(-1, 1).clamp(0.0, 1.0)
+    N = active.shape[0]
+    device = active.device
+    has_ray = _as_scalar_flat(
+        downward_has_ray,
+        "downward_has_ray",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    beta = _as_scalar_flat(downward_beta, "downward_beta", N, default=1.0, device=device).clamp(0.0, 1.0)
+    clearance = _as_scalar_flat(
+        downward_min_clearance,
+        "downward_min_clearance",
+        N,
+        default=0.0,
+        device=device,
+    )
+    pre_z = _as_scalar_flat(downward_pre_z, "downward_pre_z", N, default=0.0, device=device)
+    post_z = _as_scalar_flat(downward_post_z, "downward_post_z", N, default=0.0, device=device)
+    delta = _as_scalar_flat(
+        downward_z_delta_abs,
+        "downward_z_delta_abs",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+    attenuation_ratio = _as_scalar_flat(
+        downward_attenuation_ratio,
+        "downward_attenuation_ratio",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    inactive = torch.full_like(active, float("nan"))
+    return {
+        "r5g_downward_active": active,
+        "r5g_downward_has_ray": has_ray,
+        "r5g_downward_beta_when_active": beta * active,
+        "r5g_downward_min_clearance_when_active": torch.where(active.bool(), clearance, inactive),
+        "r5g_downward_pre_z_when_active": pre_z * active,
+        "r5g_downward_post_z_when_active": post_z * active,
+        "r5g_downward_z_delta_abs_when_active": delta * active,
+        "r5g_downward_attenuation_ratio_when_active": attenuation_ratio * active,
+    }
+
+
 def compute_vertical_channel_step_metrics(
     *,
     v_cmd_z: torch.Tensor,

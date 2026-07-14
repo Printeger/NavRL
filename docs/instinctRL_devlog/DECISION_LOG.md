@@ -546,3 +546,11 @@
 **Evidence**: The controlled R5F execution artifact `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/summary.json` contains six completed jobs with embedded `gate_report` results. No job has `passed=true` or `14/14`; the best ranked job is `r5f_zsign_opp100_reinf050` with `6/14`, `passed=false`, `safety_passed=false`, and failures in station, safety, collision termination, below-bound termination, clearance, and ICS.
 
 **Consequence**: Do not promote by score alone, do not run 1M, and do not run an R5F micro-sweep. Continue mechanism diagnosis because the best candidate is below `10/14`, fails station gates, has collision and below-bound terminations, and has `ics_violation_rate=0.05428125`, more than 2x the `0.005` gate.
+
+## D-2026-07-14-004: R5G Eval-Only Mechanism Diagnosis
+
+**Decision**: R5G added eval/logging-only diagnostics and replayed only the existing R5F best and downatten checkpoints. No training, sweep, 1M confirmation, warm-start, promotion, hard-gate change, actor-observation change, platform/sensor change, or privileged root-height deployable sweep was authorized or run.
+
+**Evidence**: New artifacts live under `docs/instinctRL_devlog/tests/artifacts/r5g_diagnostics/20260714_195313/`. For `r5f_zsign_opp100_reinf050`, null actual XY remained high (`0.1548`) while null output XY was low (`0.0281`), with command-to-motion mismatch XY `0.1824`, actual/output ratio `5.50`, and XY alignment `-0.974`. Anchor was active/valid (`0.999`) with no observability-poor condition, so high anchor error is not explained by inactive/invalid anchors. For `r5f_downatten`, `r5g_downward_has_ray_rate=0.0` and `r5g_downward_active_rate=0.0`, so the configured downward attenuation never became eligible under the MID360 ray geometry/threshold.
+
+**Consequence**: Continue R5G mechanism diagnosis. R5G dry-run variant design is allowed next, but execution remains blocked until a new dry-run plan is documented and reviewed. The next design focus is command-to-motion/null-station mismatch, active-valid anchor loss under drift, and MID360-compatible downward/near-floor safety assumptions.

@@ -279,6 +279,8 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "observability",
             "null_command",
             "vertical_null",
+            "r5g_station",
+            "r5g_anchor",
         ),
     )
     _copy_handbook_keys(
@@ -297,6 +299,8 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "vertical_ics_delta",
             "vertical_tracking",
             "vertical_v_corr_limit",
+            "r5g_near_floor",
+            "r5g_downward",
         ),
     )
     _copy_r5e_top_level_keys(combined_summary, station_summary, tracking_summary)

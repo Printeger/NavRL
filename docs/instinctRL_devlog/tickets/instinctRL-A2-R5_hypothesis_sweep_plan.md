@@ -1045,6 +1045,89 @@ Stop condition:
 
 Hard gates unchanged; `training/scripts/instinctRL/gates.py` unchanged; no actor observation, learned action method, platform/sensor, reward default, height clamp, privileged height filter, or body-frame velocity-governor method was modified; no 1M/formal/warm-start run executed.
 
+## A2-R5G Mechanism Diagnosis Backfill - 2026-07-14
+
+Scope:
+
+- Added eval/logging-only R5G diagnostics for station null command-to-motion mismatch, anchor active/valid/loss conditionals, near-floor pre-termination windows, and MID360 downward attenuation activation/effectiveness.
+- Diagnostics are emitted only through `info`, `eval/diagnostics.*`, and `eval/handbook.r5g_*`; actor observation remains `lidar_grid + state_vec`.
+- No hard gates, training behavior, actor observation, platform/sensor, method, reward defaults, warm-start behavior, promotion rule, or privileged root-height deployable sweep path changed.
+
+Validation:
+
+- `python -m py_compile training/scripts/instinctRL/ics.py training/scripts/instinctRL/task_metrics.py training/scripts/instinctRL/audit.py training/scripts/env.py training/scripts/utils.py training/scripts/eval.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_task_metrics.py training/unit_test/test_instinctrl_ics.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_actor_audit.py`: passed, `39 passed`.
+- Eval-only replay artifacts:
+  - `docs/instinctRL_devlog/tests/artifacts/r5g_diagnostics/20260714_195313/r5g_r5f_zsign_opp100_reinf050_eval.json`
+  - `docs/instinctRL_devlog/tests/artifacts/r5g_diagnostics/20260714_195313/r5g_r5f_downatten_eval.json`
+- Eval-only replay commands reused the corresponding R5F checkpoint and eval overrides from `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_195313/summary.json`, changing only `result_path`.
+- No training, sweep, 1M, warm-start, or promotion command was run.
+
+R5F micro-sweep remains disallowed:
+
+- Best R5F candidate `r5f_zsign_opp100_reinf050` is still only `6/14`.
+- It fails station drift, null speed, anchor error, clearance, ICS, collision termination, and below-bound termination.
+- Its `ics_violation_rate=0.05428125`, more than 2x the `0.005` gate.
+- Failures are not limited to small amplification/clearance misses, so the bounded micro-sweep branch is closed.
+
+Station/null command-to-motion audit:
+
+| Variant | Null actual XY | Null output XY | Mismatch XY | Mismatch Z abs | Actual/output XY ratio | XY alignment |
+|---|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.1548 | 0.0281 | 0.1824 | 0.0811 | 5.50 | -0.974 |
+| `r5f_downatten` | 0.1760 | 0.00619 | 0.1797 | 0.0799 | 28.58 | -0.574 |
+
+Interpretation:
+
+- The station failure is not caused by large issued null commands. Issued output is low, but actual motion stays high.
+- Negative/poor XY alignment means actual motion is often not following the small issued output direction.
+- The next station diagnosis should inspect velocity-controller response, command latency/hold behavior, state reset/episode timing, and command-to-motion dynamics before tuning station reward or null-axis gains.
+
+Anchor audit:
+
+| Variant | Anchor valid rate | High-loss rate | Drift when valid | Drift when high loss | Error when valid | Error when high loss | Obs-poor rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.999 | 0.898 | 1.336 | 1.476 | 2.981 | 3.267 | 0.000 |
+| `r5f_downatten` | 0.999 | 0.909 | 1.521 | 1.663 | 3.226 | 3.501 | 0.000 |
+
+Interpretation:
+
+- High anchor error is not explained by inactive anchors, invalid anchor masks, or poor observability in this replay.
+- Anchor error rises under high anchor loss and tracks station drift, so the failure is consistent with active-valid anchor loss under actual vehicle drift rather than anchor lifecycle/observability absence.
+
+Near-floor and termination audit:
+
+| Variant | Near-floor rate | Near-floor ICS | Below-bound near-floor rate in last 25 steps | Below-bound v_cmd/gov/final z | Below-bound beta | Below-bound clearance p05 | Collision near-floor rate in last 25 steps |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.0498 | 0.588 | 0.96 | -0.040 / 0.002 / 0.001 | 0.104 | 0.388 | 0.00 |
+| `r5f_downatten` | 0.1184 | 0.627 | 0.96 | -0.199 / -0.092 / -0.013 | 0.066 | 0.387 | 0.48 |
+
+Interpretation:
+
+- Below-bound failures cluster strongly near the floor: 96% of the final 25-step windows before below-bound termination are near-floor for both variants.
+- For best, below-bound occurs even when `v_gov_z` and `v_final_z` are near zero/slightly positive, so it is not only a downward issued-command problem.
+- For downatten, below-bound has stronger downward command/gov/final z and lower beta, while collision windows include zero final z, beta `0.0`, and lower clearance p05 (`0.303`), indicating severe late safety intervention without recovery.
+
+Downatten audit:
+
+| Variant | Downward has-ray rate | Downward active rate | Active beta | Active attenuation |
+|---|---:|---:|---:|---:|
+| `r5f_zsign_opp100_reinf050` | 0.000 | 0.000 | n/a | n/a |
+| `r5f_downatten` | 0.000 | 0.000 | n/a | n/a |
+
+Interpretation:
+
+- The R5F `r5f_downatten` mechanism did not improve near-floor safety because it never became eligible: `downward_ray_min_z=0.25` found no valid MID360 downward rays in the eval path.
+- This is consistent with the locked Livox MID360 vertical field-of-view and means the previous downatten result was effectively not a tested downward-attenuation mechanism.
+- Any future downward attenuation design must first be reconciled with actual MID360 ray geometry and remain actor-clean/default-off until explicitly reviewed.
+
+R5G conclusion:
+
+- No promotion, no 1M, no R5F micro-sweep.
+- R5G dry-run variant design is allowed next, but execution is not authorized in this ticket state.
+- The next design should target only documented mechanisms: command-to-motion/null-station mismatch, active-valid anchor loss under drift, and MID360-compatible near-floor/downward safety diagnostics.
+- If those mechanisms cannot be made actor-clean under TASLAB_UAV + Livox MID360 with body-frame velocity-governor commands, stop and re-review task/environment/handbook assumptions before any more sweep design.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -1079,4 +1162,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-R5F 128k execution produced no promotable candidate. No 1M confirmation and no bounded micro-sweep are authorized because the best candidate reached only `6/14`, failed station and safety gates, had collision and below-bound terminations, and had ICS more than 2x above the `0.005` gate. Continue mechanism diagnosis for station/null-anchor behavior and near-floor clearance/ICS/termination behavior; do not promote, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set.
+R5G mechanism diagnosis produced eval-only artifacts for `r5f_zsign_opp100_reinf050` and `r5f_downatten`. Do not promote, run 1M, warm-start, sweep, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set. R5G dry-run variant design is allowed next, but execution is not authorized until the design is documented and reviewed. The design focus is command-to-motion/null-station mismatch, active-valid anchor loss under drift, and MID360-compatible near-floor/downward safety behavior.

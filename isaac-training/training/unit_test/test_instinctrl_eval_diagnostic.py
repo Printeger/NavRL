@@ -57,6 +57,8 @@ def test_env_exposes_eval_diagnostics_without_actor_input_leakage():
         '"v_cmd_z"',
         '"v_final_b_z"',
         '"observability_scenario_id"',
+        '"ics_downward_active"',
+        '"ics_downward_attenuation_ratio"',
         "drift_b=station_drift_b",
         "scenario_id=scenario_id",
         "def configure_instinctrl_eval_pass(",
@@ -120,14 +122,25 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "eval/handbook.r5e_near_floor_ics_beta_mean",
         "eval/handbook.r5e_near_floor_clearance_p05",
         "eval/handbook.r5e_ics_violation_near_floor_rate",
+        "eval/handbook.r5g_station_null_mismatch_xy_mean",
+        "eval/handbook.r5g_station_null_actual_output_xy_ratio_mean",
+        "eval/handbook.r5g_anchor_{suffix}_when_{condition}",
+        "eval/handbook.r5g_downward_active_rate",
+        "eval/handbook.r5g_downward_attenuation_ratio_mean_when_active",
+        "eval/handbook.r5g_near_floor_rate_before_",
+        "eval/handbook.r5g_near_floor_{suffix}_before_",
         "eval/handbook.observability_is_proxy",
     ]:
         assert key in source
     for key in [
         "compute_vertical_channel_step_metrics(",
         "compute_r5e_mechanism_step_metrics(",
+        "compute_r5g_station_anchor_step_metrics(",
+        "compute_r5g_downward_step_metrics(",
         "vertical_diagnostic_accumulators",
         "r5e_diagnostic_accumulators",
+        "r5g_station_accumulators",
+        "r5g_termination_tracker",
         "v_corr_limit = _governor_v_corr_limit(cfg)",
     ]:
         assert key in source
@@ -141,6 +154,10 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "r5e_null_actual_speed_xy_mean",
         "r5e_command_preservation_pre_ics_ratio",
         "r5e_near_floor_clearance_p05",
+        "r5g_station",
+        "r5g_anchor",
+        "r5g_near_floor",
+        "r5g_downward",
     ]:
         assert key in eval_source
     for key in [

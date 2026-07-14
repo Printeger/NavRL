@@ -235,7 +235,7 @@ def test_downward_attenuator_disabled_preserves_ics_output():
         "active_horizon_margin": 0.0,
         "velocity_limit": 3.0,
     }
-    _, baseline = _attenuator(**params, downward_attenuation_enabled=False)
+    mod, baseline = _attenuator(**params, downward_attenuation_enabled=False)
     _, disabled = _attenuator(
         **params,
         downward_attenuation_enabled=False,
@@ -249,6 +249,7 @@ def test_downward_attenuator_disabled_preserves_ics_output():
     baseline_out = baseline(ranges, masks, weights, rays, command)
     disabled_out = disabled(ranges, masks, weights, rays, command)
 
+    assert set(disabled_out.metrics) == set(mod.ICS_METRIC_KEYS)
     assert torch.allclose(disabled_out.v_final_b, baseline_out.v_final_b)
     for key in baseline_out.metrics:
         assert torch.allclose(disabled_out.metrics[key], baseline_out.metrics[key])
@@ -274,6 +275,17 @@ def test_downward_attenuator_enabled_reduces_only_downward_z_from_mid360_rays():
     assert math.isclose(out.v_final_b[..., 2].item(), expected_z, rel_tol=1e-5)
     assert out.cache["ics_downward_active"].item() == 1.0
     assert out.cache["ics_downward_beta"].item() < 1.0
+    assert out.metrics["ics_downward_active"].item() == 1.0
+    assert out.metrics["ics_downward_has_ray"].item() == 1.0
+    assert out.metrics["ics_downward_beta"].item() == out.cache["ics_downward_beta"].item()
+    assert math.isclose(out.metrics["ics_downward_pre_z"].item(), -1.0, rel_tol=1e-6)
+    assert math.isclose(
+        out.metrics["ics_downward_post_z"].item(),
+        out.v_final_b[..., 2].item(),
+        rel_tol=1e-6,
+    )
+    assert out.metrics["ics_downward_z_delta_abs"].item() > 0.0
+    assert 0.0 < out.metrics["ics_downward_attenuation_ratio"].item() < 1.0
 
     upward = ics(ranges, masks, weights, rays, torch.tensor([[0.4, 0.0, 1.0]]))
     assert torch.allclose(upward.v_final_b, torch.tensor([[0.4, 0.0, 1.0]]))

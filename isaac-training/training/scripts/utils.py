@@ -22,6 +22,12 @@ from omni_drones.utils.torchrl import RenderCallback
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from instinctRL.task_metrics import (
+    TERMINATION_ABOVE_BOUND,
+    TERMINATION_BELOW_BOUND,
+    TERMINATION_COLLISION,
+    TERMINATION_TIMEOUT,
+    compute_r5g_downward_step_metrics,
+    compute_r5g_station_anchor_step_metrics,
     compute_r5e_mechanism_step_metrics,
     compute_vertical_channel_step_metrics,
 )
@@ -515,6 +521,38 @@ def _json_safe_eval_summary(info, trajs, cfg=None):
             ("info", "ics_final_speed"),
             ("next", "info", "ics_final_speed"),
         ],
+        "ics_downward_active": [
+            ("info", "ics_downward_active"),
+            ("next", "info", "ics_downward_active"),
+        ],
+        "ics_downward_has_ray": [
+            ("info", "ics_downward_has_ray"),
+            ("next", "info", "ics_downward_has_ray"),
+        ],
+        "ics_downward_beta": [
+            ("info", "ics_downward_beta"),
+            ("next", "info", "ics_downward_beta"),
+        ],
+        "ics_downward_min_clearance": [
+            ("info", "ics_downward_min_clearance"),
+            ("next", "info", "ics_downward_min_clearance"),
+        ],
+        "ics_downward_pre_z": [
+            ("info", "ics_downward_pre_z"),
+            ("next", "info", "ics_downward_pre_z"),
+        ],
+        "ics_downward_post_z": [
+            ("info", "ics_downward_post_z"),
+            ("next", "info", "ics_downward_post_z"),
+        ],
+        "ics_downward_z_delta_abs": [
+            ("info", "ics_downward_z_delta_abs"),
+            ("next", "info", "ics_downward_z_delta_abs"),
+        ],
+        "ics_downward_attenuation_ratio": [
+            ("info", "ics_downward_attenuation_ratio"),
+            ("next", "info", "ics_downward_attenuation_ratio"),
+        ],
         "null_command_speed": [
             ("info", "null_command_speed"),
             ("next", "info", "null_command_speed"),
@@ -752,6 +790,10 @@ def _make_optional_eval_field_candidates():
             ("next", "info", "station_keeping_drift"),
         ],
         "anchor_active": [("info", "anchor_active"), ("next", "info", "anchor_active")],
+        "anchor_valid_fraction": [
+            ("info", "anchor_valid_fraction"),
+            ("next", "info", "anchor_valid_fraction"),
+        ],
         "anchor_error_mean": [
             ("info", "anchor_error_mean"),
             ("next", "info", "anchor_error_mean"),
@@ -783,6 +825,38 @@ def _make_optional_eval_field_candidates():
         "ics_final_speed": [
             ("info", "ics_final_speed"),
             ("next", "info", "ics_final_speed"),
+        ],
+        "ics_downward_active": [
+            ("info", "ics_downward_active"),
+            ("next", "info", "ics_downward_active"),
+        ],
+        "ics_downward_has_ray": [
+            ("info", "ics_downward_has_ray"),
+            ("next", "info", "ics_downward_has_ray"),
+        ],
+        "ics_downward_beta": [
+            ("info", "ics_downward_beta"),
+            ("next", "info", "ics_downward_beta"),
+        ],
+        "ics_downward_min_clearance": [
+            ("info", "ics_downward_min_clearance"),
+            ("next", "info", "ics_downward_min_clearance"),
+        ],
+        "ics_downward_pre_z": [
+            ("info", "ics_downward_pre_z"),
+            ("next", "info", "ics_downward_pre_z"),
+        ],
+        "ics_downward_post_z": [
+            ("info", "ics_downward_post_z"),
+            ("next", "info", "ics_downward_post_z"),
+        ],
+        "ics_downward_z_delta_abs": [
+            ("info", "ics_downward_z_delta_abs"),
+            ("next", "info", "ics_downward_z_delta_abs"),
+        ],
+        "ics_downward_attenuation_ratio": [
+            ("info", "ics_downward_attenuation_ratio"),
+            ("next", "info", "ics_downward_attenuation_ratio"),
         ],
         "observability_valid_fraction": [
             ("info", "observability_valid_fraction"),
@@ -1073,6 +1147,462 @@ def _add_r5e_handbook_summary(summary, accumulators):
     )
 
 
+_R5G_STATION_FIELDS = (
+    "r5g_station_null_command",
+    "r5g_station_null_actual_speed_xy",
+    "r5g_station_null_output_speed_xy",
+    "r5g_station_null_mismatch_xy",
+    "r5g_station_null_mismatch_z_abs",
+    "r5g_station_null_alignment_xy",
+    "r5g_station_null_alignment_xy_active",
+    "r5g_station_null_actual_output_xy_ratio",
+    "r5g_station_null_output_xy_active",
+    "r5g_anchor_active",
+    "r5g_anchor_station_drift_when_active",
+    "r5g_anchor_error_when_active",
+    "r5g_anchor_loss_when_active",
+    "r5g_anchor_valid",
+    "r5g_anchor_station_drift_when_valid",
+    "r5g_anchor_error_when_valid",
+    "r5g_anchor_loss_when_valid",
+    "r5g_anchor_invalid",
+    "r5g_anchor_station_drift_when_invalid",
+    "r5g_anchor_error_when_invalid",
+    "r5g_anchor_loss_when_invalid",
+    "r5g_anchor_high_loss",
+    "r5g_anchor_station_drift_when_high_loss",
+    "r5g_anchor_error_when_high_loss",
+    "r5g_anchor_loss_when_high_loss",
+    "r5g_anchor_obs_valid",
+    "r5g_anchor_station_drift_when_obs_valid",
+    "r5g_anchor_error_when_obs_valid",
+    "r5g_anchor_loss_when_obs_valid",
+    "r5g_anchor_obs_poor",
+    "r5g_anchor_station_drift_when_obs_poor",
+    "r5g_anchor_error_when_obs_poor",
+    "r5g_anchor_loss_when_obs_poor",
+)
+
+_R5G_DOWNWARD_FIELDS = (
+    "r5g_downward_active",
+    "r5g_downward_has_ray",
+    "r5g_downward_beta_when_active",
+    "r5g_downward_min_clearance_when_active",
+    "r5g_downward_pre_z_when_active",
+    "r5g_downward_post_z_when_active",
+    "r5g_downward_z_delta_abs_when_active",
+    "r5g_downward_attenuation_ratio_when_active",
+)
+
+
+def _make_r5g_station_accumulators():
+    return {field_name: _TensorSummaryAccumulator() for field_name in _R5G_STATION_FIELDS}
+
+
+def _make_r5g_downward_accumulators():
+    return {field_name: _TensorSummaryAccumulator() for field_name in _R5G_DOWNWARD_FIELDS}
+
+
+def _r5g_eval_config(cfg):
+    instinct_cfg = getattr(cfg, "instinctRL", None) if cfg is not None else None
+    reward_cfg = getattr(instinct_cfg, "reward", None)
+    observability_cfg = getattr(instinct_cfg, "observability", None)
+    command_eps = float(getattr(reward_cfg, "command_eps", 1e-3))
+    min_anchor_valid_fraction = float(
+        getattr(reward_cfg, "min_anchor_valid_fraction", 0.1)
+    )
+    anchor_loss_high_threshold = float(
+        getattr(reward_cfg, "null_output_anchor_loss_threshold", 0.05)
+    )
+    observability_min_valid_fraction = float(
+        getattr(observability_cfg, "min_valid_fraction", 0.01)
+    )
+    return (
+        command_eps,
+        min_anchor_valid_fraction,
+        anchor_loss_high_threshold,
+        observability_min_valid_fraction,
+    )
+
+
+def _accumulate_r5g_station_metrics_from_tensordict(
+    accumulators,
+    tensordict,
+    optional_candidates,
+    cfg,
+):
+    v_cmd_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("governor_v_cmd_b", [])
+        + [("info", "v_cmd"), ("next", "info", "v_cmd")],
+    )
+    actual_velocity_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("actual_velocity_b", []),
+    )
+    v_final_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("governor_v_final_b", []),
+    )
+    station_drift = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("station_keeping_drift", []),
+    )
+    if any(value is None for value in (v_cmd_b, actual_velocity_b, v_final_b, station_drift)):
+        return False
+
+    (
+        command_eps,
+        min_anchor_valid_fraction,
+        anchor_loss_high_threshold,
+        observability_min_valid_fraction,
+    ) = _r5g_eval_config(cfg)
+    metrics = compute_r5g_station_anchor_step_metrics(
+        v_cmd_b=v_cmd_b,
+        actual_velocity_b=actual_velocity_b,
+        v_final_b=v_final_b,
+        station_drift=station_drift,
+        anchor_active=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("anchor_active", []),
+        ),
+        anchor_valid_fraction=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("anchor_valid_fraction", []),
+        ),
+        anchor_error_mean=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("anchor_error_mean", []),
+        ),
+        anchor_loss=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("anchor_loss", []),
+        ),
+        observability_valid_fraction=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("observability_valid_fraction", []),
+        ),
+        command_eps=command_eps,
+        min_anchor_valid_fraction=min_anchor_valid_fraction,
+        anchor_loss_high_threshold=anchor_loss_high_threshold,
+        observability_min_valid_fraction=observability_min_valid_fraction,
+    )
+    for field_name, value in metrics.items():
+        accumulators[field_name].add(value)
+    return True
+
+
+def _accumulate_r5g_downward_metrics_from_tensordict(
+    accumulators,
+    tensordict,
+    optional_candidates,
+):
+    active = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("ics_downward_active", []),
+    )
+    if active is None:
+        return False
+    metrics = compute_r5g_downward_step_metrics(
+        downward_active=active,
+        downward_has_ray=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_has_ray", []),
+        ),
+        downward_beta=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_beta", []),
+        ),
+        downward_min_clearance=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_min_clearance", []),
+        ),
+        downward_pre_z=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_pre_z", []),
+        ),
+        downward_post_z=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_post_z", []),
+        ),
+        downward_z_delta_abs=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_z_delta_abs", []),
+        ),
+        downward_attenuation_ratio=_get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_downward_attenuation_ratio", []),
+        ),
+    )
+    for field_name, value in metrics.items():
+        accumulators[field_name].add(value)
+    return True
+
+
+def _add_r5g_diagnostic_summaries(summary, station_accumulators, downward_accumulators):
+    for field_name, accumulator in station_accumulators.items():
+        if accumulator.count > 0:
+            summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+    for field_name, accumulator in downward_accumulators.items():
+        if accumulator.count > 0:
+            summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+
+
+def _add_r5g_handbook_summary(summary, station_accumulators, downward_accumulators):
+    null_count = station_accumulators["r5g_station_null_command"]
+    for numerator_name, denominator_name, handbook_key in (
+        (
+            "r5g_station_null_actual_speed_xy",
+            "r5g_station_null_command",
+            "eval/handbook.r5g_station_null_actual_speed_xy_mean",
+        ),
+        (
+            "r5g_station_null_output_speed_xy",
+            "r5g_station_null_command",
+            "eval/handbook.r5g_station_null_output_speed_xy_mean",
+        ),
+        (
+            "r5g_station_null_mismatch_xy",
+            "r5g_station_null_command",
+            "eval/handbook.r5g_station_null_mismatch_xy_mean",
+        ),
+        (
+            "r5g_station_null_mismatch_z_abs",
+            "r5g_station_null_command",
+            "eval/handbook.r5g_station_null_mismatch_z_abs_mean",
+        ),
+        (
+            "r5g_station_null_alignment_xy",
+            "r5g_station_null_alignment_xy_active",
+            "eval/handbook.r5g_station_null_alignment_xy_mean",
+        ),
+        (
+            "r5g_station_null_actual_output_xy_ratio",
+            "r5g_station_null_output_xy_active",
+            "eval/handbook.r5g_station_null_actual_output_xy_ratio_mean",
+        ),
+    ):
+        value = _masked_sum_mean(
+            station_accumulators[numerator_name],
+            station_accumulators[denominator_name],
+        )
+        if null_count.count > 0:
+            summary[handbook_key] = float(value) if value is not None else None
+
+    for condition in ("active", "valid", "invalid", "high_loss", "obs_valid", "obs_poor"):
+        denominator = station_accumulators[f"r5g_anchor_{condition}"]
+        for field_name, suffix in (
+            ("station_drift", "station_drift_mean"),
+            ("error", "error_mean"),
+            ("loss", "loss_mean"),
+        ):
+            value = _masked_sum_mean(
+                station_accumulators[f"r5g_anchor_{field_name}_when_{condition}"],
+                denominator,
+            )
+            if denominator.count > 0:
+                summary[f"eval/handbook.r5g_anchor_{suffix}_when_{condition}"] = (
+                    float(value) if value is not None else None
+                )
+        rate = denominator.mean()
+        if rate is not None:
+            summary[f"eval/handbook.r5g_anchor_{condition}_rate"] = float(rate)
+
+    active = downward_accumulators["r5g_downward_active"]
+    has_ray = downward_accumulators["r5g_downward_has_ray"]
+    active_rate = active.mean()
+    has_ray_rate = has_ray.mean()
+    if active_rate is not None:
+        summary["eval/handbook.r5g_downward_active_rate"] = float(active_rate)
+    if has_ray_rate is not None:
+        summary["eval/handbook.r5g_downward_has_ray_rate"] = float(has_ray_rate)
+    for numerator_name, handbook_key in (
+        ("r5g_downward_beta_when_active", "eval/handbook.r5g_downward_beta_mean_when_active"),
+        ("r5g_downward_pre_z_when_active", "eval/handbook.r5g_downward_pre_z_mean_when_active"),
+        ("r5g_downward_post_z_when_active", "eval/handbook.r5g_downward_post_z_mean_when_active"),
+        (
+            "r5g_downward_z_delta_abs_when_active",
+            "eval/handbook.r5g_downward_z_delta_abs_mean_when_active",
+        ),
+        (
+            "r5g_downward_attenuation_ratio_when_active",
+            "eval/handbook.r5g_downward_attenuation_ratio_mean_when_active",
+        ),
+    ):
+        value = _masked_sum_mean(downward_accumulators[numerator_name], active)
+        if active.count > 0:
+            summary[handbook_key] = float(value) if value is not None else None
+    clearance_p05 = downward_accumulators[
+        "r5g_downward_min_clearance_when_active"
+    ].quantile(0.05)
+    if active.count > 0:
+        summary["eval/handbook.r5g_downward_min_clearance_p05_when_active"] = (
+            float(clearance_p05) if clearance_p05 is not None else None
+        )
+
+
+_R5G_TERMINATION_LABELS = {
+    TERMINATION_BELOW_BOUND: "below_bound",
+    TERMINATION_ABOVE_BOUND: "above_bound",
+    TERMINATION_COLLISION: "collision",
+    TERMINATION_TIMEOUT: "timeout",
+}
+
+
+class _R5GTerminationWindowTracker:
+    def __init__(self, num_envs: int, *, height_floor: float, window_steps: int = 25):
+        self.window_steps = int(window_steps)
+        self.height_floor = float(height_floor)
+        self._buffers = [[] for _ in range(int(num_envs))]
+        self._accumulators = {
+            label: {
+                field_name: _TensorSummaryAccumulator()
+                for field_name in (
+                    "window_step",
+                    "near_floor",
+                    "v_cmd_z",
+                    "v_gov_z",
+                    "v_final_z",
+                    "ics_beta",
+                    "clearance",
+                )
+            }
+            for label in ("below_bound", "above_bound", "collision", "timeout", "other")
+        }
+
+    def add_step(self, tensordict, optional_candidates, recorded):
+        values = {
+            "height": _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("height_world_z", []),
+            ),
+            "v_cmd_z": _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("governor_v_cmd_b_z", []),
+            ),
+            "v_gov_z": _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("governor_v_gov_b_z", []),
+            ),
+            "v_final_z": _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("governor_v_final_b_z", []),
+            ),
+            "ics_beta": _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("ics_beta", []),
+            ),
+            "clearance": _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("min_clearance", []),
+            ),
+        }
+        if any(value is None for value in values.values()):
+            return False
+        recorded_cpu = recorded.detach().cpu().reshape(-1).bool()
+        flat = {
+            key: value.detach().float().cpu().reshape(-1)
+            for key, value in values.items()
+        }
+        count = min(len(self._buffers), int(flat["height"].numel()))
+        near_floor = (flat["height"] <= self.height_floor + 0.10).float()
+        for env_id in range(count):
+            if recorded_cpu[env_id]:
+                continue
+            self._buffers[env_id].append({
+                "near_floor": float(near_floor[env_id].item()),
+                "v_cmd_z": float(flat["v_cmd_z"][env_id].item()),
+                "v_gov_z": float(flat["v_gov_z"][env_id].item()),
+                "v_final_z": float(flat["v_final_z"][env_id].item()),
+                "ics_beta": float(flat["ics_beta"][env_id].item()),
+                "clearance": float(flat["clearance"][env_id].item()),
+            })
+            if len(self._buffers[env_id]) > self.window_steps:
+                self._buffers[env_id].pop(0)
+        return True
+
+    def flush(self, newly_done, stats):
+        done_cpu = newly_done.detach().cpu().reshape(-1).bool()
+        reason_codes = self._reason_codes(stats)
+        for env_id in done_cpu.nonzero(as_tuple=False).reshape(-1).tolist():
+            label = _R5G_TERMINATION_LABELS.get(int(reason_codes[env_id].item()), "other")
+            target = self._accumulators[label]
+            for record in self._buffers[env_id]:
+                near_floor = record["near_floor"]
+                target["window_step"].add(torch.ones(1))
+                target["near_floor"].add(torch.tensor([near_floor]))
+                for field_name in ("v_cmd_z", "v_gov_z", "v_final_z", "ics_beta", "clearance"):
+                    value = record[field_name] if near_floor >= 0.5 else float("nan")
+                    target[field_name].add(torch.tensor([value]))
+            self._buffers[env_id] = []
+
+    def add_summaries(self, summary):
+        summary["eval/handbook.r5g_near_floor_pre_termination_window_steps"] = self.window_steps
+        for label, accumulators in self._accumulators.items():
+            window_steps = accumulators["window_step"].finite_count
+            if window_steps <= 0:
+                continue
+            near_count = accumulators["near_floor"].sum
+            summary[f"eval/handbook.r5g_near_floor_window_steps_before_{label}"] = int(window_steps)
+            summary[f"eval/handbook.r5g_near_floor_count_before_{label}"] = float(near_count)
+            summary[f"eval/handbook.r5g_near_floor_rate_before_{label}"] = float(
+                near_count / max(window_steps, 1)
+            )
+            for field_name, suffix in (
+                ("v_cmd_z", "v_cmd_z_mean"),
+                ("v_gov_z", "v_gov_z_mean"),
+                ("v_final_z", "v_final_z_mean"),
+                ("ics_beta", "ics_beta_mean"),
+            ):
+                value = accumulators[field_name].mean()
+                summary[f"eval/handbook.r5g_near_floor_{suffix}_before_{label}"] = (
+                    float(value) if value is not None else None
+                )
+            clearance_p05 = accumulators["clearance"].quantile(0.05)
+            summary[f"eval/handbook.r5g_near_floor_clearance_p05_before_{label}"] = (
+                float(clearance_p05) if clearance_p05 is not None else None
+            )
+
+    @staticmethod
+    def _reason_codes(stats):
+        keys = stats.keys() if hasattr(stats, "keys") else stats
+        if "termination_reason_code" in keys:
+            return stats["termination_reason_code"].detach().cpu().reshape(-1).long()
+        below = _R5GTerminationWindowTracker._stat_tensor(
+            stats,
+            "terminated_below_bound",
+            torch.zeros(1),
+        ).bool()
+        above = _R5GTerminationWindowTracker._stat_tensor(
+            stats,
+            "terminated_above_bound",
+            torch.zeros_like(below),
+        ).bool()
+        collision = _R5GTerminationWindowTracker._stat_tensor(
+            stats,
+            "terminated_collision",
+            torch.zeros_like(below),
+        ).bool()
+        timeout = _R5GTerminationWindowTracker._stat_tensor(
+            stats,
+            "truncated_timeout",
+            torch.zeros_like(below),
+        ).bool()
+        codes = torch.zeros_like(below, dtype=torch.long)
+        codes = torch.where(timeout, torch.full_like(codes, TERMINATION_TIMEOUT), codes)
+        codes = torch.where(above, torch.full_like(codes, TERMINATION_ABOVE_BOUND), codes)
+        codes = torch.where(below, torch.full_like(codes, TERMINATION_BELOW_BOUND), codes)
+        codes = torch.where(collision, torch.full_like(codes, TERMINATION_COLLISION), codes)
+        return codes
+
+    @staticmethod
+    def _stat_tensor(stats, name, default):
+        keys = stats.keys() if hasattr(stats, "keys") else stats
+        if name in keys:
+            return stats[name].detach().cpu().reshape(-1)
+        return default.detach().cpu().reshape(-1)
+
+
 @torch.no_grad()
 def _evaluate_streaming(
     env,
@@ -1127,7 +1657,14 @@ def _evaluate_streaming(
         )
     }
     r5e_diagnostic_accumulators = _make_r5e_diagnostic_accumulators()
+    r5g_station_accumulators = _make_r5g_station_accumulators()
+    r5g_downward_accumulators = _make_r5g_downward_accumulators()
     v_corr_limit = _governor_v_corr_limit(cfg)
+    _, r5g_height_floor, _ = _r5e_eval_config(cfg)
+    r5g_termination_tracker = _R5GTerminationWindowTracker(
+        num_envs,
+        height_floor=r5g_height_floor,
+    )
     reward_accumulator = _TensorSummaryAccumulator()
     reward_sum = 0.0
 
@@ -1189,6 +1726,18 @@ def _evaluate_streaming(
                 optional_candidates,
                 cfg,
             )
+            _accumulate_r5g_station_metrics_from_tensordict(
+                r5g_station_accumulators,
+                step_td,
+                optional_candidates,
+                cfg,
+            )
+            _accumulate_r5g_downward_metrics_from_tensordict(
+                r5g_downward_accumulators,
+                step_td,
+                optional_candidates,
+            )
+            r5g_termination_tracker.add_step(step_td, optional_candidates, recorded)
 
             reward = _get_optional_tensor(step_td, [("next", "agents", "reward")])
             if reward is not None:
@@ -1211,6 +1760,7 @@ def _evaluate_streaming(
                     if key not in first_episode_stats:
                         first_episode_stats[key] = torch.zeros_like(value_cpu)
                     first_episode_stats[key][newly_done.cpu()] = value_cpu[newly_done.cpu()]
+                r5g_termination_tracker.flush(newly_done, next_stats)
                 recorded |= newly_done
             if recorded.all():
                 break
@@ -1221,6 +1771,7 @@ def _evaluate_streaming(
             if key not in first_episode_stats:
                 first_episode_stats[key] = torch.zeros_like(value_cpu)
             first_episode_stats[key][missing.cpu()] = value_cpu[missing.cpu()]
+        r5g_termination_tracker.flush(missing, last_stats)
 
     env.enable_render(not cfg.headless)
     env.reset()
@@ -1257,6 +1808,11 @@ def _evaluate_streaming(
         if accumulator.count > 0:
             summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
     _add_r5e_diagnostic_summaries(summary, r5e_diagnostic_accumulators)
+    _add_r5g_diagnostic_summaries(
+        summary,
+        r5g_station_accumulators,
+        r5g_downward_accumulators,
+    )
     actual_error = diagnostic_accumulators["tracking_actual_error_sq"].mean()
     if actual_error is not None:
         summary["eval/handbook.tracking_rmse_actual_body_vs_v_cmd"] = float(
@@ -1417,6 +1973,12 @@ def _evaluate_streaming(
     if violation_rate is not None:
         summary["eval/handbook.ics_violation_rate"] = float(violation_rate)
     _add_r5e_handbook_summary(summary, r5e_diagnostic_accumulators)
+    _add_r5g_handbook_summary(
+        summary,
+        r5g_station_accumulators,
+        r5g_downward_accumulators,
+    )
+    r5g_termination_tracker.add_summaries(summary)
     vertical_corr = vertical_diagnostic_accumulators["vertical_corr_z"].mean()
     if vertical_corr is not None:
         summary["eval/handbook.vertical_v_corr_limit"] = float(v_corr_limit)
