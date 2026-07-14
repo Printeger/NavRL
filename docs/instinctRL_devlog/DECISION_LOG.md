@@ -530,3 +530,11 @@
 **Rationale**: R5E evidence splits the remaining failures into station/null XY drift and anchor error, tracking preservation, and near-floor clearance/ICS safety. Actor-clean hooks may be screened later without changing actor inputs. A root-height floor filter can diagnose controller-boundary safety behavior in simulation/evaluation, but root height is privileged and must never enter the deployed actor observation or deployable-method claim.
 
 **Guardrails**: Actor observation remains exactly `lidar_grid + state_vec`; learned-governor action remains `[alpha, v_corr_x, v_corr_y, v_corr_z]`; hard gates remain unchanged; no training, sweep, 1M, warm-start, or promotion is authorized by this decision.
+
+## D-2026-07-14-002: R5F Default Sweep Excludes Privileged Height Filter
+
+**Decision**: The default R5F dry-run sweep variants exclude `instinctRL.safety_filter.privileged_height_floor_enabled=true`. The privileged root-height filter remains a deferred sim/eval-only diagnostic and is not part of the deployable or Paper-1 actor evidence screen.
+
+**Rationale**: The first R5F screen should compare actor-clean/default-off mechanisms: null-axis split, sign-aware z correction, MID360 range-derived downward attenuation, and reward-only axis preservation. Including a privileged root-height filter in the default set would mix deployable actor-method evidence with a simulator-bound diagnostic.
+
+**Guardrails**: R5F sweep defaults keep TASLAB_UAV + Livox MID360, actor observation `lidar_grid + state_vec`, 4D learned action `[alpha, v_corr_x, v_corr_y, v_corr_z]`, body-frame velocity governance, unchanged hard gates, and dry-run default behavior. A later privileged-height diagnostic, if ever run, must be explicitly labeled sim/eval-only and cannot support deployable-method claims.

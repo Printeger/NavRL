@@ -11,6 +11,7 @@ import torch
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 SCRIPTS = os.path.join(ROOT, "training", "scripts")
 MODULE_PATH = os.path.join(SCRIPTS, "instinctRL", "audit.py")
+SAFETY_FILTER_PATH = os.path.join(SCRIPTS, "instinctRL", "safety_filter.py")
 
 
 def _load_module():
@@ -61,6 +62,8 @@ def test_actor_audit_rejects_velocity_map_slam_and_privileged_state_keys():
         "min_clearance",
         "ics_beta",
         "safety_filter_height_scale",
+        "safety_filter_height_active",
+        "safety_filter_privileged_height",
     ]:
         td = _td({
             "lidar_grid": torch.zeros(2, 12, 360, 59),
@@ -209,3 +212,23 @@ def test_r5b_height_diagnostics_do_not_enter_actor_observation_source():
     ]:
         assert forbidden not in env_actor_block
         assert forbidden not in ppo_actor_block
+
+
+def test_privileged_height_filter_source_is_sim_eval_only_not_actor_method():
+    safety_source = open(SAFETY_FILTER_PATH, encoding="utf-8").read()
+    train_source = open(os.path.join(SCRIPTS, "train.py"), encoding="utf-8").read()
+    eval_source = open(os.path.join(SCRIPTS, "eval.py"), encoding="utf-8").read()
+    ppo_source = open(os.path.join(SCRIPTS, "ppo.py"), encoding="utf-8").read()
+    normalized_safety_source = " ".join(safety_source.split())
+
+    assert "sim/eval-only" in safety_source
+    assert "must never enter actor observation" in normalized_safety_source
+    assert "Paper-1 deployable actor-method claim" in safety_source
+    assert "(sim/eval-only)" in train_source
+    assert "(sim/eval-only)" in eval_source
+
+    actor_block = ppo_source.split("self.actor_feature_extractor = TensorDictSequential", 1)[1]
+    actor_block = actor_block.split("self.critic_feature_extractor = TensorDictSequential", 1)[0]
+    assert "PrivilegedHeightFloorSafetyFilter" not in actor_block
+    assert "root_height_w" not in actor_block
+    assert "safety_filter" not in actor_block

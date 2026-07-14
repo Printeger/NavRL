@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5D 128k execute sweep completed; no candidate passed, no 1M, promotion, warm-start, code change, parameter change, or hard-gate change
+**Status**: R5F dry-run sweep design and validation completed; no `--execute`, 1M, promotion, warm-start, parameter change, or hard-gate change
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -817,6 +817,109 @@ Next-step decision:
 - The next round may design R5F dry-run sweep variants only after validation remains clean.
 - Any privileged height-filter variant must be labeled sim/eval-only and excluded from deployable Paper-1 claims.
 
+## A2-R5F Dry-Run Sweep Plan - 2026-07-14
+
+R5F dry-run scope:
+
+- Design and validate only the R5F default sweep variants.
+- Do not pass `--execute`, do not run 1M, do not warm-start, do not promote, and do not modify `training/scripts/instinctRL/gates.py`.
+- Preserve TASLAB_UAV + Livox MID360, actor observation `lidar_grid + state_vec`, learned-governor action `[alpha, v_corr_x, v_corr_y, v_corr_z]`, and the body-frame velocity-governor method.
+- Exclude `instinctRL.safety_filter.privileged_height_floor_enabled=true` from the default R5F sweep set. The privileged root-height filter remains deferred sim/eval-only diagnostic tooling, not deployable Paper-1 actor evidence.
+
+Evidence entering R5F dry-run design:
+
+- R5D execution failed the 128k screen. Best candidate `r5d_zlimit012` reached only `8/14`, `passed=false`, and `safety_passed=false`, with station null speed, anchor error, preservation, clearance, ICS, and below-bound failures.
+- R5E replay showed station/null XY drift and anchor error remain separate from vertical output bias: actual XY speed `0.1482`, actual |z| `0.0697`, output XY `0.0373`, and output |z| `0.0114`.
+- R5E preservation split showed mostly pre-ICS/governor-side preservation loss: pre-ICS `0.6869`, post-ICS `0.6620`, ICS loss `0.0249`, horizontal `0.7525`, and vertical |z| `0.5581`.
+- R5E near-floor split showed near-floor safety remains unresolved: near-floor rate `0.0724`, `v_cmd_z=-0.1611`, `v_gov_z=-0.0499`, `v_final_z=-0.0328`, beta `0.6486`, clearance p05 `0.4143`, and near-floor ICS violation rate `0.5838`.
+
+Fixed R5D-best base for every R5F variant:
+
+```text
+algo.instinctRL.governor.v_corr_limit=0.35
+instinctRL.reward.preservation_high_weight=2.0
+instinctRL.reward.command_amplification_weight=2.5
+instinctRL.reward.proxy_tracking_weight=0.5
+instinctRL.reward.safety_weight=1.2
+instinctRL.reward.clearance_margin=0.4
+instinctRL.ics.active_horizon_margin=1.0
+instinctRL.ics.clearance_margin=0.15
+instinctRL.reward.null_command_speed_weight=4.0
+instinctRL.reward.height_floor=0.5
+instinctRL.reward.height_floor_weight=8.0
+instinctRL.reward.height_ceiling=4.0
+instinctRL.reward.height_ceiling_weight=8.0
+algo.instinctRL.governor.v_corr_z_limit=0.12
+```
+
+Default sweep tag: `a2r5f_sweep`.
+
+Variants, in order:
+
+| Variant | Additional overrides | Hypothesis |
+|---|---|---|
+| `r5f_null_axis_xy050_z000` | `algo.instinctRL.governor.null_vcorr_axis_split_enabled=true`, `algo.instinctRL.governor.null_vcorr_xy_gate_min=0.50`, `algo.instinctRL.governor.null_vcorr_z_gate_min=0.0` | Increase null XY correction authority while suppressing null z correction. |
+| `r5f_null_axis_xy075_z000` | `algo.instinctRL.governor.null_vcorr_axis_split_enabled=true`, `algo.instinctRL.governor.null_vcorr_xy_gate_min=0.75`, `algo.instinctRL.governor.null_vcorr_z_gate_min=0.0` | More aggressive XY null correction tests station/anchor recovery. |
+| `r5f_zsign_opp050_reinf100` | `algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001`, `algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=0.50`, `algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=1.0` | Reduce z correction that opposes vertical tracking while preserving reinforcing correction. |
+| `r5f_zsign_opp100_reinf050` | `algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true`, `algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001`, `algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=1.0`, `algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=0.50` | Preserve opposing correction but reduce reinforcing z correction that may amplify descent/ascent. |
+| `r5f_downatten` | `instinctRL.ics.downward_attenuation_enabled=true`, `instinctRL.ics.downward_ray_min_z=0.25`, `instinctRL.ics.downward_clearance_margin=0.0` | Test MID360 range-derived downward attenuation for near-floor clearance and ICS violations. |
+| `r5f_preserve_h050_v100` | `instinctRL.reward.horizontal_preservation_weight=0.5`, `instinctRL.reward.vertical_preservation_weight=1.0` | Add reward-only axis preservation pressure without changing actor inputs or command method. |
+
+Validation commands:
+
+```bash
+cd /home/mint/rl_dev/NavRL/isaac-training
+python -m py_compile training/scripts/instinctRL/sweep.py
+python -m pytest -q training/unit_test/test_instinctrl_gates.py
+python -m pytest -q training/unit_test/test_instinctrl_*.py
+python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6
+```
+
+Execute eligibility:
+
+- A clean dry-run only authorizes review of the planned commands.
+- A 128k R5F execute sweep is allowed only in a later turn, still requires explicit `--execute`, and must use the same six default variants unless this ticket is updated first.
+- No 1M confirmation is allowed unless a later executed 128k R5F candidate passes all hard gates.
+
+## R5F Sweep Dry-Run Backfill - 2026-07-14
+
+Changed files:
+
+- `docs/instinctRL_devlog/DECISION_LOG.md`
+- `docs/instinctRL_devlog/tickets/instinctRL-A2-R5_hypothesis_sweep_plan.md`
+- `isaac-training/training/scripts/instinctRL/sweep.py`
+- `isaac-training/training/unit_test/test_instinctrl_gates.py`
+- `isaac-training/training/unit_test/test_instinctrl_actor_audit.py`
+
+Code and test changes:
+
+- Added `default_r5f_mechanism_variants()` and kept `default_safety_preservation_variants()` as a compatibility wrapper.
+- Updated the CLI default tag to `a2r5f_sweep`.
+- Replaced R5D defaults with the six R5F variants above, all sharing the fixed R5D-best base plus `algo.instinctRL.governor.v_corr_z_limit=0.12`.
+- Preserved train/eval override propagation: every variant's full override tuple appears in `train_command`, `eval_command`, and `job.eval_overrides`.
+- Added focused tests for exact R5F order, default tag, common base, per-variant train/eval propagation, absence of privileged height filtering, hard-gate snapshot stability, actor observation contract, forbidden actor keys, and sim/eval-only labeling of the privileged height filter.
+
+Validation results:
+
+- `python -m py_compile training/scripts/instinctRL/sweep.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_gates.py`: passed, `6 passed in 1.10s`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `127 passed, 12 warnings in 2.37s`.
+
+Dry-run JSON summary:
+
+- Command run: `python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6`.
+- Result: passed as dry-run only with `execute=false`, `frames=131072`, `seed=0`, six generated jobs, `checkpoint_path=null`, `gate_report=null`, and `error=null`.
+- Generated artifact paths pointed under `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_185019/`, but no execution artifact is expected because `--execute` was not used.
+- Generated variants, in order: `r5f_null_axis_xy050_z000`, `r5f_null_axis_xy075_z000`, `r5f_zsign_opp050_reinf100`, `r5f_zsign_opp100_reinf050`, `r5f_downatten`, `r5f_preserve_h050_v100`.
+- All run names used the `instinctrl_a2r5f_sweep_*_131072_seed0` prefix.
+- Train and eval commands both included the fixed R5D-best base, `algo.instinctRL.governor.v_corr_z_limit=0.12`, and each variant's R5F-specific overrides.
+- No default variant included `instinctRL.safety_filter.privileged_height_floor_enabled=true`.
+
+Next step:
+
+- R5F 128k execute sweep is allowed only after this dry-run is reviewed and only with explicit `--execute` in a later turn.
+- No 1M, promotion, warm-start, hard-gate change, actor-observation change, platform/sensor change, reward-default change, or body-frame velocity-governor method change is authorized by this dry-run backfill.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -851,4 +954,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-Do not promote any R5D candidate, do not run 1M, do not run another R5D sweep, and do not start R5E dry-run variants. R5D execution failed the screen: best candidate was `r5d_zlimit012` at `8/14` with below-bound, clearance, ICS, preservation, and station/null-anchor failures. The next allowed action is exactly one eval-only R5E mechanism replay of `r5d_zlimit012` using the checkpoint and overrides recorded above.
+R5F default-off readiness is complete and the R5F dry-run sweep design has passed validation. The next allowed action is a controlled R5F 128k execute sweep only after explicit review, still requiring `--execute` in a later turn. Do not run 1M, promote, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set.
