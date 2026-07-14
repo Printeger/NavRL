@@ -1239,3 +1239,123 @@ Do not rely on chat history for experimental state.
 ## Current Next Action
 
 R5G dry-run readiness is complete for review with six default `r5g_*` variants under tag `a2r5g_sweep`. Do not promote, run 1M, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set. The next step may request human approval for a controlled 128k R5G execute sweep, but execute remains unauthorized until explicitly approved later.
+
+## A2-R5G 128k Execute Sweep - 2026-07-14
+
+Execution:
+
+- Command run exactly once: `python training/scripts/instinctRL/sweep.py --execute --frames 131072 --seeds 0 --limit 6`.
+- Summary path: `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json`.
+- Artifact timestamp: `20260714_234801`.
+- Validation: `execute=true`, `frames=131072`, six jobs, every job has `error=null`, non-empty `checkpoint_path`, non-empty `result_path`, and an embedded `gate_report`; no train/eval command contains an `instinctRL.safety_filter.*` override.
+- Generation order remained the R5G dry-run order: `r5g_smooth025`, `r5g_smooth040`, `r5g_anchor_huber050`, `r5g_smooth025_anchor_huber050`, `r5g_downatten_z010`, `r5g_downatten_z005`.
+- The stored summary job order is the post-execute `sweep.py` rank order: `passed`, then `safety_passed`, then `score`.
+- No 1M, warm-start, promotion, code/config tuning, hard-gate change, actor-observation change, platform/sensor change, command-method change, or privileged safety-filter default change was run.
+
+Six-variant result table:
+
+| Rank | Variant | Gates | Score | Passed | Safety passed | Checkpoint | Result |
+|---:|---|---:|---:|---|---|---|---|
+| 1 | `r5g_downatten_z010` | 6/14 | 4.6971 | `false` | `false` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260715_004807-durd58lw/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/a2r5g_sweep_r5g_downatten_z010_131072_seed0_eval.json` |
+| 2 | `r5g_downatten_z005` | 6/14 | 4.6533 | `false` | `false` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260715_005952-j5r0dcp6/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/a2r5g_sweep_r5g_downatten_z005_131072_seed0_eval.json` |
+| 3 | `r5g_smooth040` | 5/14 | 2.9564 | `false` | `false` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260715_000711-zpdlyl15/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/a2r5g_sweep_r5g_smooth040_131072_seed0_eval.json` |
+| 4 | `r5g_anchor_huber050` | 4/14 | 2.1560 | `false` | `false` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260715_002209-ezp1ynnp/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/a2r5g_sweep_r5g_anchor_huber050_131072_seed0_eval.json` |
+| 5 | `r5g_smooth025` | 4/14 | 1.6384 | `false` | `false` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_234806-ns92lyb2/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/a2r5g_sweep_r5g_smooth025_131072_seed0_eval.json` |
+| 6 | `r5g_smooth025_anchor_huber050` | 4/14 | 1.5920 | `false` | `false` | `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260715_003448-zold97jo/files/checkpoint_final.pt` | `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/a2r5g_sweep_r5g_smooth025_anchor_huber050_131072_seed0_eval.json` |
+
+Per-variant gate table (`P` = passed, `F` = failed):
+
+| Gate | `r5g_downatten_z010` | `r5g_downatten_z005` | `r5g_smooth040` | `r5g_anchor_huber050` | `r5g_smooth025` | `r5g_smooth025_anchor_huber050` |
+|---|---:|---:|---:|---:|---:|---:|
+| `station_drift_mean` | F | F | F | F | F | F |
+| `station_drift_p95` | F | F | F | F | F | F |
+| `station_null_speed_mean` | F | F | F | F | F | F |
+| `station_anchor_error_mean` | F | F | F | F | F | F |
+| `tracking_rmse_actual` | P | P | F | P | P | P |
+| `tracking_preservation_ratio` | F | F | F | F | F | F |
+| `tracking_command_amplification_mean` | P | P | P | P | P | P |
+| `tracking_command_amplification_rate` | P | P | P | P | P | P |
+| `safety_collision_rate` | F | F | P | F | F | F |
+| `safety_min_clearance_p05` | P | P | F | F | F | F |
+| `ics_violation_rate` | F | F | F | F | F | F |
+| `termination_collision` | F | F | P | F | F | F |
+| `termination_below_bound` | P | P | F | F | F | F |
+| `termination_above_bound` | P | P | P | P | P | P |
+
+Failed gates:
+
+| Variant | Gate | Key | Value | Min | Max | Reason |
+|---|---|---|---:|---:|---:|---|
+| `r5g_downatten_z010` | `station_drift_mean` | `eval/station/handbook.station_keeping_drift_mean` | 1.5319 | n/a | 1.3000 | above max by 0.2319 |
+| `r5g_downatten_z010` | `station_drift_p95` | `eval/station/handbook.station_keeping_drift_p95` | 2.9870 | n/a | 2.6000 | above max by 0.387048 |
+| `r5g_downatten_z010` | `station_null_speed_mean` | `eval/station/handbook.null_command_speed_mean` | 0.195142 | n/a | 0.08 | above max by 0.115142 |
+| `r5g_downatten_z010` | `station_anchor_error_mean` | `eval/station/handbook.anchor_error_mean` | 3.2438 | n/a | 2.0000 | above max by 1.2438 |
+| `r5g_downatten_z010` | `tracking_preservation_ratio` | `eval/tracking/handbook.command_preservation_ratio` | 0.558618 | 0.75 | 1.0500 | below min by 0.191382 |
+| `r5g_downatten_z010` | `safety_collision_rate` | `eval/handbook.safety_collision_rate` | 0.000063 | n/a | 0 | above max by 6.25e-05 |
+| `r5g_downatten_z010` | `ics_violation_rate` | `eval/handbook.ics_violation_rate` | 0.020906 | n/a | 0.005 | above max by 0.0159063 |
+| `r5g_downatten_z010` | `termination_collision` | `eval/handbook.termination_collision` | 0.03125 | n/a | 0 | above max by 0.03125 |
+| `r5g_downatten_z005` | `station_drift_mean` | `eval/station/handbook.station_keeping_drift_mean` | 1.5706 | n/a | 1.3000 | above max by 0.270574 |
+| `r5g_downatten_z005` | `station_drift_p95` | `eval/station/handbook.station_keeping_drift_p95` | 3.0563 | n/a | 2.6000 | above max by 0.456273 |
+| `r5g_downatten_z005` | `station_null_speed_mean` | `eval/station/handbook.null_command_speed_mean` | 0.199751 | n/a | 0.08 | above max by 0.119751 |
+| `r5g_downatten_z005` | `station_anchor_error_mean` | `eval/station/handbook.anchor_error_mean` | 3.2565 | n/a | 2.0000 | above max by 1.25646 |
+| `r5g_downatten_z005` | `tracking_preservation_ratio` | `eval/tracking/handbook.command_preservation_ratio` | 0.620261 | 0.75 | 1.0500 | below min by 0.129739 |
+| `r5g_downatten_z005` | `safety_collision_rate` | `eval/handbook.safety_collision_rate` | 0.000125 | n/a | 0 | above max by 0.000125 |
+| `r5g_downatten_z005` | `ics_violation_rate` | `eval/handbook.ics_violation_rate` | 0.027688 | n/a | 0.005 | above max by 0.0226875 |
+| `r5g_downatten_z005` | `termination_collision` | `eval/handbook.termination_collision` | 0.0625 | n/a | 0 | above max by 0.0625 |
+| `r5g_smooth040` | `station_drift_mean` | `eval/station/handbook.station_keeping_drift_mean` | 1.4883 | n/a | 1.3000 | above max by 0.188278 |
+| `r5g_smooth040` | `station_drift_p95` | `eval/station/handbook.station_keeping_drift_p95` | 2.8967 | n/a | 2.6000 | above max by 0.296748 |
+| `r5g_smooth040` | `station_null_speed_mean` | `eval/station/handbook.null_command_speed_mean` | 0.189257 | n/a | 0.08 | above max by 0.109257 |
+| `r5g_smooth040` | `station_anchor_error_mean` | `eval/station/handbook.anchor_error_mean` | 3.2372 | n/a | 2.0000 | above max by 1.23724 |
+| `r5g_smooth040` | `tracking_rmse_actual` | `eval/tracking/handbook.tracking_rmse_actual_body_vs_v_cmd` | 0.453415 | n/a | 0.45 | above max by 0.00341462 |
+| `r5g_smooth040` | `tracking_preservation_ratio` | `eval/tracking/handbook.command_preservation_ratio` | 0.420378 | 0.75 | 1.0500 | below min by 0.329622 |
+| `r5g_smooth040` | `safety_min_clearance_p05` | `eval/handbook.safety_min_clearance_p05` | 0.660399 | 1.0000 | n/a | below min by 0.339601 |
+| `r5g_smooth040` | `ics_violation_rate` | `eval/handbook.ics_violation_rate` | 0.076656 | n/a | 0.005 | above max by 0.0716562 |
+| `r5g_smooth040` | `termination_below_bound` | `eval/handbook.termination_below_bound` | 0.3125 | n/a | 0 | above max by 0.3125 |
+| `r5g_anchor_huber050` | `station_drift_mean` | `eval/station/handbook.station_keeping_drift_mean` | 1.5476 | n/a | 1.3000 | above max by 0.247587 |
+| `r5g_anchor_huber050` | `station_drift_p95` | `eval/station/handbook.station_keeping_drift_p95` | 3.0087 | n/a | 2.6000 | above max by 0.408676 |
+| `r5g_anchor_huber050` | `station_null_speed_mean` | `eval/station/handbook.null_command_speed_mean` | 0.196576 | n/a | 0.08 | above max by 0.116576 |
+| `r5g_anchor_huber050` | `station_anchor_error_mean` | `eval/station/handbook.anchor_error_mean` | 3.2779 | n/a | 2.0000 | above max by 1.27789 |
+| `r5g_anchor_huber050` | `tracking_preservation_ratio` | `eval/tracking/handbook.command_preservation_ratio` | 0.652314 | 0.75 | 1.0500 | below min by 0.0976861 |
+| `r5g_anchor_huber050` | `safety_collision_rate` | `eval/handbook.safety_collision_rate` | 0.000063 | n/a | 0 | above max by 6.25e-05 |
+| `r5g_anchor_huber050` | `safety_min_clearance_p05` | `eval/handbook.safety_min_clearance_p05` | 0.748736 | 1.0000 | n/a | below min by 0.251264 |
+| `r5g_anchor_huber050` | `ics_violation_rate` | `eval/handbook.ics_violation_rate` | 0.053062 | n/a | 0.005 | above max by 0.0480625 |
+| `r5g_anchor_huber050` | `termination_collision` | `eval/handbook.termination_collision` | 0.03125 | n/a | 0 | above max by 0.03125 |
+| `r5g_anchor_huber050` | `termination_below_bound` | `eval/handbook.termination_below_bound` | 0.3125 | n/a | 0 | above max by 0.3125 |
+| `r5g_smooth025` | `station_drift_mean` | `eval/station/handbook.station_keeping_drift_mean` | 1.6182 | n/a | 1.3000 | above max by 0.318217 |
+| `r5g_smooth025` | `station_drift_p95` | `eval/station/handbook.station_keeping_drift_p95` | 3.1496 | n/a | 2.6000 | above max by 0.549575 |
+| `r5g_smooth025` | `station_null_speed_mean` | `eval/station/handbook.null_command_speed_mean` | 0.205828 | n/a | 0.08 | above max by 0.125828 |
+| `r5g_smooth025` | `station_anchor_error_mean` | `eval/station/handbook.anchor_error_mean` | 3.3028 | n/a | 2.0000 | above max by 1.30281 |
+| `r5g_smooth025` | `tracking_preservation_ratio` | `eval/tracking/handbook.command_preservation_ratio` | 0.552503 | 0.75 | 1.0500 | below min by 0.197497 |
+| `r5g_smooth025` | `safety_collision_rate` | `eval/handbook.safety_collision_rate` | 0.00025 | n/a | 0 | above max by 0.00025 |
+| `r5g_smooth025` | `safety_min_clearance_p05` | `eval/handbook.safety_min_clearance_p05` | 0.586708 | 1.0000 | n/a | below min by 0.413292 |
+| `r5g_smooth025` | `ics_violation_rate` | `eval/handbook.ics_violation_rate` | 0.084687 | n/a | 0.005 | above max by 0.0796875 |
+| `r5g_smooth025` | `termination_collision` | `eval/handbook.termination_collision` | 0.125 | n/a | 0 | above max by 0.125 |
+| `r5g_smooth025` | `termination_below_bound` | `eval/handbook.termination_below_bound` | 0.3125 | n/a | 0 | above max by 0.3125 |
+| `r5g_smooth025_anchor_huber050` | `station_drift_mean` | `eval/station/handbook.station_keeping_drift_mean` | 1.6354 | n/a | 1.3000 | above max by 0.335378 |
+| `r5g_smooth025_anchor_huber050` | `station_drift_p95` | `eval/station/handbook.station_keeping_drift_p95` | 3.2091 | n/a | 2.6000 | above max by 0.60911 |
+| `r5g_smooth025_anchor_huber050` | `station_null_speed_mean` | `eval/station/handbook.null_command_speed_mean` | 0.210073 | n/a | 0.08 | above max by 0.130073 |
+| `r5g_smooth025_anchor_huber050` | `station_anchor_error_mean` | `eval/station/handbook.anchor_error_mean` | 3.3282 | n/a | 2.0000 | above max by 1.32815 |
+| `r5g_smooth025_anchor_huber050` | `tracking_preservation_ratio` | `eval/tracking/handbook.command_preservation_ratio` | 0.630095 | 0.75 | 1.0500 | below min by 0.119905 |
+| `r5g_smooth025_anchor_huber050` | `safety_collision_rate` | `eval/handbook.safety_collision_rate` | 0.000188 | n/a | 0 | above max by 0.0001875 |
+| `r5g_smooth025_anchor_huber050` | `safety_min_clearance_p05` | `eval/handbook.safety_min_clearance_p05` | 0.56949 | 1.0000 | n/a | below min by 0.43051 |
+| `r5g_smooth025_anchor_huber050` | `ics_violation_rate` | `eval/handbook.ics_violation_rate` | 0.107219 | n/a | 0.005 | above max by 0.102219 |
+| `r5g_smooth025_anchor_huber050` | `termination_collision` | `eval/handbook.termination_collision` | 0.09375 | n/a | 0 | above max by 0.09375 |
+| `r5g_smooth025_anchor_huber050` | `termination_below_bound` | `eval/handbook.termination_below_bound` | 0.375 | n/a | 0 | above max by 0.375 |
+
+Key diagnostics:
+
+| Variant | Drift mean | Drift p95 | Null speed | Anchor err | Preserve | Amp mean | Amp rate | Collision rate | Clearance p05 | ICS | Term collision | Term below | Term above | Down has-ray | Down active |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 1.5319 | 2.9870 | 0.195142 | 3.2438 | 0.558618 | 0.009351 | 0.011219 | 0.000063 | 1.0047 | 0.020906 | 0.03125 | 0 | 0 | 1.0000 | 0.655469 |
+| `r5g_downatten_z005` | 1.5706 | 3.0563 | 0.199751 | 3.2565 | 0.620261 | 0.012644 | 0.019844 | 0.000125 | 1.1229 | 0.027688 | 0.0625 | 0 | 0 | 1.0000 | 0.651531 |
+| `r5g_smooth040` | 1.4883 | 2.8967 | 0.189257 | 3.2372 | 0.420378 | 0.005167 | 0.011469 | 0 | 0.660399 | 0.076656 | 0 | 0.3125 | 0 | 0 | 0 |
+| `r5g_anchor_huber050` | 1.5476 | 3.0087 | 0.196576 | 3.2779 | 0.652314 | 0.020452 | 0.034031 | 0.000063 | 0.748736 | 0.053062 | 0.03125 | 0.3125 | 0 | 0 | 0 |
+| `r5g_smooth025` | 1.6182 | 3.1496 | 0.205828 | 3.3028 | 0.552503 | 0.0066 | 0.013187 | 0.00025 | 0.586708 | 0.084687 | 0.125 | 0.3125 | 0 | 0 | 0 |
+| `r5g_smooth025_anchor_huber050` | 1.6354 | 3.2091 | 0.210073 | 3.3282 | 0.630095 | 0.015375 | 0.026187 | 0.000188 | 0.56949 | 0.107219 | 0.09375 | 0.375 | 0 | 0 | 0 |
+
+Best candidate and decision:
+
+- Best candidate by `sweep.py` rank logic: `r5g_downatten_z010` with 6/14 gates, score 4.6971, `passed=false`, `safety_passed=false`.
+- Failed gates for best: `station_drift_mean`=1.5319 (above max by 0.2319), `station_drift_p95`=2.9870 (above max by 0.387048), `station_null_speed_mean`=0.195142 (above max by 0.115142), `station_anchor_error_mean`=3.2438 (above max by 1.2438), `tracking_preservation_ratio`=0.558618 (below min by 0.191382), `safety_collision_rate`=0.000063 (above max by 6.25e-05), `ics_violation_rate`=0.020906 (above max by 0.0159063), `termination_collision`=0.03125 (above max by 0.03125).
+- Decision rule hit: best is below 10/14, `safety_passed=false`, collision termination is 0.03125, and `ics_violation_rate` is 0.020906 (> 0.01).
+- Final decision: stop sweeps, do not run 1M, forbid R5H micro-sweep, and route to mechanism diagnosis.

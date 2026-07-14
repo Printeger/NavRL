@@ -562,3 +562,11 @@
 **Evidence**: The default sweep tag is now `a2r5g_sweep`, and the default variants are exactly `r5g_smooth025`, `r5g_smooth040`, `r5g_anchor_huber050`, `r5g_smooth025_anchor_huber050`, `r5g_downatten_z010`, and `r5g_downatten_z005`. Dry-run validation emitted six `r5g_*` jobs with `execute=false`, `frames=131072`, `checkpoint_path=null`, `gate_report=null`, `error=null`, short diagnostic eval, and `wandb.name=instinctrl_a2r5g_sweep_*`.
 
 **Guardrails**: R5G defaults keep TASLAB_UAV + Livox MID360, actor observation exactly `lidar_grid + state_vec`, body-frame learned velocity-governor commands, unchanged hard gates, and no `instinctRL.safety_filter.*` overrides. A later 128k execute sweep requires explicit human approval and an explicit `--execute` command in a later turn.
+
+## D-2026-07-14-006: R5G 128k Execute Sweep Stops Further Sweeps
+
+**Decision**: R5G 128k execution produced no promotable candidate; no 1M confirmation is authorized, no R5H micro-sweep is authorized, and the next allowed action is mechanism diagnosis.
+
+**Evidence**: The controlled execution artifact `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json` contains six completed jobs with embedded `gate_report` results and no `instinctRL.safety_filter.*` train/eval overrides. No job has `passed=true` or `14/14`. The best ranked job by `sweep.py` ordering is `r5g_downatten_z010` with `6/14`, score `4.6971`, `passed=false`, and `safety_passed=false`. It fails station drift mean/p95, null speed, anchor error, tracking preservation, safety collision rate, ICS, and collision termination. Its `ics_violation_rate=0.02090625` is above the `0.01` stop threshold, and `termination_collision=0.03125`.
+
+**Consequence**: Do not promote by score alone, do not run 1M, and do not run an R5H micro-sweep. Stop sweep escalation and route to mechanism diagnosis focused on station/null command-to-motion mismatch, anchor loss under drift, and safety/ICS collision mechanisms under actor-clean TASLAB_UAV + Livox MID360 constraints.
