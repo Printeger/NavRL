@@ -11,7 +11,7 @@ if SCRIPTS not in sys.path:
 from instinctRL.gates import DEFAULT_GATE_SPECS, evaluate_gates  # noqa: E402
 from instinctRL.sweep import (  # noqa: E402
     build_jobs,
-    default_r5f_mechanism_variants,
+    default_r5g_dry_run_variants,
     default_safety_preservation_variants,
 )
 
@@ -255,28 +255,84 @@ def _last_override(command, key):
     return values[-1]
 
 
-def test_sweep_dry_run_jobs_include_a2r5f_mechanism_overrides():
+def test_sweep_dry_run_jobs_include_a2r5g_mechanism_overrides():
     variants = default_safety_preservation_variants()
-    assert variants == default_r5f_mechanism_variants()
+    assert variants == default_r5g_dry_run_variants()
     jobs = build_jobs(
         python_exe="python",
         variants=variants,
         seeds=[0],
         frames=131072,
         artifacts_dir=Path("/tmp/instinctrl_sweep"),
-        tag="a2r5f_sweep",
+        tag="a2r5g_sweep",
     )
 
-    expected_names = [
-        "r5f_null_axis_xy050_z000",
-        "r5f_null_axis_xy075_z000",
-        "r5f_zsign_opp050_reinf100",
-        "r5f_zsign_opp100_reinf050",
-        "r5f_downatten",
-        "r5f_preserve_h050_v100",
+    base_overrides = (
+        "algo.instinctRL.governor.v_corr_limit=0.35",
+        "instinctRL.reward.preservation_high_weight=2.0",
+        "instinctRL.reward.command_amplification_weight=2.5",
+        "instinctRL.reward.proxy_tracking_weight=0.5",
+        "instinctRL.reward.safety_weight=1.2",
+        "instinctRL.reward.clearance_margin=0.4",
+        "instinctRL.ics.active_horizon_margin=1.0",
+        "instinctRL.ics.clearance_margin=0.15",
+        "instinctRL.reward.null_command_speed_weight=4.0",
+        "instinctRL.reward.height_floor=0.5",
+        "instinctRL.reward.height_floor_weight=8.0",
+        "instinctRL.reward.height_ceiling=4.0",
+        "instinctRL.reward.height_ceiling_weight=8.0",
+        "algo.instinctRL.governor.v_corr_z_limit=0.12",
+        "algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true",
+        "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
+        "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=1.0",
+        "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=0.50",
+    )
+    expected_variant_overrides = [
+        (
+            "r5g_smooth025",
+            ("algo.instinctRL.governor.smoothing_tau=0.25",),
+        ),
+        (
+            "r5g_smooth040",
+            ("algo.instinctRL.governor.smoothing_tau=0.40",),
+        ),
+        (
+            "r5g_anchor_huber050",
+            ("instinctRL.anchor.huber_delta=0.50",),
+        ),
+        (
+            "r5g_smooth025_anchor_huber050",
+            (
+                "algo.instinctRL.governor.smoothing_tau=0.25",
+                "instinctRL.anchor.huber_delta=0.50",
+            ),
+        ),
+        (
+            "r5g_downatten_z010",
+            (
+                "instinctRL.ics.downward_attenuation_enabled=true",
+                "instinctRL.ics.downward_ray_min_z=0.10",
+                "instinctRL.ics.downward_clearance_margin=0.0",
+            ),
+        ),
+        (
+            "r5g_downatten_z005",
+            (
+                "instinctRL.ics.downward_attenuation_enabled=true",
+                "instinctRL.ics.downward_ray_min_z=0.05",
+                "instinctRL.ics.downward_clearance_margin=0.0",
+            ),
+        ),
     ]
+    expected_names = [name for name, _ in expected_variant_overrides]
 
     assert [variant.name for variant in variants] == expected_names
+    assert [
+        (variant.name, variant.overrides) for variant in variants
+    ] == [
+        (name, base_overrides + overrides)
+        for name, overrides in expected_variant_overrides
+    ]
     assert len(jobs) == len(expected_names)
     command_text = " ".join(jobs[0].train_command)
     assert "algo.instinctRL.governor.null_vcorr_gate_enabled=true" in command_text
@@ -298,65 +354,24 @@ def test_sweep_dry_run_jobs_include_a2r5f_mechanism_overrides():
     assert "instinctRL.reward.height_ceiling=4.0" in command_text
     assert "instinctRL.reward.height_ceiling_weight=8.0" in command_text
     assert "algo.instinctRL.governor.v_corr_z_limit=0.12" in command_text
+    assert "algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true" in command_text
+    assert "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001" in command_text
+    assert "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=1.0" in command_text
+    assert "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=0.50" in command_text
     assert "instinctRL.eval.suite=short_diagnostic" in " ".join(jobs[0].eval_command)
 
-    base_overrides = {
-        "algo.instinctRL.governor.v_corr_limit": "0.35",
-        "instinctRL.reward.preservation_high_weight": "2.0",
-        "instinctRL.reward.command_amplification_weight": "2.5",
-        "instinctRL.reward.proxy_tracking_weight": "0.5",
-        "instinctRL.reward.safety_weight": "1.2",
-        "instinctRL.reward.clearance_margin": "0.4",
-        "instinctRL.ics.active_horizon_margin": "1.0",
-        "instinctRL.ics.clearance_margin": "0.15",
-        "instinctRL.reward.null_command_speed_weight": "4.0",
-        "instinctRL.reward.height_floor": "0.5",
-        "instinctRL.reward.height_floor_weight": "8.0",
-        "instinctRL.reward.height_ceiling": "4.0",
-        "instinctRL.reward.height_ceiling_weight": "8.0",
-        "algo.instinctRL.governor.v_corr_z_limit": "0.12",
-    }
-    expected_variant_overrides = {
-        "r5f_null_axis_xy050_z000": (
-            "algo.instinctRL.governor.null_vcorr_axis_split_enabled=true",
-            "algo.instinctRL.governor.null_vcorr_xy_gate_min=0.50",
-            "algo.instinctRL.governor.null_vcorr_z_gate_min=0.0",
-        ),
-        "r5f_null_axis_xy075_z000": (
-            "algo.instinctRL.governor.null_vcorr_axis_split_enabled=true",
-            "algo.instinctRL.governor.null_vcorr_xy_gate_min=0.75",
-            "algo.instinctRL.governor.null_vcorr_z_gate_min=0.0",
-        ),
-        "r5f_zsign_opp050_reinf100": (
-            "algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true",
-            "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
-            "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=0.50",
-            "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=1.0",
-        ),
-        "r5f_zsign_opp100_reinf050": (
-            "algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true",
-            "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
-            "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=1.0",
-            "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=0.50",
-        ),
-        "r5f_downatten": (
-            "instinctRL.ics.downward_attenuation_enabled=true",
-            "instinctRL.ics.downward_ray_min_z=0.25",
-            "instinctRL.ics.downward_clearance_margin=0.0",
-        ),
-        "r5f_preserve_h050_v100": (
-            "instinctRL.reward.horizontal_preservation_weight=0.5",
-            "instinctRL.reward.vertical_preservation_weight=1.0",
-        ),
-    }
+    base_override_pairs = dict(
+        override.split("=", 1) for override in base_overrides
+    )
     jobs_by_variant = {job.variant: job for job in jobs}
-    for variant_name, expected_overrides in expected_variant_overrides.items():
+    for variant_name, expected_overrides in expected_variant_overrides:
         job = jobs_by_variant[variant_name]
         assert job.eval_overrides == variants[expected_names.index(variant_name)].overrides
         assert job.eval_overrides[-len(expected_overrides):] == expected_overrides
         for command in (job.train_command, job.eval_command):
-            for key, expected_value in base_overrides.items():
+            for key, expected_value in base_override_pairs.items():
                 assert _last_override(command, key) == expected_value
+                assert f"{key}={expected_value}" in command
             for override in expected_overrides:
                 key, expected_value = override.split("=", 1)
                 assert _last_override(command, key) == expected_value
@@ -364,6 +379,10 @@ def test_sweep_dry_run_jobs_include_a2r5f_mechanism_overrides():
 
     for job in jobs:
         command = job.train_command + job.eval_command
+        assert job.variant.startswith("r5g_")
+        assert job.checkpoint_path is None
+        assert job.gate_report is None
+        assert job.error is None
         assert "instinctRL.reward.anchor_weight=5.0" not in command
         assert "instinctRL.reward.safety_weight=1.5" not in command
         assert "instinctRL.reward.clearance_margin=0.5" not in command
@@ -373,8 +392,17 @@ def test_sweep_dry_run_jobs_include_a2r5f_mechanism_overrides():
         assert "instinctRL.reward.height_floor_weight=12.0" not in command
         assert "algo.instinctRL.governor.v_corr_limit=0.30" not in command
         assert "algo.instinctRL.governor.v_corr_z_limit=0.20" not in command
+        assert "algo.instinctRL.governor.null_vcorr_axis_split_enabled=true" not in command
+        assert "algo.instinctRL.governor.null_vcorr_xy_gate_min=0.50" not in command
+        assert "algo.instinctRL.governor.null_vcorr_xy_gate_min=0.75" not in command
+        assert "algo.instinctRL.governor.null_vcorr_z_gate_min=0.0" not in command
         assert "algo.instinctRL.governor.tracking_vcorr_z_gain=0.0" not in command
         assert "algo.instinctRL.governor.tracking_vcorr_z_gain=0.50" not in command
+        assert "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=0.50" not in command
+        assert "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=1.0" not in command
+        assert "instinctRL.reward.horizontal_preservation_weight=0.5" not in command
+        assert "instinctRL.reward.vertical_preservation_weight=1.0" not in command
+        assert "instinctRL.ics.downward_ray_min_z=0.25" not in command
         assert "instinctRL.safety_filter.privileged_height_floor_enabled=true" not in command
         assert not any("height_clamp" in arg for arg in command)
         assert not any("height_safety_clamp" in arg for arg in command)
@@ -383,10 +411,11 @@ def test_sweep_dry_run_jobs_include_a2r5f_mechanism_overrides():
             for arg in command
         )
         assert any(
-            arg.startswith("wandb.name=instinctrl_a2r5f_sweep_")
+            arg.startswith("wandb.name=instinctrl_a2r5g_sweep_")
             for arg in job.train_command
         )
 
     sweep_source = open(SWEEP_PATH, encoding="utf-8").read()
-    assert 'parser.add_argument("--tag", default="a2r5f_sweep")' in sweep_source
+    assert 'parser.add_argument("--tag", default="a2r5g_sweep")' in sweep_source
+    assert "a2r5f_sweep" not in sweep_source
     assert "a2r5d_sweep" not in sweep_source

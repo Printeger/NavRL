@@ -1128,6 +1128,82 @@ R5G conclusion:
 - The next design should target only documented mechanisms: command-to-motion/null-station mismatch, active-valid anchor loss under drift, and MID360-compatible near-floor/downward safety diagnostics.
 - If those mechanisms cannot be made actor-clean under TASLAB_UAV + Livox MID360 with body-frame velocity-governor commands, stop and re-review task/environment/handbook assumptions before any more sweep design.
 
+## A2-R5G Dry-Run Variant Design - 2026-07-14
+
+R5G dry-run scope:
+
+- This round implements dry-run readiness only: docs, default sweep variants, unit tests, and dry-run validation.
+- Do not pass `--execute`, do not run 1M, do not warm-start any checkpoint, and do not promote any candidate.
+- Keep hard gates unchanged, keep TASLAB_UAV + Livox MID360, keep actor observation exactly `lidar_grid + state_vec`, keep the body-frame velocity-governor method, and exclude privileged height safety filtering from defaults.
+
+Shared R5G base for every variant, derived from the best R5F candidate:
+
+```text
+algo.instinctRL.governor.v_corr_limit=0.35
+instinctRL.reward.preservation_high_weight=2.0
+instinctRL.reward.command_amplification_weight=2.5
+instinctRL.reward.proxy_tracking_weight=0.5
+instinctRL.reward.safety_weight=1.2
+instinctRL.reward.clearance_margin=0.4
+instinctRL.ics.active_horizon_margin=1.0
+instinctRL.ics.clearance_margin=0.15
+instinctRL.reward.null_command_speed_weight=4.0
+instinctRL.reward.height_floor=0.5
+instinctRL.reward.height_floor_weight=8.0
+instinctRL.reward.height_ceiling=4.0
+instinctRL.reward.height_ceiling_weight=8.0
+algo.instinctRL.governor.v_corr_z_limit=0.12
+algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true
+algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001
+algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=1.0
+algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=0.50
+```
+
+Default sweep tag: `a2r5g_sweep`.
+
+R5G variants, in order:
+
+| Variant | Additional overrides | Hypothesis |
+|---|---|---|
+| `r5g_smooth025` | `algo.instinctRL.governor.smoothing_tau=0.25` | Command-to-motion/null-station mismatch may come from command/controller lag or sign chatter; mild actor-clean command smoothing should reduce actual/output mismatch. |
+| `r5g_smooth040` | `algo.instinctRL.governor.smoothing_tau=0.40` | Dose test for the same command-to-motion hypothesis without changing observation or method. |
+| `r5g_anchor_huber050` | `instinctRL.anchor.huber_delta=0.50` | Active-valid anchor loss under drift may be under-sensitive to large MID360 residuals; increase Huber slope without repeating `anchor_weight=5.0`. |
+| `r5g_smooth025_anchor_huber050` | `algo.instinctRL.governor.smoothing_tau=0.25`, `instinctRL.anchor.huber_delta=0.50` | Combined station mechanism: smoother issued commands plus stronger active-valid anchor-loss sensitivity. |
+| `r5g_downatten_z010` | `instinctRL.ics.downward_attenuation_enabled=true`, `instinctRL.ics.downward_ray_min_z=0.10`, `instinctRL.ics.downward_clearance_margin=0.0` | MID360 lower FOV is shallow; `0.25` never triggered, while `0.10` should catch physically downward lower beams. |
+| `r5g_downatten_z005` | `instinctRL.ics.downward_attenuation_enabled=true`, `instinctRL.ics.downward_ray_min_z=0.05`, `instinctRL.ics.downward_clearance_margin=0.0` | More permissive but still nonzero MID360-compatible downward eligibility; do not use `0.0`. |
+
+Excluded from R5G defaults:
+
+- No null-axis XY variants.
+- No `tracking_vcorr_z_gain=0` or `tracking_vcorr_z_gain=0.50`.
+- No `v_corr_z_limit=0.20`.
+- No axis-preservation reward-only variant.
+- No `downward_ray_min_z=0.25`.
+- No `anchor_weight=5.0`.
+- No `instinctRL.safety_filter.*` override and no privileged height filter.
+
+Implementation notes:
+
+- Replaced `training/scripts/instinctRL/sweep.py` defaults with `default_r5g_dry_run_variants()` and kept `default_safety_preservation_variants()` as the sweep entry point.
+- Updated the CLI default tag to `a2r5g_sweep`.
+- Kept `variant.overrides` propagated into both train and eval commands.
+- Kept `instinctRL.eval.suite=short_diagnostic`.
+- Extended gate and actor-audit tests for exact R5G order, full base propagation, train/eval override propagation, dry-run run-name prefix, absence of safety-filter overrides, unchanged hard-gate snapshot, and forbidden R5G/height/downward/safety-filter actor-observation diagnostics.
+
+Validation:
+
+- `python -m py_compile training/scripts/instinctRL/sweep.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_gates.py training/unit_test/test_instinctrl_actor_audit.py`: passed, `15 passed`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `129 passed, 12 warnings`.
+- `python training/scripts/instinctRL/sweep.py --frames 131072 --seeds 0 --limit 6`: passed as dry-run only.
+- Dry-run stdout validation: `execute=false`, `frames=131072`, six jobs, only the six `r5g_*` variants above, `checkpoint_path=null`, `gate_report=null`, `error=null`, short diagnostic eval, no `instinctRL.safety_filter.*` override, and `wandb.name=instinctrl_a2r5g_sweep_*`.
+
+Decision:
+
+- R5G dry-run readiness is complete for review.
+- This dry-run readiness does not authorize `--execute`, 1M confirmation, warm-start, promotion, hard-gate change, actor-observation change, platform/sensor change, reward-default change, body-frame method change, or privileged height-filter default use.
+- The next step may request human approval for a controlled 128k R5G execute sweep, but execute remains unauthorized until explicitly approved later.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -1162,4 +1238,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-R5G mechanism diagnosis produced eval-only artifacts for `r5f_zsign_opp100_reinf050` and `r5f_downatten`. Do not promote, run 1M, warm-start, sweep, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set. R5G dry-run variant design is allowed next, but execution is not authorized until the design is documented and reviewed. The design focus is command-to-motion/null-station mismatch, active-valid anchor loss under drift, and MID360-compatible near-floor/downward safety behavior.
+R5G dry-run readiness is complete for review with six default `r5g_*` variants under tag `a2r5g_sweep`. Do not promote, run 1M, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set. The next step may request human approval for a controlled 128k R5G execute sweep, but execute remains unauthorized until explicitly approved later.

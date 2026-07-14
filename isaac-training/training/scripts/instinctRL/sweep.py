@@ -53,8 +53,8 @@ class SweepJob:
         return data
 
 
-def default_r5f_mechanism_variants() -> tuple[SweepVariant, ...]:
-    r5f_base = (
+def default_r5g_dry_run_variants() -> tuple[SweepVariant, ...]:
+    r5g_base = (
         "algo.instinctRL.governor.v_corr_limit=0.35",
         "instinctRL.reward.preservation_high_weight=2.0",
         "instinctRL.reward.command_amplification_weight=2.5",
@@ -69,68 +69,55 @@ def default_r5f_mechanism_variants() -> tuple[SweepVariant, ...]:
         "instinctRL.reward.height_ceiling=4.0",
         "instinctRL.reward.height_ceiling_weight=8.0",
         "algo.instinctRL.governor.v_corr_z_limit=0.12",
-    )
-    null_axis_xy050_z000 = (
-        "algo.instinctRL.governor.null_vcorr_axis_split_enabled=true",
-        "algo.instinctRL.governor.null_vcorr_xy_gate_min=0.50",
-        "algo.instinctRL.governor.null_vcorr_z_gate_min=0.0",
-    )
-    null_axis_xy075_z000 = (
-        "algo.instinctRL.governor.null_vcorr_axis_split_enabled=true",
-        "algo.instinctRL.governor.null_vcorr_xy_gate_min=0.75",
-        "algo.instinctRL.governor.null_vcorr_z_gate_min=0.0",
-    )
-    zsign_opp050_reinf100 = (
-        "algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true",
-        "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
-        "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=0.50",
-        "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=1.0",
-    )
-    zsign_opp100_reinf050 = (
         "algo.instinctRL.governor.tracking_vcorr_z_sign_gate_enabled=true",
         "algo.instinctRL.governor.tracking_vcorr_z_gate_eps=0.001",
         "algo.instinctRL.governor.tracking_vcorr_z_opposing_gain=1.0",
         "algo.instinctRL.governor.tracking_vcorr_z_reinforcing_gain=0.50",
     )
-    downward_attenuation = (
-        "instinctRL.ics.downward_attenuation_enabled=true",
-        "instinctRL.ics.downward_ray_min_z=0.25",
-        "instinctRL.ics.downward_clearance_margin=0.0",
-    )
-    preserve_h050_v100 = (
-        "instinctRL.reward.horizontal_preservation_weight=0.5",
-        "instinctRL.reward.vertical_preservation_weight=1.0",
-    )
     return (
         SweepVariant(
-            "r5f_null_axis_xy050_z000",
-            r5f_base + null_axis_xy050_z000,
+            "r5g_smooth025",
+            r5g_base + ("algo.instinctRL.governor.smoothing_tau=0.25",),
         ),
         SweepVariant(
-            "r5f_null_axis_xy075_z000",
-            r5f_base + null_axis_xy075_z000,
+            "r5g_smooth040",
+            r5g_base + ("algo.instinctRL.governor.smoothing_tau=0.40",),
         ),
         SweepVariant(
-            "r5f_zsign_opp050_reinf100",
-            r5f_base + zsign_opp050_reinf100,
+            "r5g_anchor_huber050",
+            r5g_base + ("instinctRL.anchor.huber_delta=0.50",),
         ),
         SweepVariant(
-            "r5f_zsign_opp100_reinf050",
-            r5f_base + zsign_opp100_reinf050,
+            "r5g_smooth025_anchor_huber050",
+            r5g_base
+            + (
+                "algo.instinctRL.governor.smoothing_tau=0.25",
+                "instinctRL.anchor.huber_delta=0.50",
+            ),
         ),
         SweepVariant(
-            "r5f_downatten",
-            r5f_base + downward_attenuation,
+            "r5g_downatten_z010",
+            r5g_base
+            + (
+                "instinctRL.ics.downward_attenuation_enabled=true",
+                "instinctRL.ics.downward_ray_min_z=0.10",
+                "instinctRL.ics.downward_clearance_margin=0.0",
+            ),
         ),
         SweepVariant(
-            "r5f_preserve_h050_v100",
-            r5f_base + preserve_h050_v100,
+            "r5g_downatten_z005",
+            r5g_base
+            + (
+                "instinctRL.ics.downward_attenuation_enabled=true",
+                "instinctRL.ics.downward_ray_min_z=0.05",
+                "instinctRL.ics.downward_clearance_margin=0.0",
+            ),
         ),
     )
 
 
 def default_safety_preservation_variants() -> tuple[SweepVariant, ...]:
-    return default_r5f_mechanism_variants()
+    return default_r5g_dry_run_variants()
 
 
 def build_train_command(
@@ -308,7 +295,7 @@ def _main() -> int:
     parser.add_argument("--seeds", type=int, nargs="+", default=[0])
     parser.add_argument("--limit", type=int, default=0, help="Limit number of generated jobs")
     parser.add_argument("--python", default=sys.executable)
-    parser.add_argument("--tag", default="a2r5f_sweep")
+    parser.add_argument("--tag", default="a2r5g_sweep")
     parser.add_argument(
         "--artifacts-dir",
         default="../docs/instinctRL_devlog/tests/artifacts/sweeps",

@@ -554,3 +554,11 @@
 **Evidence**: New artifacts live under `docs/instinctRL_devlog/tests/artifacts/r5g_diagnostics/20260714_195313/`. For `r5f_zsign_opp100_reinf050`, null actual XY remained high (`0.1548`) while null output XY was low (`0.0281`), with command-to-motion mismatch XY `0.1824`, actual/output ratio `5.50`, and XY alignment `-0.974`. Anchor was active/valid (`0.999`) with no observability-poor condition, so high anchor error is not explained by inactive/invalid anchors. For `r5f_downatten`, `r5g_downward_has_ray_rate=0.0` and `r5g_downward_active_rate=0.0`, so the configured downward attenuation never became eligible under the MID360 ray geometry/threshold.
 
 **Consequence**: Continue R5G mechanism diagnosis. R5G dry-run variant design is allowed next, but execution remains blocked until a new dry-run plan is documented and reviewed. The next design focus is command-to-motion/null-station mismatch, active-valid anchor loss under drift, and MID360-compatible downward/near-floor safety assumptions.
+
+## D-2026-07-14-005: R5G Dry-Run Sweep Readiness Only
+
+**Decision**: R5G may update the default dry-run sweep design, docs, and tests for six actor-clean readiness variants. This round authorizes dry-run readiness only; it does not authorize `--execute`, 1M confirmation, warm-starting, promotion, hard-gate changes, actor-observation changes, platform/sensor changes, reward-default changes, or privileged root-height safety-filter defaults.
+
+**Evidence**: The default sweep tag is now `a2r5g_sweep`, and the default variants are exactly `r5g_smooth025`, `r5g_smooth040`, `r5g_anchor_huber050`, `r5g_smooth025_anchor_huber050`, `r5g_downatten_z010`, and `r5g_downatten_z005`. Dry-run validation emitted six `r5g_*` jobs with `execute=false`, `frames=131072`, `checkpoint_path=null`, `gate_report=null`, `error=null`, short diagnostic eval, and `wandb.name=instinctrl_a2r5g_sweep_*`.
+
+**Guardrails**: R5G defaults keep TASLAB_UAV + Livox MID360, actor observation exactly `lidar_grid + state_vec`, body-frame learned velocity-governor commands, unchanged hard gates, and no `instinctRL.safety_filter.*` overrides. A later 128k execute sweep requires explicit human approval and an explicit `--execute` command in a later turn.
