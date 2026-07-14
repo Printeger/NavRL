@@ -104,12 +104,30 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "eval/handbook.vertical_tracking_corr_active_rate",
         "eval/handbook.vertical_tracking_amplification_mean_when_corr_active",
         "eval/handbook.vertical_tracking_preservation_mean_when_corr_active",
+        "eval/handbook.r5e_null_actual_speed_xy_mean",
+        "eval/handbook.r5e_null_actual_speed_z_abs_mean",
+        "eval/handbook.r5e_null_output_speed_xy_mean",
+        "eval/handbook.r5e_null_output_speed_z_abs_mean",
+        "eval/handbook.r5e_command_preservation_pre_ics_ratio",
+        "eval/handbook.r5e_command_preservation_post_ics_ratio",
+        "eval/handbook.r5e_command_preservation_ics_loss_ratio",
+        "eval/handbook.r5e_command_preservation_horizontal_ratio",
+        "eval/handbook.r5e_command_preservation_vertical_abs_ratio",
+        "eval/handbook.r5e_near_floor_rate",
+        "eval/handbook.r5e_near_floor_v_cmd_z_mean",
+        "eval/handbook.r5e_near_floor_v_gov_z_mean",
+        "eval/handbook.r5e_near_floor_v_final_z_mean",
+        "eval/handbook.r5e_near_floor_ics_beta_mean",
+        "eval/handbook.r5e_near_floor_clearance_p05",
+        "eval/handbook.r5e_ics_violation_near_floor_rate",
         "eval/handbook.observability_is_proxy",
     ]:
         assert key in source
     for key in [
         "compute_vertical_channel_step_metrics(",
+        "compute_r5e_mechanism_step_metrics(",
         "vertical_diagnostic_accumulators",
+        "r5e_diagnostic_accumulators",
         "v_corr_limit = _governor_v_corr_limit(cfg)",
     ]:
         assert key in source
@@ -119,6 +137,10 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         '"vertical_null"',
         '"vertical_corr"',
         '"vertical_tracking"',
+        "_copy_r5e_top_level_keys(",
+        "r5e_null_actual_speed_xy_mean",
+        "r5e_command_preservation_pre_ics_ratio",
+        "r5e_near_floor_clearance_p05",
     ]:
         assert key in eval_source
     for key in [

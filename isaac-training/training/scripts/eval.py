@@ -140,6 +140,37 @@ def _copy_handbook_keys(target, source, *, prefixes):
             target[key] = value
 
 
+def _copy_r5e_top_level_keys(target, station_summary, tracking_summary):
+    station_metrics = {
+        "r5e_null_actual_speed_xy_mean",
+        "r5e_null_actual_speed_z_abs_mean",
+        "r5e_null_output_speed_xy_mean",
+        "r5e_null_output_speed_z_abs_mean",
+    }
+    tracking_metrics = {
+        "r5e_command_preservation_pre_ics_ratio",
+        "r5e_command_preservation_post_ics_ratio",
+        "r5e_command_preservation_ics_loss_ratio",
+        "r5e_command_preservation_horizontal_ratio",
+        "r5e_command_preservation_vertical_abs_ratio",
+        "r5e_near_floor_rate",
+        "r5e_near_floor_v_cmd_z_mean",
+        "r5e_near_floor_v_gov_z_mean",
+        "r5e_near_floor_v_final_z_mean",
+        "r5e_near_floor_ics_beta_mean",
+        "r5e_near_floor_clearance_p05",
+        "r5e_ics_violation_near_floor_rate",
+    }
+    for metric_name in station_metrics:
+        key = f"eval/handbook.{metric_name}"
+        if key in station_summary:
+            target[key] = station_summary[key]
+    for metric_name in tracking_metrics:
+        key = f"eval/handbook.{metric_name}"
+        if key in tracking_summary:
+            target[key] = tracking_summary[key]
+
+
 def _scalar_log_fields(summary):
     flat = {}
     for key, value in summary.items():
@@ -262,6 +293,7 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "vertical_v_corr_limit",
         ),
     )
+    _copy_r5e_top_level_keys(combined_summary, station_summary, tracking_summary)
 
     combined_info = {}
     combined_info.update(_scalar_log_fields(_prefix_eval_summary(station_summary, "station")))

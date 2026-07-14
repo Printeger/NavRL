@@ -21,7 +21,10 @@ from tensordict.tensordict import TensorDict
 from omni_drones.utils.torchrl import RenderCallback
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
-from instinctRL.task_metrics import compute_vertical_channel_step_metrics
+from instinctRL.task_metrics import (
+    compute_r5e_mechanism_step_metrics,
+    compute_vertical_channel_step_metrics,
+)
 
 # ============================================
 # 价值归一化（Value Normalization）
@@ -475,7 +478,7 @@ def _get_optional_tensor(tensordict, candidates):
     return None
 
 
-def _json_safe_eval_summary(info, trajs):
+def _json_safe_eval_summary(info, trajs, cfg=None):
     summary = {
         key: _json_safe_scalar(value)
         for key, value in info.items()
@@ -492,7 +495,18 @@ def _json_safe_eval_summary(info, trajs):
         "governor_v_gov_b_z": ["governor_v_gov_b_z", ("next", "governor_v_gov_b_z")],
         "governor_v_final_b": ["governor_v_final_b", ("next", "governor_v_final_b")],
         "governor_v_final_b_z": ["governor_v_final_b_z", ("next", "governor_v_final_b_z")],
+        "actual_velocity_b": [
+            ("info", "actual_velocity_b"),
+            ("next", "info", "actual_velocity_b"),
+        ],
+        "min_clearance": [
+            ("info", "min_clearance"),
+            ("next", "info", "min_clearance"),
+            ("info", "safety_min_clearance"),
+            ("next", "info", "safety_min_clearance"),
+        ],
         "ics_beta": [("info", "ics_beta"), ("next", "info", "ics_beta")],
+        "ics_emergency": [("info", "ics_emergency"), ("next", "info", "ics_emergency")],
         "ics_command_speed": [
             ("info", "ics_command_speed"),
             ("next", "info", "ics_command_speed"),
@@ -570,6 +584,16 @@ def _json_safe_eval_summary(info, trajs):
     if absent_fields:
         summary["absent_optional_fields"] = absent_fields
 
+    r5e_accumulators = _make_r5e_diagnostic_accumulators()
+    if _accumulate_r5e_metrics_from_tensordict(
+        r5e_accumulators,
+        trajs,
+        optional_fields,
+        cfg,
+    ):
+        _add_r5e_diagnostic_summaries(summary, r5e_accumulators)
+        _add_r5e_handbook_summary(summary, r5e_accumulators)
+
     return summary
 
 
@@ -641,6 +665,16 @@ def _make_optional_eval_field_candidates():
         "governor_v_gov_b_z": ["governor_v_gov_b_z", ("next", "governor_v_gov_b_z")],
         "governor_v_final_b": ["governor_v_final_b", ("next", "governor_v_final_b")],
         "governor_v_final_b_z": ["governor_v_final_b_z", ("next", "governor_v_final_b_z")],
+        "actual_velocity_b": [
+            ("info", "actual_velocity_b"),
+            ("next", "info", "actual_velocity_b"),
+        ],
+        "min_clearance": [
+            ("info", "min_clearance"),
+            ("next", "info", "min_clearance"),
+            ("info", "safety_min_clearance"),
+            ("next", "info", "safety_min_clearance"),
+        ],
         "tracking_actual_error_sq": [
             ("info", "tracking_actual_error_sq"),
             ("next", "info", "tracking_actual_error_sq"),
@@ -826,6 +860,219 @@ def _masked_sum_mean(
     return numerator.sum / denominator.sum
 
 
+_R5E_DIAGNOSTIC_FIELDS = (
+    "r5e_null_command",
+    "r5e_null_actual_speed_xy",
+    "r5e_null_actual_speed_z_abs",
+    "r5e_null_output_speed_xy",
+    "r5e_null_output_speed_z_abs",
+    "r5e_command_active",
+    "r5e_command_preservation_pre_ics",
+    "r5e_command_preservation_post_ics",
+    "r5e_command_preservation_ics_loss",
+    "r5e_command_horizontal_active",
+    "r5e_command_preservation_horizontal",
+    "r5e_command_vertical_active",
+    "r5e_command_preservation_vertical_abs",
+    "r5e_near_floor",
+    "r5e_near_floor_v_cmd_z",
+    "r5e_near_floor_v_gov_z",
+    "r5e_near_floor_v_final_z",
+    "r5e_near_floor_ics_beta",
+    "r5e_near_floor_clearance",
+    "r5e_ics_violation_near_floor",
+)
+
+
+def _make_r5e_diagnostic_accumulators():
+    return {
+        field_name: _TensorSummaryAccumulator()
+        for field_name in _R5E_DIAGNOSTIC_FIELDS
+    }
+
+
+def _r5e_eval_config(cfg):
+    instinct_cfg = getattr(cfg, "instinctRL", None) if cfg is not None else None
+    reward_cfg = getattr(instinct_cfg, "reward", None)
+    ics_cfg = getattr(instinct_cfg, "ics", None)
+    command_eps = float(getattr(reward_cfg, "command_eps", 1e-3))
+    height_floor = float(getattr(reward_cfg, "height_floor", 0.5))
+    d_safe = float(getattr(ics_cfg, "d_safe", 0.8))
+    return command_eps, height_floor, d_safe
+
+
+def _accumulate_r5e_metrics_from_tensordict(
+    accumulators,
+    tensordict,
+    optional_candidates,
+    cfg,
+):
+    v_cmd_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("governor_v_cmd_b", [])
+        + [("info", "v_cmd"), ("next", "info", "v_cmd")],
+    )
+    actual_velocity_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("actual_velocity_b", []),
+    )
+    v_gov_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("governor_v_gov_b", []),
+    )
+    v_final_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("governor_v_final_b", []),
+    )
+    if v_final_b is None:
+        v_final_b = v_gov_b
+    height_world_z = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("height_world_z", []),
+    )
+    min_clearance = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("min_clearance", []),
+    )
+    ics_beta = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("ics_beta", []),
+    )
+    ics_emergency = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("ics_emergency", []),
+    )
+    if any(
+        value is None
+        for value in (
+            v_cmd_b,
+            actual_velocity_b,
+            v_gov_b,
+            v_final_b,
+            height_world_z,
+            min_clearance,
+        )
+    ):
+        return False
+
+    command_eps, height_floor, d_safe = _r5e_eval_config(cfg)
+    metrics = compute_r5e_mechanism_step_metrics(
+        v_cmd_b=v_cmd_b,
+        actual_velocity_b=actual_velocity_b,
+        v_gov_b=v_gov_b,
+        v_final_b=v_final_b,
+        height_world_z=height_world_z,
+        min_clearance=min_clearance,
+        ics_beta=ics_beta,
+        ics_emergency=ics_emergency,
+        d_safe=d_safe,
+        height_floor=height_floor,
+        command_eps=command_eps,
+    )
+    for field_name, value in metrics.items():
+        accumulators[field_name].add(value)
+    return True
+
+
+def _add_r5e_diagnostic_summaries(summary, accumulators):
+    for field_name, accumulator in accumulators.items():
+        if accumulator.count > 0:
+            summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+
+
+def _add_r5e_handbook_summary(summary, accumulators):
+    if accumulators["r5e_null_command"].count == 0:
+        return
+    for numerator_name, denominator_name, handbook_key in (
+        (
+            "r5e_null_actual_speed_xy",
+            "r5e_null_command",
+            "eval/handbook.r5e_null_actual_speed_xy_mean",
+        ),
+        (
+            "r5e_null_actual_speed_z_abs",
+            "r5e_null_command",
+            "eval/handbook.r5e_null_actual_speed_z_abs_mean",
+        ),
+        (
+            "r5e_null_output_speed_xy",
+            "r5e_null_command",
+            "eval/handbook.r5e_null_output_speed_xy_mean",
+        ),
+        (
+            "r5e_null_output_speed_z_abs",
+            "r5e_null_command",
+            "eval/handbook.r5e_null_output_speed_z_abs_mean",
+        ),
+        (
+            "r5e_command_preservation_pre_ics",
+            "r5e_command_active",
+            "eval/handbook.r5e_command_preservation_pre_ics_ratio",
+        ),
+        (
+            "r5e_command_preservation_post_ics",
+            "r5e_command_active",
+            "eval/handbook.r5e_command_preservation_post_ics_ratio",
+        ),
+        (
+            "r5e_command_preservation_ics_loss",
+            "r5e_command_active",
+            "eval/handbook.r5e_command_preservation_ics_loss_ratio",
+        ),
+        (
+            "r5e_command_preservation_horizontal",
+            "r5e_command_horizontal_active",
+            "eval/handbook.r5e_command_preservation_horizontal_ratio",
+        ),
+        (
+            "r5e_command_preservation_vertical_abs",
+            "r5e_command_vertical_active",
+            "eval/handbook.r5e_command_preservation_vertical_abs_ratio",
+        ),
+        (
+            "r5e_near_floor_v_cmd_z",
+            "r5e_near_floor",
+            "eval/handbook.r5e_near_floor_v_cmd_z_mean",
+        ),
+        (
+            "r5e_near_floor_v_gov_z",
+            "r5e_near_floor",
+            "eval/handbook.r5e_near_floor_v_gov_z_mean",
+        ),
+        (
+            "r5e_near_floor_v_final_z",
+            "r5e_near_floor",
+            "eval/handbook.r5e_near_floor_v_final_z_mean",
+        ),
+        (
+            "r5e_near_floor_ics_beta",
+            "r5e_near_floor",
+            "eval/handbook.r5e_near_floor_ics_beta_mean",
+        ),
+        (
+            "r5e_ics_violation_near_floor",
+            "r5e_near_floor",
+            "eval/handbook.r5e_ics_violation_near_floor_rate",
+        ),
+    ):
+        value = _masked_sum_mean(
+            accumulators[numerator_name],
+            accumulators[denominator_name],
+        )
+        summary[handbook_key] = float(value) if value is not None else None
+
+    near_floor_rate = accumulators["r5e_near_floor"].mean()
+    summary["eval/handbook.r5e_near_floor_rate"] = (
+        float(near_floor_rate) if near_floor_rate is not None else None
+    )
+    near_floor_clearance_p05 = accumulators["r5e_near_floor_clearance"].quantile(0.05)
+    summary["eval/handbook.r5e_near_floor_clearance_p05"] = (
+        float(near_floor_clearance_p05)
+        if near_floor_clearance_p05 is not None
+        else None
+    )
+
+
 @torch.no_grad()
 def _evaluate_streaming(
     env,
@@ -879,6 +1126,7 @@ def _evaluate_streaming(
             "vertical_ics_emergency",
         )
     }
+    r5e_diagnostic_accumulators = _make_r5e_diagnostic_accumulators()
     v_corr_limit = _governor_v_corr_limit(cfg)
     reward_accumulator = _TensorSummaryAccumulator()
     reward_sum = 0.0
@@ -934,6 +1182,13 @@ def _evaluate_streaming(
                 )
                 for field_name, value in vertical_metrics.items():
                     vertical_diagnostic_accumulators[field_name].add(value)
+
+            _accumulate_r5e_metrics_from_tensordict(
+                r5e_diagnostic_accumulators,
+                step_td,
+                optional_candidates,
+                cfg,
+            )
 
             reward = _get_optional_tensor(step_td, [("next", "agents", "reward")])
             if reward is not None:
@@ -1001,6 +1256,7 @@ def _evaluate_streaming(
     for field_name, accumulator in vertical_diagnostic_accumulators.items():
         if accumulator.count > 0:
             summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+    _add_r5e_diagnostic_summaries(summary, r5e_diagnostic_accumulators)
     actual_error = diagnostic_accumulators["tracking_actual_error_sq"].mean()
     if actual_error is not None:
         summary["eval/handbook.tracking_rmse_actual_body_vs_v_cmd"] = float(
@@ -1160,6 +1416,7 @@ def _evaluate_streaming(
     violation_rate = diagnostic_accumulators["ics_violation"].mean()
     if violation_rate is not None:
         summary["eval/handbook.ics_violation_rate"] = float(violation_rate)
+    _add_r5e_handbook_summary(summary, r5e_diagnostic_accumulators)
     vertical_corr = vertical_diagnostic_accumulators["vertical_corr_z"].mean()
     if vertical_corr is not None:
         summary["eval/handbook.vertical_v_corr_limit"] = float(v_corr_limit)
@@ -1391,7 +1648,7 @@ def evaluate(
     env.train()  # 恢复训练模式
 
     if return_summary:
-        return info, _json_safe_eval_summary(info, trajs)
+        return info, _json_safe_eval_summary(info, trajs, cfg)
 
     return info
 

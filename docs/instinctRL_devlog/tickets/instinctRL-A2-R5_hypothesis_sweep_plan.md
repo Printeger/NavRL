@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5D dry-run-only sweep implemented and validated; no training execution, 1M, promotion, warm-start, or hard-gate change
+**Status**: R5D 128k execute sweep completed; no candidate passed, no 1M, promotion, warm-start, code change, parameter change, or hard-gate change
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -605,6 +605,137 @@ Stop condition:
 - Next step after this clean dry-run is a controlled 128k R5D execute sweep.
 - Only a `14/14` candidate with `passed=true` can be considered for a 1M confirmation.
 
+## R5D Execution Backfill - 2026-07-13
+
+Execution:
+
+- Preflight found a clean worktree at baseline commit `f1f9fef01495c5c7952600f7653023823768767a`.
+- Re-read the handbook, decision log, R5 ticket, `training/scripts/instinctRL/gates.py`, and `training/scripts/instinctRL/sweep.py` before execution.
+- Verified `training/scripts/instinctRL/sweep.py` default tag was `a2r5d_sweep`.
+- Verified the R5D variant set was exactly `r5d_zlimit020`, `r5d_zlimit012`, `r5d_trackzgain050`, `r5d_trackzgain000`, `r5d_zlimit020_trackzgain050`, `r5d_zlimit012_trackzgain000`.
+- Command run exactly once: `python training/scripts/instinctRL/sweep.py --execute --frames 131072 --seeds 0 --limit 6`.
+- Artifact: `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_000507/summary.json`.
+- The artifact timestamp is `20260714_000507` because this controlled execution ran in local Asia/Shanghai time after midnight.
+- All six jobs completed with `error=null`, non-null checkpoints, eval JSON artifacts, and embedded `gate_report`.
+- Gate truth source: only embedded `job.gate_report` in the new `summary.json`, produced by `training/scripts/instinctRL/gates.py`.
+- Hard gates were unchanged; `training/scripts/instinctRL/gates.py` was not modified.
+- No 1M, formal long training, warm-start, code change, parameter change, hard-gate change, actor-observation change, platform/sensor change, reward change, height-clamp change, or velocity-governor/body-frame command method change was executed.
+
+Execution decision:
+
+- No candidate passed all 14 hard gates.
+- Best candidate by embedded hard-gate ranking was `r5d_zlimit012`, seed `0`, with `8/14` gates and score `6.841`.
+- `r5d_zlimit012` is not promotable because it failed station null speed, station anchor error, tracking preservation, clearance, ICS, and below-bound termination.
+- No 1M confirmation command is written because there is no `passed=true`, `14/14` candidate.
+- R5D micro-sweep is not allowed: the best candidate is below `10/14`, has `termination_below_bound=0.3125`, fails the clearance gate, and has `safety_passed=false`.
+- Stop R5D sweeping and continue mechanism diagnosis. The remaining blockers are station/null-anchor behavior, low preservation, clearance/ICS, and below-bound height/safety behavior.
+
+Rows below are ranked as written in `summary.json`.
+
+| Variant | Seed | Gates | Score | Passed | Safety passed | Failed gates |
+|---|---:|---:|---:|---|---|---|
+| `r5d_zlimit012` | 0 | 8/14 | 6.841 | false | false | `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_below_bound` |
+| `r5d_trackzgain050` | 0 | 6/14 | 4.847 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_below_bound` |
+| `r5d_trackzgain000` | 0 | 6/14 | 4.604 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_below_bound` |
+| `r5d_zlimit012_trackzgain000` | 0 | 6/14 | 4.357 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_below_bound` |
+| `r5d_zlimit020_trackzgain050` | 0 | 4/14 | 2.069 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+| `r5d_zlimit020` | 0 | 4/14 | 1.161 | false | false | `station_drift_mean`, `station_drift_p95`, `station_null_speed_mean`, `station_anchor_error_mean`, `tracking_preservation_ratio`, `safety_collision_rate`, `safety_min_clearance_p05`, `ics_violation_rate`, `termination_collision`, `termination_below_bound` |
+
+Key station, tracking, and safety diagnostics:
+
+| Variant | Station drift mean/p95 | Null speed | Anchor error | Tracking RMSE | Preservation | Amp mean/rate | H amp mean/rate | V amp mean/rate | Clearance p05 | Collision | ICS | Term below/above/collision |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5d_zlimit012` | 1.288 / 2.506 | 0.164 | 2.925 | 0.378 | 0.701 | 0.039 / 0.119 | 0.084 / 0.218 | 0.056 / 0.089 | 0.792 | 0.000 | 0.049 | 0.312 / 0.000 / 0.000 |
+| `r5d_trackzgain050` | 1.353 / 2.631 | 0.172 | 2.882 | 0.403 | 0.628 | 0.022 / 0.035 | 0.035 / 0.091 | 0.075 / 0.127 | 0.782 | 0.000 | 0.046 | 0.188 / 0.000 / 0.000 |
+| `r5d_trackzgain000` | 1.432 / 2.779 | 0.182 | 3.116 | 0.381 | 0.683 | 0.024 / 0.062 | 0.056 / 0.163 | 0.003 / 0.005 | 0.820 | 0.000 | 0.043 | 0.281 / 0.000 / 0.000 |
+| `r5d_zlimit012_trackzgain000` | 1.516 / 2.951 | 0.193 | 3.226 | 0.384 | 0.684 | 0.032 / 0.052 | 0.051 / 0.107 | 0.003 / 0.005 | 0.723 | 0.000 | 0.060 | 0.219 / 0.000 / 0.000 |
+| `r5d_zlimit020_trackzgain050` | 1.416 / 2.754 | 0.180 | 3.192 | 0.394 | 0.665 | 0.030 / 0.091 | 0.047 / 0.128 | 0.035 / 0.059 | 0.563 | 0.000063 | 0.100 | 0.438 / 0.000 / 0.031 |
+| `r5d_zlimit020` | 1.779 / 3.465 | 0.226 | 3.451 | 0.428 | 0.615 | 0.033 / 0.048 | 0.055 / 0.104 | 0.030 / 0.054 | 0.559 | 0.000219 | 0.101 | 0.469 / 0.000 / 0.125 |
+
+Key vertical mechanism diagnostics:
+
+| Variant | Corr z mean | Corr z abs | Saturation | Tracking corr active | Tracking amp when active | Tracking preservation when active | Null corr abs | Null station drift when corr active | ICS delta z abs |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5d_zlimit012` | 0.037 | 0.037 | 0.000 | 1.000 | 0.065 | 0.658 | 0.011 | 1.288 | 0.004 |
+| `r5d_trackzgain050` | 0.048 | 0.048 | 0.000 | 1.000 | 0.088 | 0.568 | 0.028 | 1.353 | 0.008 |
+| `r5d_trackzgain000` | 0.000438 | 0.001 | 0.000 | 0.000 | n/a | n/a | 0.002 | 1.403 | 0.008 |
+| `r5d_zlimit012_trackzgain000` | -0.000307 | 0.000312 | 0.000 | 0.000 | n/a | n/a | 0.001 | 1.521 | 0.006 |
+| `r5d_zlimit020_trackzgain050` | -0.012 | 0.012 | 0.000 | 1.000 | 0.041 | 0.603 | 0.009 | 1.416 | 0.010 |
+| `r5d_zlimit020` | -0.013 | 0.013 | 0.000 | 1.000 | 0.035 | 0.537 | 0.005 | 1.779 | 0.015 |
+
+Interpretation:
+
+- R5D did reduce vertical amplification for some variants, especially `tracking_vcorr_z_gain=0.0`, but those variants still failed station/null-anchor, preservation, clearance, ICS, and below-bound behavior.
+- `r5d_zlimit012` was the only branch that kept station drift mean/p95 within the hard gates, but its null speed, anchor error, low preservation, clearance, ICS, and below-bound failures make it a failed screen.
+- The zero-tracking-z variants lowered vertical amp but did not recover preservation enough and did not solve safety/height failures.
+- The `v_corr_z_limit=0.20` branches regressed safety/collision and below-bound behavior, so they are not useful follow-up anchors.
+
+Stop condition:
+
+Hard gates unchanged; `training/scripts/instinctRL/gates.py` unchanged; no actor observation, learned action method, platform/sensor, reward, height clamp, or body-frame velocity-governor method was modified; no 1M/formal/warm-start run executed.
+
+## A2-R5E Mechanism Diagnosis Plan - 2026-07-14
+
+Scope:
+
+- R5E is diagnostics code plus documentation backfill only.
+- Do not change hard gates, actor observation, PPO actor feature extraction, reward behavior, env action semantics, or governor behavior.
+- Do not train, do not sweep, do not run 1M, do not warm-start, and do not promote `r5d_zlimit012`.
+- Do not start R5E dry-run sweep variants from current evidence. First run exactly one best-only eval replay for `r5d_zlimit012` with the new diagnostics.
+
+R5D failure decomposition:
+
+- `r5d_zlimit012` was best-ranked but still failed the screen at `8/14`, `passed=false`, `safety_passed=false`.
+- `v_corr_z_limit=0.12` made station drift mean/p95 pass, but it did not solve station null actual speed or anchor error.
+- Tracking still failed command preservation. R5E must separate pre-ICS preservation, post-ICS preservation, horizontal preservation, vertical preservation, and ICS preservation loss before any mechanism patch is considered.
+- Safety still failed clearance and ICS violation, with below-bound termination still present. R5E must isolate near-floor command/gov/final z behavior, near-floor ICS beta, near-floor clearance tail, and whether ICS violations cluster near the floor.
+- The likely source split remains unresolved: null station correction, tracking preservation, ICS attenuation, and source-of-z-control near the floor are not yet separable from existing R5D summaries.
+
+R5E eval-only diagnostics to emit:
+
+- `eval/handbook.r5e_null_actual_speed_xy_mean`
+- `eval/handbook.r5e_null_actual_speed_z_abs_mean`
+- `eval/handbook.r5e_null_output_speed_xy_mean`
+- `eval/handbook.r5e_null_output_speed_z_abs_mean`
+- `eval/handbook.r5e_command_preservation_pre_ics_ratio`
+- `eval/handbook.r5e_command_preservation_post_ics_ratio`
+- `eval/handbook.r5e_command_preservation_ics_loss_ratio`
+- `eval/handbook.r5e_command_preservation_horizontal_ratio`
+- `eval/handbook.r5e_command_preservation_vertical_abs_ratio`
+- `eval/handbook.r5e_near_floor_rate`
+- `eval/handbook.r5e_near_floor_v_cmd_z_mean`
+- `eval/handbook.r5e_near_floor_v_gov_z_mean`
+- `eval/handbook.r5e_near_floor_v_final_z_mean`
+- `eval/handbook.r5e_near_floor_ics_beta_mean`
+- `eval/handbook.r5e_near_floor_clearance_p05`
+- `eval/handbook.r5e_ics_violation_near_floor_rate`
+
+Mechanism candidates to document but not enable:
+
+- Station/null actual-speed constraint: allowed as diagnostic or reward-only if it uses privileged actual velocity; not deployable as actor input.
+- Actor-clean z lower-bound/floor-safety: deployable only if driven by command, history, or range-derived signals; not by root height.
+- Governor-side height floor clamp using root height: privileged safety filter; diagnostic/sim-only; not deployable as the Paper-1 method.
+- Horizontal/vertical preservation governance: diagnostic or reward-only first; clipping is behavior-changing and must stay default-off.
+- Null station correction vs tracking preservation split: candidate decoder/reward separation only after diagnostics isolate the source; default-off until then.
+
+Replay target:
+
+- Checkpoint: `/home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260714_001959-2fhm2u4z/files/checkpoint_final.pt`.
+- Result path: `docs/instinctRL_devlog/tests/artifacts/r5e_diagnostics/20260714_r5d_zlimit012_mechanism_eval.json`.
+- Use the same R5D `r5d_zlimit012` eval overrides from `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_000507/summary.json`.
+- This replay is eval-only. It is not a 1M confirmation, not a promotion run, and not evidence to start R5E variants unless it identifies a single default-off or default-equivalent mechanism worth screening.
+
+R5E replay result:
+
+- Command executed: `training/scripts/eval.py` only, with the checkpoint and R5D `r5d_zlimit012` eval overrides above.
+- Artifact written: `docs/instinctRL_devlog/tests/artifacts/r5e_diagnostics/20260714_r5d_zlimit012_mechanism_eval.json`.
+- The JSON contains all R5E keys at top level, under `passes.station_static_mid360`, and under `passes.tracking_static_mid360`. Station tracking/near-floor conditionals are `null` when their active mask count is zero.
+- Top-level station/null split: actual xy `0.1482`, actual |z| `0.0697`, output xy `0.0373`, output |z| `0.0114`.
+- Top-level tracking preservation split: pre-ICS `0.6869`, post-ICS `0.6620`, ICS loss `0.0249`, horizontal `0.7525`, vertical |z| `0.5581`.
+- Top-level near-floor split: near-floor rate `0.0724`, `v_cmd_z` `-0.1611`, `v_gov_z` `-0.0499`, `v_final_z` `-0.0328`, beta `0.6486`, clearance p05 `0.4143`, near-floor ICS violation rate `0.5838`.
+- R5D failed gates remain failed: null speed `0.1638`, anchor error `2.9254`, preservation `0.7015`, clearance p05 `0.7922`, ICS violation `0.0486`, below-bound termination `0.3125`.
+- Interpretation: preservation loss is mostly pre-ICS/governor-side rather than ICS-only, while near-floor samples show strong downward commands, partial governor/ICS attenuation, poor clearance tail, and high near-floor ICS violation rate. This supports mechanism diagnosis only; it does not authorize promotion, 1M, a sweep, or a behavior-changing patch.
+
 ## Decision Tree After R5A
 
 1. If any candidate passes all 14 gates:
@@ -639,4 +770,4 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-Do not promote any R5B candidate and do not run 1M. R5D dry-run passed; the next step is a controlled 128k R5D execute sweep with `--execute`. Only a `14/14` candidate with `passed=true` can be considered for a 1M confirmation.
+Do not promote any R5D candidate, do not run 1M, do not run another R5D sweep, and do not start R5E dry-run variants. R5D execution failed the screen: best candidate was `r5d_zlimit012` at `8/14` with below-bound, clearance, ICS, preservation, and station/null-anchor failures. The next allowed action is exactly one eval-only R5E mechanism replay of `r5d_zlimit012` using the checkpoint and overrides recorded above.

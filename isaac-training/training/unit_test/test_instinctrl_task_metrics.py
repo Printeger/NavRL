@@ -281,3 +281,117 @@ def test_vertical_channel_metrics_report_sign_masks_saturation_and_conditionals(
         summary["vertical_tracking_preservation_when_corr_active"].reshape(-1),
         torch.tensor([0.0, 0.8, 0.9, 1.1]),
     )
+
+
+def test_r5e_metrics_split_null_actual_and_output_speed_axes():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e_mechanism_step_metrics(
+        v_cmd_b=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]),
+        actual_velocity_b=torch.tensor([
+            [3.0, 4.0, 2.0],
+            [10.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0],
+        ]),
+        v_gov_b=torch.zeros(3, 3),
+        v_final_b=torch.tensor([
+            [0.0, 2.0, -0.5],
+            [9.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]),
+        height_world_z=torch.ones(3, 1),
+        min_clearance=torch.ones(3, 1),
+        command_eps=0.05,
+    )
+
+    null_count = summary["r5e_null_command"].sum().item()
+    assert null_count == 2.0
+    assert abs(summary["r5e_null_actual_speed_xy"].sum().item() / null_count - 2.5) < 1e-6
+    assert abs(summary["r5e_null_actual_speed_z_abs"].sum().item() / null_count - 1.5) < 1e-6
+    assert abs(summary["r5e_null_output_speed_xy"].sum().item() / null_count - 1.0) < 1e-6
+    assert abs(summary["r5e_null_output_speed_z_abs"].sum().item() / null_count - 0.25) < 1e-6
+
+
+def test_r5e_metrics_split_pre_post_ics_and_axis_preservation():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e_mechanism_step_metrics(
+        v_cmd_b=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.0, 0.0],
+        ]),
+        actual_velocity_b=torch.zeros(3, 3),
+        v_gov_b=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 2.0],
+            [5.0, 0.0, 0.0],
+        ]),
+        v_final_b=torch.tensor([
+            [0.5, 0.0, 0.0],
+            [0.0, 0.0, 1.0],
+            [5.0, 0.0, 0.0],
+        ]),
+        height_world_z=torch.ones(3, 1),
+        min_clearance=torch.ones(3, 1),
+        command_eps=0.05,
+    )
+
+    command_count = summary["r5e_command_active"].sum().item()
+    assert command_count == 2.0
+    assert abs(summary["r5e_command_preservation_pre_ics"].sum().item() / command_count - 1.5) < 1e-6
+    assert abs(summary["r5e_command_preservation_post_ics"].sum().item() / command_count - 0.75) < 1e-6
+    assert abs(summary["r5e_command_preservation_ics_loss"].sum().item() / command_count - 0.75) < 1e-6
+    assert summary["r5e_command_horizontal_active"].sum().item() == 1.0
+    assert abs(summary["r5e_command_preservation_horizontal"].sum().item() - 0.5) < 1e-6
+    assert summary["r5e_command_vertical_active"].sum().item() == 1.0
+    assert abs(summary["r5e_command_preservation_vertical_abs"].sum().item() - 1.0) < 1e-6
+
+
+def test_r5e_metrics_mask_near_floor_and_report_near_floor_ics_violation():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e_mechanism_step_metrics(
+        v_cmd_b=torch.tensor([
+            [0.0, 0.0, -0.2],
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, 0.4],
+        ]),
+        actual_velocity_b=torch.zeros(3, 3),
+        v_gov_b=torch.tensor([
+            [0.0, 0.0, -0.1],
+            [0.0, 0.0, -2.0],
+            [0.0, 0.0, 0.3],
+        ]),
+        v_final_b=torch.tensor([
+            [0.0, 0.0, -0.05],
+            [0.0, 0.0, -1.0],
+            [0.0, 0.0, 0.2],
+        ]),
+        height_world_z=torch.tensor([[0.60], [0.61], [0.40]]),
+        min_clearance=torch.tensor([[0.70], [0.10], [0.90]]),
+        ics_beta=torch.tensor([[0.5], [0.1], [1.0]]),
+        ics_emergency=torch.tensor([[0.0], [0.0], [0.0]]),
+        height_floor=0.5,
+        d_safe=0.8,
+        command_eps=0.05,
+    )
+
+    near_floor = summary["r5e_near_floor"]
+    near_count = near_floor.sum().item()
+    assert near_floor.reshape(-1).tolist() == [1.0, 0.0, 1.0]
+    assert near_count == 2.0
+    assert abs(summary["r5e_near_floor_v_cmd_z"].sum().item() / near_count - 0.1) < 1e-6
+    assert abs(summary["r5e_near_floor_v_gov_z"].sum().item() / near_count - 0.1) < 1e-6
+    assert abs(summary["r5e_near_floor_v_final_z"].sum().item() / near_count - 0.075) < 1e-6
+    assert abs(summary["r5e_near_floor_ics_beta"].sum().item() / near_count - 0.75) < 1e-6
+    assert torch.isfinite(summary["r5e_near_floor_clearance"].reshape(-1)).tolist() == [
+        True,
+        False,
+        True,
+    ]
+    assert abs(summary["r5e_ics_violation_near_floor"].sum().item() / near_count - 0.5) < 1e-6

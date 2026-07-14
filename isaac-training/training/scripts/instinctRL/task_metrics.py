@@ -81,6 +81,34 @@ def _as_scalar(
     return value.float().to(device=device)
 
 
+def _as_vector_flat(value: torch.Tensor, name: str) -> torch.Tensor:
+    if value.dim() >= 3 and value.shape[-2:] == (1, 3):
+        value = value.squeeze(-2)
+    if value.dim() < 2 or value.shape[-1] != 3:
+        raise ValueError(f"{name} must have trailing shape [3] or [1,3]")
+    if not torch.isfinite(value.float()).all():
+        raise ValueError(f"{name} must be finite")
+    return value.float().reshape(-1, 3)
+
+
+def _as_scalar_flat(
+    value: Optional[torch.Tensor],
+    name: str,
+    N: int,
+    default: float = 0.0,
+    *,
+    device=None,
+) -> torch.Tensor:
+    if value is None:
+        return torch.full((N, 1), default, dtype=torch.float32, device=device)
+    if value.numel() != N:
+        raise ValueError(f"{name} must have {N} elements after flattening")
+    value = value.float().reshape(N, 1)
+    if not torch.isfinite(value).all():
+        value = torch.nan_to_num(value, nan=default, posinf=default, neginf=default)
+    return value.to(device=device)
+
+
 def world_to_body_velocity(velocity_w: torch.Tensor, quat_wxyz: torch.Tensor) -> torch.Tensor:
     """Rotate a world-frame velocity into the TASLAB body/governor frame."""
     velocity = _as_vector(velocity_w, "velocity_w")
@@ -316,6 +344,130 @@ def compute_handbook_step_metrics(
         "ics_intervention": intervention,
         "ics_emergency": emergency,
         "ics_violation": violation,
+    }
+
+
+def compute_r5e_mechanism_step_metrics(
+    *,
+    v_cmd_b: torch.Tensor,
+    actual_velocity_b: torch.Tensor,
+    v_gov_b: torch.Tensor,
+    v_final_b: torch.Tensor,
+    height_world_z: torch.Tensor,
+    min_clearance: torch.Tensor,
+    ics_beta: Optional[torch.Tensor] = None,
+    ics_emergency: Optional[torch.Tensor] = None,
+    d_safe: float = 0.8,
+    height_floor: float = 0.5,
+    command_eps: float = 1e-3,
+) -> Dict[str, torch.Tensor]:
+    """R5E eval-only mechanism diagnostics.
+
+    Conditional quantities are returned as masked numerators plus explicit mask
+    counts. Eval aggregation owns the divisions so inactive steps do not pull
+    conditional means toward zero.
+    """
+    v_cmd = _as_vector_flat(v_cmd_b, "v_cmd_b")
+    N = v_cmd.shape[0]
+    device = v_cmd.device
+    actual = _as_vector_flat(actual_velocity_b, "actual_velocity_b").to(device=device)
+    gov = _as_vector_flat(v_gov_b, "v_gov_b").to(device=device)
+    final = _as_vector_flat(v_final_b, "v_final_b").to(device=device)
+    if actual.shape[0] != N or gov.shape[0] != N or final.shape[0] != N:
+        raise ValueError("R5E vector inputs must flatten to the same length")
+
+    height = _as_scalar_flat(height_world_z, "height_world_z", N, device=device)
+    clearance = _as_scalar_flat(
+        min_clearance,
+        "min_clearance",
+        N,
+        default=float("inf"),
+        device=device,
+    )
+    beta = _as_scalar_flat(ics_beta, "ics_beta", N, default=1.0, device=device).clamp(0.0, 1.0)
+    emergency = _as_scalar_flat(
+        ics_emergency,
+        "ics_emergency",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+
+    eps = float(command_eps)
+    if not math.isfinite(eps) or eps < 0.0:
+        raise ValueError("command_eps must be finite and >= 0")
+    floor = float(height_floor)
+    if not math.isfinite(floor) or floor < 0.0:
+        raise ValueError("height_floor must be finite and >= 0")
+    safe = float(d_safe)
+    if not math.isfinite(safe) or safe < 0.0:
+        raise ValueError("d_safe must be finite and >= 0")
+
+    command_norm = v_cmd.norm(dim=-1, keepdim=True)
+    command_active = (command_norm > eps).float()
+    null_command = 1.0 - command_active
+    gov_norm = gov.norm(dim=-1, keepdim=True)
+    final_norm = final.norm(dim=-1, keepdim=True)
+    pre_ics_preservation = torch.where(
+        command_norm > eps,
+        gov_norm / command_norm.clamp_min(eps),
+        torch.zeros_like(command_norm),
+    ).clamp(0.0, 2.0)
+    post_ics_preservation = torch.where(
+        command_norm > eps,
+        final_norm / command_norm.clamp_min(eps),
+        torch.zeros_like(command_norm),
+    ).clamp(0.0, 2.0)
+
+    horizontal_cmd_norm = v_cmd[..., :2].norm(dim=-1, keepdim=True)
+    horizontal_final_norm = final[..., :2].norm(dim=-1, keepdim=True)
+    horizontal_active = (horizontal_cmd_norm > eps).float()
+    horizontal_preservation = torch.where(
+        horizontal_cmd_norm > eps,
+        horizontal_final_norm / horizontal_cmd_norm.clamp_min(eps),
+        torch.zeros_like(horizontal_cmd_norm),
+    ).clamp(0.0, 2.0)
+
+    vertical_cmd_abs = v_cmd[..., 2:3].abs()
+    vertical_final_abs = final[..., 2:3].abs()
+    vertical_active = (vertical_cmd_abs > eps).float()
+    vertical_abs_preservation = torch.where(
+        vertical_cmd_abs > eps,
+        vertical_final_abs / vertical_cmd_abs.clamp_min(eps),
+        torch.zeros_like(vertical_cmd_abs),
+    ).clamp(0.0, 2.0)
+
+    near_floor = (height <= floor + 0.10).float()
+    ics_violation = ((clearance < safe) & (emergency < 0.5)).float()
+    inactive_clearance = torch.full_like(clearance, float("nan"))
+
+    return {
+        "r5e_null_command": null_command,
+        "r5e_null_actual_speed_xy": actual[..., :2].norm(dim=-1, keepdim=True) * null_command,
+        "r5e_null_actual_speed_z_abs": actual[..., 2:3].abs() * null_command,
+        "r5e_null_output_speed_xy": final[..., :2].norm(dim=-1, keepdim=True) * null_command,
+        "r5e_null_output_speed_z_abs": final[..., 2:3].abs() * null_command,
+        "r5e_command_active": command_active,
+        "r5e_command_preservation_pre_ics": pre_ics_preservation * command_active,
+        "r5e_command_preservation_post_ics": post_ics_preservation * command_active,
+        "r5e_command_preservation_ics_loss": (
+            pre_ics_preservation - post_ics_preservation
+        ).clamp_min(0.0) * command_active,
+        "r5e_command_horizontal_active": horizontal_active,
+        "r5e_command_preservation_horizontal": horizontal_preservation * horizontal_active,
+        "r5e_command_vertical_active": vertical_active,
+        "r5e_command_preservation_vertical_abs": vertical_abs_preservation * vertical_active,
+        "r5e_near_floor": near_floor,
+        "r5e_near_floor_v_cmd_z": v_cmd[..., 2:3] * near_floor,
+        "r5e_near_floor_v_gov_z": gov[..., 2:3] * near_floor,
+        "r5e_near_floor_v_final_z": final[..., 2:3] * near_floor,
+        "r5e_near_floor_ics_beta": beta * near_floor,
+        "r5e_near_floor_clearance": torch.where(
+            near_floor.bool(),
+            clearance,
+            inactive_clearance,
+        ),
+        "r5e_ics_violation_near_floor": ics_violation * near_floor,
     }
 
 
