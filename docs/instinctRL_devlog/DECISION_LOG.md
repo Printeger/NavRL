@@ -52,6 +52,25 @@
 
 ---
 
+## D-2026-07-15-003: R5 Postmortem Evidence Collection Boundary
+
+**Decision**: The next stage after R5I is evidence-collection planning only.
+
+**Evidence**:
+
+- R5G, R5H, and R5I closed the sweep path without identifying a promotable candidate or concrete actor-clean implementation defect.
+- R5H collision windows already show `ics_beta=0` and final command speed zero while actual XY motion persists, so another parameter sweep is not justified.
+- R5I found no actor-observation leak, platform/sensor substitution, action-interface substitution, hard-gate edit, or privileged root-height default.
+
+**Consequence**:
+
+- R5J patch remains unauthorized.
+- 1M/formal training remains forbidden.
+- Sweeps remain formally stopped.
+- Future authorization requires one evidence item to identify a concrete actor-clean implementation defect or mechanism gap, with required tests documented before behavior changes.
+
+---
+
 ## D-2026-07-11-001: A2-R3 Station Correction Repair
 
 **Decision**: Do not promote any `20260711_111713` A2-R2 sweep candidate to 1M or formal training. Replace the hard-zero null-command interpretation with a soft, measurement-anchored station-correction path and rerun a fresh 128k A2-R3 sweep.

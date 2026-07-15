@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5I assumption review completed; stop sweeps, no 1M, no R5H micro-sweep, no promotion, no R5J unless a concrete actor-clean implementation defect or mechanism gap is identified
+**Status**: A2-R5 is `blocked / stop sweeps`, not ready for training; no 1M, no R5H micro-sweep, no promotion, no R5J unless evidence identifies a concrete actor-clean implementation defect or mechanism gap
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -1238,7 +1238,7 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-R5G and R5H are complete, and R5I assumption review is documented below. Stop sweeps. Do not run 1M, warm-start, promote, run an R5H micro-sweep, change hard gates, change actor observation, change TASLAB_UAV + Livox MID360, change the body-frame velocity-governor method, or enable the privileged root-height safety filter in the default path. A next R5J or variant design is not authorized unless a later review identifies a concrete actor-clean implementation defect or mechanism gap.
+R5G, R5H, and R5I have closed the sweep path. A2-R5 is `blocked / stop sweeps`, not ready for training, and the current stage is evidence collection rather than candidate selection. Stop sweeps. Do not run 1M, warm-start, promote, run an R5H micro-sweep, change hard gates, change actor observation, change TASLAB_UAV + Livox MID360, change the body-frame velocity-governor method, or enable the privileged root-height safety filter in the default path. A next R5J or variant design is not authorized unless later evidence identifies a concrete actor-clean implementation defect or mechanism gap.
 
 ## A2-R5G 128k Execute Sweep - 2026-07-14
 
@@ -1500,3 +1500,30 @@ R5I conclusion:
 - Implementation bug status: no concrete actor-clean implementation defect found.
 - R5J status: not authorized from current evidence.
 - Sweep/1M status: sweeps, 1M, warm-start, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, method edits, and privileged root-height safety-filter defaults remain forbidden.
+
+## A2-R5 Postmortem / Evidence Collection Plan - 2026-07-15
+
+Scope:
+
+- R5G, R5H, and R5I closed the sweep path. A2-R5 is `blocked / stop sweeps`, not ready for training.
+- The current state is blocked pending evidence collection, not candidate selection.
+- This section is a postmortem and evidence plan only. It does not authorize training, sweeps, 1M, warm-start, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, method edits, or privileged root-height safety-filter defaults.
+- Use existing R5H artifacts and source review for the current planning pass. Do not replay eval under this authority.
+- R5J remains unauthorized unless evidence identifies a concrete actor-clean implementation defect or mechanism gap, and the required tests are documented before behavior changes.
+
+Explicitly forbidden in this section:
+
+- sweep variants;
+- parameter combinations;
+- R5J patch design;
+- 1M or formal training readiness claims.
+
+Next-stage evidence table:
+
+| Evidence item | Hypothesis | Why it matters to R5H failures | Required diagnostics | Actor-clean? | Expected artifact | Pass/fail interpretation | Could authorize future R5J? |
+|---|---|---|---|---|---|---|---|
+| controller latency/inertia windows | Final body-frame commands may already be stopped, but controller boundary timing, world-frame command application, or vehicle inertia may leave realized body velocity nonzero during collision/null windows. | R5H collision windows show `ics_beta=0` and `v_final_xy/z=0`, yet actual XY remains about `0.1768 m/s`; null windows also show tiny final output but high actual XY. | Compare `v_final_b`, world-frame command, actual body velocity, collision windows, and null windows, including per-step lag/alignment around the controller boundary. | Yes, if diagnostics remain eval/logging-only and do not enter actor observation. | Aligned command/velocity window report for collision and null windows. | Supports the hypothesis only if nonzero actual velocity is explained by a concrete timing/inertia mechanism after actor-clean stop commands; rejects it if command, controller action, and realized velocity are already aligned without a mechanism gap. | Only if it identifies a concrete controller-boundary timing/inertia mechanism that is actor-clean to compensate or diagnose. |
+| collision geometry reason codes | Current collision summaries may conflate obstacle contact, ground/ceiling contact, and termination timing. | R5H downatten variants fail collision/termination-collision while `smooth040` removes collision but regresses below-bound and clearance; the root contact class changes what mechanism failed. | Distinguish obstacle contact, ground/ceiling contact, and termination timing for each collision termination and pre-termination window. | Yes, if reason codes are eval/termination metadata only and remain outside actor observation. | Collision reason-code table linked to the R5H failing windows. | Supports the hypothesis only if the R5H "collision" label is a misclassified geometry/termination issue or exposes a concrete safety mechanism gap; rejects it if contacts are correctly classified and no actor-clean gap is found. | Only if R5H "collision" is shown to be a misclassified geometry/termination issue or a concrete safety mechanism gap. |
+| ICS braking-distance residual | ICS may compute beta/emergency response too late or with insufficient residual stopping-distance margin even when `v_final=0`. | R5H downatten collisions happen with `v_final=0` and `ics_beta=0`, so the unresolved issue is why full stop still ends in collision. | Explain each stopped-collision window using beta, emergency threshold, active beams, clearance, realized speed, and residual stopping distance. | Yes, if it uses actor-clean ICS inputs and eval-only realized-motion diagnostics without adding actor features. | Residual stopping-distance table for low-beta and collision windows. | Supports the hypothesis only if residual distance shows a specific timing/braking calculation defect or missing diagnostic; rejects it if residuals are consistent with known physics and no implementation/mechanism gap appears. | Only if the residual exposes a specific actor-clean ICS timing/braking calculation defect or missing diagnostic. |
+| RayCaster/MID360 transform audit | The composed zero-mount MID360 pattern, RayCaster offset/quaternion, or full-attitude attachment may mismatch the ray frame used by downatten and clearance evidence. | R5G/R5H downatten is active, but collisions persist near low clearance; a ray-frame mismatch would undermine the downatten/clearance interpretation. | Verify mount pitch, `attach_yaw_only=False`, RayCaster offset/quaternion, cached body-frame ray directions, and zero-mount pattern sanity. | Yes, if this remains a sensor-geometry audit and does not change actor observation. | Transform-audit note comparing configured mount, RayCaster transform, and expected MID360 ray frame. | Supports the hypothesis only if the audit finds a concrete transform/ray-frame mismatch affecting downatten or clearance evidence; rejects it if the transform chain and zero-mount pattern are internally consistent. | Only if the transform audit finds a concrete ray-frame mismatch affecting downatten/clearance evidence. |
+| anchor-reference drift diagnostics | Active/valid anchor references may become unstable under drift, changing measurement space, or nearby geometry while still reporting high active/valid rates. | R5H anchor active/valid is high, but anchor error and high-loss remain high, so inactive anchors do not explain the station failure. | Test whether active/valid anchor references become unstable under drift by comparing anchor reference stability, anchor error, high-loss windows, station drift, null speed, and measurement validity. | Yes, if diagnostics remain measurement-space/eval-only and do not add privileged actor input. | Anchor-reference drift report for active/valid high-loss windows. | Supports the hypothesis only if active/valid anchor references drift or become unstable in a way that explains high loss; rejects it if references are stable and the failure must be attributed elsewhere. | Only if measurement-space anchor reference drift is confirmed as a concrete mechanism gap. |
