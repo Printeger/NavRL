@@ -236,6 +236,123 @@ R5E2_DIAGNOSTIC_FIELDS = (
     "r5e2_reason_code",
 ) + R5E2_REASON_FIELD_NAMES
 
+R5E3_COLLISION_WINDOW_STEPS = (25, 50)
+R5E3_LOW_BETA_WINDOW_STEPS = (25, 50)
+R5E3_WINDOW_VALUE_FIELDS = (
+    "v_gov_body_x",
+    "v_gov_body_y",
+    "v_gov_body_z",
+    "v_gov_body_speed_xy",
+    "v_gov_body_speed_z_abs",
+    "v_gov_body_speed_norm",
+    "v_final_body_x",
+    "v_final_body_y",
+    "v_final_body_z",
+    "v_final_body_speed_xy",
+    "v_final_body_speed_z_abs",
+    "v_final_body_speed_norm",
+    "controller_command_world_x",
+    "controller_command_world_y",
+    "controller_command_world_z",
+    "controller_command_world_speed_xy",
+    "controller_command_world_speed_z_abs",
+    "controller_command_world_speed_norm",
+    "actual_body_x",
+    "actual_body_y",
+    "actual_body_z",
+    "actual_body_speed_xy",
+    "actual_body_speed_z_abs",
+    "actual_body_speed_norm",
+    "actual_world_x",
+    "actual_world_y",
+    "actual_world_z",
+    "actual_world_speed_xy",
+    "actual_world_speed_z_abs",
+    "actual_world_speed_norm",
+    "ics_beta",
+    "ics_emergency",
+    "ics_active_beam_count",
+    "ics_min_clearance",
+    "raw_min_clearance",
+    "collision_clearance_threshold",
+    "emergency_clearance",
+    "d_safe",
+    "required_stop_distance_conservative",
+    "residual_to_collision_threshold",
+    "residual_to_emergency",
+    "residual_to_d_safe",
+    "worst_beam_closing_speed",
+    "worst_beam_required_stop_distance",
+    "worst_beam_residual_to_collision_threshold",
+    "worst_beam_residual_to_emergency",
+    "worst_beam_residual_to_d_safe",
+    "low_beta",
+    "full_stop_commanded",
+    "full_stop_after_collision_margin_exhausted",
+    "full_stop_after_emergency_margin_exhausted",
+    "missing_contact_telemetry",
+    "missing_body_telemetry",
+    "missing_surface_normal",
+    "missing_measured_deceleration",
+    "missing_worst_ics_beam",
+    "conservative_approximation_used",
+)
+
+R5E3_DIAGNOSTIC_FIELDS = (
+    "r5e3_raw_min_clearance",
+    "r5e3_ics_min_clearance",
+    "r5e3_collision_clearance_threshold",
+    "r5e3_emergency_clearance",
+    "r5e3_d_safe",
+    "r5e3_a_max",
+    "r5e3_latency_sec",
+    "r5e3_command_eps",
+    "r5e3_low_beta_threshold",
+    "r5e3_actual_body_speed_xy",
+    "r5e3_actual_body_speed_z_abs",
+    "r5e3_actual_body_speed_norm",
+    "r5e3_v_final_body_speed_xy",
+    "r5e3_v_final_body_speed_z_abs",
+    "r5e3_v_final_body_speed_norm",
+    "r5e3_required_stop_distance_conservative",
+    "r5e3_residual_to_collision_threshold",
+    "r5e3_residual_to_emergency",
+    "r5e3_residual_to_d_safe",
+    "r5e3_collision_margin_exhausted",
+    "r5e3_emergency_margin_exhausted",
+    "r5e3_d_safe_margin_exhausted",
+    "r5e3_low_beta",
+    "r5e3_full_stop_commanded",
+    "r5e3_full_stop_after_collision_margin_exhausted",
+    "r5e3_full_stop_after_emergency_margin_exhausted",
+    "r5e3_worst_ics_beam_index",
+    "r5e3_worst_beam_closing_speed",
+    "r5e3_worst_beam_required_stop_distance",
+    "r5e3_worst_beam_residual_to_collision_threshold",
+    "r5e3_worst_beam_residual_to_emergency",
+    "r5e3_worst_beam_residual_to_d_safe",
+    "r5e3_worst_beam_collision_margin_exhausted",
+    "r5e3_worst_beam_emergency_margin_exhausted",
+    "r5e3_worst_beam_d_safe_margin_exhausted",
+    "r5e3_worst_beam_full_stop_after_collision_margin_exhausted",
+    "r5e3_worst_beam_full_stop_after_emergency_margin_exhausted",
+    "r5e3_raw_min_clearance_source_available",
+    "r5e3_ics_min_clearance_source_available",
+    "r5e3_contact_telemetry_available",
+    "r5e3_body_telemetry_available",
+    "r5e3_surface_normal_available",
+    "r5e3_measured_deceleration_available",
+    "r5e3_worst_ics_beam_source_available",
+    "r5e3_missing_clearance_source",
+    "r5e3_missing_contact_telemetry",
+    "r5e3_missing_body_telemetry",
+    "r5e3_missing_contact_body_telemetry",
+    "r5e3_missing_surface_normal",
+    "r5e3_missing_measured_deceleration",
+    "r5e3_missing_worst_ics_beam",
+    "r5e3_conservative_approximation_used",
+)
+
 
 DEFAULT_COMMAND_CURRICULUM = (
     (0, (0.55, 0.0, 0.0, 0.15, 0.30)),
@@ -1620,6 +1737,368 @@ def compute_r5e2_collision_geometry_step_metrics(
             is_collision_termination & (code == int(reason_code))
         ).float()
     return result
+
+
+def _r5e3_optional_vector(
+    value: Optional[torch.Tensor],
+    name: str,
+    N: int,
+    *,
+    device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if value is None:
+        vector = torch.full((N, 3), float("nan"), dtype=torch.float32, device=device)
+        available = torch.zeros((N, 1), dtype=torch.float32, device=device)
+        return vector, available
+    vector = _as_vector_flat(value, name).to(device=device)
+    if vector.shape[0] != N:
+        raise ValueError(f"{name} must have {N} rows after flattening")
+    available = torch.isfinite(vector).all(dim=-1, keepdim=True).float()
+    return vector, available
+
+
+def _r5e3_optional_clearance(
+    value: Optional[torch.Tensor],
+    source_available: Optional[torch.Tensor],
+    name: str,
+    N: int,
+    *,
+    device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if value is None:
+        clearance = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+        inferred_source = torch.zeros((N, 1), dtype=torch.float32, device=device)
+    else:
+        if value.numel() != N:
+            raise ValueError(f"{name} must have {N} elements after flattening")
+        clearance = value.float().reshape(N, 1).to(device=device)
+        inferred_source = torch.isfinite(clearance).float()
+    if source_available is None:
+        source = inferred_source
+    else:
+        source = _as_scalar_flat(
+            source_available,
+            f"{name}_source_available",
+            N,
+            default=0.0,
+            device=device,
+        ).clamp(0.0, 1.0)
+    clearance = torch.where(
+        (source >= 0.5) & torch.isfinite(clearance),
+        clearance,
+        torch.full_like(clearance, float("nan")),
+    )
+    return clearance, source
+
+
+def _r5e3_worst_beam_direction(
+    *,
+    ray_directions_b: Optional[torch.Tensor],
+    worst_beam_index: Optional[torch.Tensor],
+    N: int,
+    device,
+    eps: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    missing_direction = torch.full((N, 3), float("nan"), dtype=torch.float32, device=device)
+    missing_index = torch.full((N, 1), -1.0, dtype=torch.float32, device=device)
+    missing_source = torch.zeros((N, 1), dtype=torch.float32, device=device)
+    if ray_directions_b is None or worst_beam_index is None:
+        return missing_direction, missing_index, missing_source
+
+    index = worst_beam_index.reshape(-1).to(device=device).long()
+    if index.numel() != N:
+        raise ValueError("ics_worst_beam_index must have N elements after flattening")
+    if ray_directions_b.dim() == 2 and ray_directions_b.shape[-1] == 3:
+        rays = ray_directions_b.to(device=device).float().unsqueeze(0).expand(N, -1, 3)
+    elif ray_directions_b.dim() == 3 and ray_directions_b.shape[0] == N and ray_directions_b.shape[-1] == 3:
+        rays = ray_directions_b.to(device=device).float()
+    else:
+        raise ValueError("ray_directions_b must have shape [R,3] or [N,R,3]")
+    if not torch.isfinite(rays).all():
+        raise ValueError("ray_directions_b must be finite")
+    ray_count = int(rays.shape[1])
+    valid = (index >= 0) & (index < ray_count)
+    safe_index = index.clamp(0, max(ray_count - 1, 0))
+    gathered = rays[torch.arange(N, device=device), safe_index]
+    norm = gathered.norm(dim=-1, keepdim=True)
+    valid = valid.reshape(N, 1) & (norm > eps)
+    direction = gathered / norm.clamp_min(eps)
+    direction = torch.where(valid, direction, missing_direction)
+    index_out = torch.where(
+        valid,
+        index.reshape(N, 1).float(),
+        missing_index,
+    )
+    return direction, index_out, valid.float()
+
+
+def compute_r5e3_braking_residual_step_metrics(
+    *,
+    v_final_b: torch.Tensor,
+    actual_velocity_b: Optional[torch.Tensor],
+    raw_min_clearance: Optional[torch.Tensor],
+    ics_min_clearance: Optional[torch.Tensor],
+    raw_min_clearance_source_available: Optional[torch.Tensor] = None,
+    ics_min_clearance_source_available: Optional[torch.Tensor] = None,
+    ics_beta: Optional[torch.Tensor] = None,
+    ics_emergency: Optional[torch.Tensor] = None,
+    contact_telemetry_available: Optional[torch.Tensor] = None,
+    surface_normal_available: Optional[torch.Tensor] = None,
+    measured_deceleration_available: Optional[torch.Tensor] = None,
+    ics_worst_beam_index: Optional[torch.Tensor] = None,
+    ray_directions_b: Optional[torch.Tensor] = None,
+    collision_clearance_threshold: float = 0.3,
+    emergency_clearance: float = 0.25,
+    d_safe: float = 0.8,
+    a_max: float = 2.0,
+    latency_sec: float = 0.0,
+    command_eps: float = 1e-3,
+    low_beta_threshold: float = 0.999,
+) -> Dict[str, torch.Tensor]:
+    """R5 Evidence-3 eval-only ICS braking-distance residual diagnostics."""
+    final_b = _as_vector_flat(v_final_b, "v_final_b")
+    N = final_b.shape[0]
+    device = final_b.device
+
+    threshold = float(collision_clearance_threshold)
+    emergency = float(emergency_clearance)
+    safe = float(d_safe)
+    accel = float(a_max)
+    latency = float(latency_sec)
+    eps = float(command_eps)
+    beta_threshold = float(low_beta_threshold)
+    for name, value in (
+        ("collision_clearance_threshold", threshold),
+        ("emergency_clearance", emergency),
+        ("d_safe", safe),
+        ("a_max", accel),
+        ("latency_sec", latency),
+        ("command_eps", eps),
+        ("low_beta_threshold", beta_threshold),
+    ):
+        if not math.isfinite(value):
+            raise ValueError(f"{name} must be finite")
+    if threshold < 0.0:
+        raise ValueError("collision_clearance_threshold must be >= 0")
+    if emergency < 0.0:
+        raise ValueError("emergency_clearance must be >= 0")
+    if safe < 0.0:
+        raise ValueError("d_safe must be >= 0")
+    if accel <= 0.0:
+        raise ValueError("a_max must be > 0")
+    if latency < 0.0:
+        raise ValueError("latency_sec must be >= 0")
+    if eps < 0.0:
+        raise ValueError("command_eps must be >= 0")
+    if not (0.0 <= beta_threshold <= 1.0):
+        raise ValueError("low_beta_threshold must be in [0, 1]")
+
+    actual_b, body_available = _r5e3_optional_vector(
+        actual_velocity_b,
+        "actual_velocity_b",
+        N,
+        device=device,
+    )
+    raw_clearance, raw_source = _r5e3_optional_clearance(
+        raw_min_clearance,
+        raw_min_clearance_source_available,
+        "raw_min_clearance",
+        N,
+        device=device,
+    )
+    ics_clearance, ics_source = _r5e3_optional_clearance(
+        ics_min_clearance,
+        ics_min_clearance_source_available,
+        "ics_min_clearance",
+        N,
+        device=device,
+    )
+
+    contact_available = _as_scalar_flat(
+        contact_telemetry_available,
+        "contact_telemetry_available",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    surface_available = _as_scalar_flat(
+        surface_normal_available,
+        "surface_normal_available",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    decel_available = _as_scalar_flat(
+        measured_deceleration_available,
+        "measured_deceleration_available",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    beta = _as_scalar_flat(
+        ics_beta,
+        "ics_beta",
+        N,
+        default=1.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    emergency_flag = _as_scalar_flat(
+        ics_emergency,
+        "ics_emergency",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+
+    actual_speed = actual_b.norm(dim=-1, keepdim=True)
+    actual_speed = torch.where(
+        body_available >= 0.5,
+        actual_speed,
+        torch.full_like(actual_speed, float("nan")),
+    )
+    required_stop = (
+        actual_speed * latency
+        + actual_speed.square() / (2.0 * accel)
+    )
+
+    residual_collision = raw_clearance - threshold - required_stop
+    residual_emergency = ics_clearance - emergency - required_stop
+    residual_safe = ics_clearance - safe - required_stop
+    residual_collision = torch.where(
+        (raw_source >= 0.5) & (body_available >= 0.5),
+        residual_collision,
+        torch.full_like(residual_collision, float("nan")),
+    )
+    residual_emergency = torch.where(
+        (ics_source >= 0.5) & (body_available >= 0.5),
+        residual_emergency,
+        torch.full_like(residual_emergency, float("nan")),
+    )
+    residual_safe = torch.where(
+        (ics_source >= 0.5) & (body_available >= 0.5),
+        residual_safe,
+        torch.full_like(residual_safe, float("nan")),
+    )
+
+    beam_direction, beam_index, beam_source = _r5e3_worst_beam_direction(
+        ray_directions_b=ray_directions_b,
+        worst_beam_index=ics_worst_beam_index,
+        N=N,
+        device=device,
+        eps=max(eps, 1e-6),
+    )
+    worst_closing_speed = (actual_b * beam_direction).sum(dim=-1, keepdim=True).clamp_min(0.0)
+    worst_closing_speed = torch.where(
+        (beam_source >= 0.5) & (body_available >= 0.5),
+        worst_closing_speed,
+        torch.full_like(worst_closing_speed, float("nan")),
+    )
+    worst_required = (
+        worst_closing_speed * latency
+        + worst_closing_speed.square() / (2.0 * accel)
+    )
+    worst_residual_collision = raw_clearance - threshold - worst_required
+    worst_residual_emergency = ics_clearance - emergency - worst_required
+    worst_residual_safe = ics_clearance - safe - worst_required
+    worst_residual_collision = torch.where(
+        (raw_source >= 0.5) & (beam_source >= 0.5) & (body_available >= 0.5),
+        worst_residual_collision,
+        torch.full_like(worst_residual_collision, float("nan")),
+    )
+    worst_residual_emergency = torch.where(
+        (ics_source >= 0.5) & (beam_source >= 0.5) & (body_available >= 0.5),
+        worst_residual_emergency,
+        torch.full_like(worst_residual_emergency, float("nan")),
+    )
+    worst_residual_safe = torch.where(
+        (ics_source >= 0.5) & (beam_source >= 0.5) & (body_available >= 0.5),
+        worst_residual_safe,
+        torch.full_like(worst_residual_safe, float("nan")),
+    )
+
+    full_stop = (final_b.norm(dim=-1, keepdim=True) <= eps).float()
+    collision_exhausted = (torch.isfinite(residual_collision) & (residual_collision < 0.0)).float()
+    emergency_exhausted = (torch.isfinite(residual_emergency) & (residual_emergency < 0.0)).float()
+    safe_exhausted = (torch.isfinite(residual_safe) & (residual_safe < 0.0)).float()
+    worst_collision_exhausted = (
+        torch.isfinite(worst_residual_collision) & (worst_residual_collision < 0.0)
+    ).float()
+    worst_emergency_exhausted = (
+        torch.isfinite(worst_residual_emergency) & (worst_residual_emergency < 0.0)
+    ).float()
+    worst_safe_exhausted = (
+        torch.isfinite(worst_residual_safe) & (worst_residual_safe < 0.0)
+    ).float()
+
+    one = torch.ones((N, 1), dtype=torch.float32, device=device)
+    missing_contact = 1.0 - contact_available
+    missing_body = 1.0 - body_available
+    missing_surface = 1.0 - surface_available
+    missing_decel = 1.0 - decel_available
+    missing_worst = 1.0 - beam_source
+
+    return {
+        "r5e3_raw_min_clearance": raw_clearance,
+        "r5e3_ics_min_clearance": ics_clearance,
+        "r5e3_collision_clearance_threshold": torch.full((N, 1), threshold, dtype=torch.float32, device=device),
+        "r5e3_emergency_clearance": torch.full((N, 1), emergency, dtype=torch.float32, device=device),
+        "r5e3_d_safe": torch.full((N, 1), safe, dtype=torch.float32, device=device),
+        "r5e3_a_max": torch.full((N, 1), accel, dtype=torch.float32, device=device),
+        "r5e3_latency_sec": torch.full((N, 1), latency, dtype=torch.float32, device=device),
+        "r5e3_command_eps": torch.full((N, 1), eps, dtype=torch.float32, device=device),
+        "r5e3_low_beta_threshold": torch.full((N, 1), beta_threshold, dtype=torch.float32, device=device),
+        "r5e3_actual_body_speed_xy": torch.where(
+            body_available >= 0.5,
+            actual_b[..., :2].norm(dim=-1, keepdim=True),
+            torch.full((N, 1), float("nan"), dtype=torch.float32, device=device),
+        ),
+        "r5e3_actual_body_speed_z_abs": torch.where(
+            body_available >= 0.5,
+            actual_b[..., 2:3].abs(),
+            torch.full((N, 1), float("nan"), dtype=torch.float32, device=device),
+        ),
+        "r5e3_actual_body_speed_norm": actual_speed,
+        "r5e3_v_final_body_speed_xy": final_b[..., :2].norm(dim=-1, keepdim=True),
+        "r5e3_v_final_body_speed_z_abs": final_b[..., 2:3].abs(),
+        "r5e3_v_final_body_speed_norm": final_b.norm(dim=-1, keepdim=True),
+        "r5e3_required_stop_distance_conservative": required_stop,
+        "r5e3_residual_to_collision_threshold": residual_collision,
+        "r5e3_residual_to_emergency": residual_emergency,
+        "r5e3_residual_to_d_safe": residual_safe,
+        "r5e3_collision_margin_exhausted": collision_exhausted,
+        "r5e3_emergency_margin_exhausted": emergency_exhausted,
+        "r5e3_d_safe_margin_exhausted": safe_exhausted,
+        "r5e3_low_beta": (beta < beta_threshold).float(),
+        "r5e3_full_stop_commanded": full_stop,
+        "r5e3_full_stop_after_collision_margin_exhausted": full_stop * collision_exhausted,
+        "r5e3_full_stop_after_emergency_margin_exhausted": full_stop * emergency_exhausted,
+        "r5e3_worst_ics_beam_index": beam_index,
+        "r5e3_worst_beam_closing_speed": worst_closing_speed,
+        "r5e3_worst_beam_required_stop_distance": worst_required,
+        "r5e3_worst_beam_residual_to_collision_threshold": worst_residual_collision,
+        "r5e3_worst_beam_residual_to_emergency": worst_residual_emergency,
+        "r5e3_worst_beam_residual_to_d_safe": worst_residual_safe,
+        "r5e3_worst_beam_collision_margin_exhausted": worst_collision_exhausted,
+        "r5e3_worst_beam_emergency_margin_exhausted": worst_emergency_exhausted,
+        "r5e3_worst_beam_d_safe_margin_exhausted": worst_safe_exhausted,
+        "r5e3_worst_beam_full_stop_after_collision_margin_exhausted": full_stop * worst_collision_exhausted,
+        "r5e3_worst_beam_full_stop_after_emergency_margin_exhausted": full_stop * worst_emergency_exhausted,
+        "r5e3_raw_min_clearance_source_available": raw_source,
+        "r5e3_ics_min_clearance_source_available": ics_source,
+        "r5e3_contact_telemetry_available": contact_available,
+        "r5e3_body_telemetry_available": body_available,
+        "r5e3_surface_normal_available": surface_available,
+        "r5e3_measured_deceleration_available": decel_available,
+        "r5e3_worst_ics_beam_source_available": beam_source,
+        "r5e3_missing_clearance_source": 1.0 - raw_source,
+        "r5e3_missing_contact_telemetry": missing_contact,
+        "r5e3_missing_body_telemetry": missing_body,
+        "r5e3_missing_contact_body_telemetry": torch.maximum(missing_contact, missing_body),
+        "r5e3_missing_surface_normal": missing_surface,
+        "r5e3_missing_measured_deceleration": missing_decel,
+        "r5e3_missing_worst_ics_beam": missing_worst,
+        "r5e3_conservative_approximation_used": one,
+    }
 
 
 def compute_vertical_channel_step_metrics(

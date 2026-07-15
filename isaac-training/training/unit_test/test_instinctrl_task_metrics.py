@@ -727,6 +727,143 @@ def test_r5e2_collision_geometry_reason_codes_and_window_contract():
         assert field_name in metrics.R5E2_COLLISION_WINDOW_VALUE_FIELDS
 
 
+def test_r5e3_braking_residual_metrics_report_conservative_and_worst_beam_contract():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e3_braking_residual_step_metrics(
+        v_final_b=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [0.2, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]),
+        actual_velocity_b=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 2.0, 0.0],
+            [3.0, 0.0, 4.0],
+        ]),
+        raw_min_clearance=torch.tensor([[0.6], [3.0], [float("nan")]]),
+        ics_min_clearance=torch.tensor([[0.7], [2.0], [1.0]]),
+        raw_min_clearance_source_available=torch.tensor([[1.0], [1.0], [0.0]]),
+        ics_min_clearance_source_available=torch.tensor([[1.0], [1.0], [1.0]]),
+        ics_beta=torch.tensor([[0.2], [1.0], [0.5]]),
+        ics_emergency=torch.tensor([[1.0], [0.0], [0.0]]),
+        contact_telemetry_available=torch.tensor([[0.0], [1.0], [0.0]]),
+        ics_worst_beam_index=torch.tensor([[0], [1], [-1]]),
+        ray_directions_b=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ]),
+        collision_clearance_threshold=0.3,
+        emergency_clearance=0.25,
+        d_safe=0.8,
+        a_max=2.0,
+        latency_sec=0.1,
+        command_eps=0.05,
+        low_beta_threshold=0.999,
+    )
+
+    for field_name in metrics.R5E3_DIAGNOSTIC_FIELDS:
+        assert field_name in summary
+        assert summary[field_name].shape == (3, 1)
+
+    required = summary["r5e3_required_stop_distance_conservative"].reshape(-1)
+    assert torch.allclose(required[:2], torch.tensor([0.35, 1.2]), atol=1e-6)
+    assert abs(required[2].item() - 6.75) < 1e-6
+    assert torch.allclose(
+        summary["r5e3_residual_to_collision_threshold"].reshape(-1)[:2],
+        torch.tensor([-0.05, 1.5]),
+        atol=1e-6,
+    )
+    assert not torch.isfinite(summary["r5e3_residual_to_collision_threshold"][2, 0])
+    assert torch.allclose(
+        summary["r5e3_residual_to_emergency"].reshape(-1)[:2],
+        torch.tensor([0.10, 0.55]),
+        atol=1e-6,
+    )
+    assert torch.allclose(
+        summary["r5e3_residual_to_d_safe"].reshape(-1)[:2],
+        torch.tensor([-0.45, 0.0]),
+        atol=1e-6,
+    )
+
+    assert summary["r5e3_full_stop_commanded"].reshape(-1).tolist() == [1.0, 0.0, 1.0]
+    assert summary["r5e3_full_stop_after_collision_margin_exhausted"].reshape(-1).tolist() == [
+        1.0,
+        0.0,
+        0.0,
+    ]
+    assert summary["r5e3_full_stop_after_emergency_margin_exhausted"].reshape(-1).tolist() == [
+        0.0,
+        0.0,
+        1.0,
+    ]
+    assert summary["r5e3_low_beta"].reshape(-1).tolist() == [1.0, 0.0, 1.0]
+    assert summary["r5e3_contact_telemetry_available"].reshape(-1).tolist() == [0.0, 1.0, 0.0]
+    assert summary["r5e3_body_telemetry_available"].reshape(-1).tolist() == [1.0, 1.0, 1.0]
+    assert summary["r5e3_missing_surface_normal"].reshape(-1).tolist() == [1.0, 1.0, 1.0]
+    assert summary["r5e3_missing_measured_deceleration"].reshape(-1).tolist() == [1.0, 1.0, 1.0]
+    assert summary["r5e3_conservative_approximation_used"].reshape(-1).tolist() == [1.0, 1.0, 1.0]
+
+    assert summary["r5e3_worst_ics_beam_source_available"].reshape(-1).tolist() == [
+        1.0,
+        1.0,
+        0.0,
+    ]
+    assert torch.allclose(
+        summary["r5e3_worst_beam_closing_speed"].reshape(-1)[:2],
+        torch.tensor([1.0, 2.0]),
+        atol=1e-6,
+    )
+    assert torch.allclose(
+        summary["r5e3_worst_beam_residual_to_collision_threshold"].reshape(-1)[:2],
+        torch.tensor([-0.05, 1.5]),
+        atol=1e-6,
+    )
+    assert not torch.isfinite(summary["r5e3_worst_beam_residual_to_collision_threshold"][2, 0])
+
+    assert metrics.R5E3_COLLISION_WINDOW_STEPS == (25, 50)
+    assert metrics.R5E3_LOW_BETA_WINDOW_STEPS == (25, 50)
+    for field_name in [
+        "v_gov_body_speed_norm",
+        "v_final_body_speed_norm",
+        "controller_command_world_speed_norm",
+        "actual_body_speed_norm",
+        "actual_world_speed_norm",
+        "ics_beta",
+        "ics_emergency",
+        "ics_active_beam_count",
+        "ics_min_clearance",
+        "raw_min_clearance",
+        "required_stop_distance_conservative",
+        "residual_to_collision_threshold",
+        "worst_beam_residual_to_collision_threshold",
+        "full_stop_after_collision_margin_exhausted",
+        "missing_worst_ics_beam",
+    ]:
+        assert field_name in metrics.R5E3_WINDOW_VALUE_FIELDS
+
+
+def test_r5e3_braking_residual_metrics_flag_missing_body_and_beam_sources():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e3_braking_residual_step_metrics(
+        v_final_b=torch.zeros(2, 3),
+        actual_velocity_b=None,
+        raw_min_clearance=torch.tensor([[1.0], [1.0]]),
+        ics_min_clearance=None,
+        raw_min_clearance_source_available=torch.ones(2, 1),
+        ics_worst_beam_index=None,
+        ray_directions_b=None,
+    )
+
+    assert summary["r5e3_body_telemetry_available"].reshape(-1).tolist() == [0.0, 0.0]
+    assert summary["r5e3_missing_body_telemetry"].reshape(-1).tolist() == [1.0, 1.0]
+    assert summary["r5e3_ics_min_clearance_source_available"].reshape(-1).tolist() == [0.0, 0.0]
+    assert summary["r5e3_missing_worst_ics_beam"].reshape(-1).tolist() == [1.0, 1.0]
+    assert not torch.isfinite(summary["r5e3_required_stop_distance_conservative"]).any()
+    assert not torch.isfinite(summary["r5e3_residual_to_collision_threshold"]).any()
+
+
 def test_r5e1_controller_latency_metrics_report_frame_splits_masks_and_prev_action():
     metrics = _load_task_metrics()
 

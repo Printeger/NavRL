@@ -329,6 +329,16 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "r5e2_height",
             "r5e2_below_bound",
             "r5e2_ceiling",
+            "r5e3_residual",
+            "r5e3_braking",
+            "r5e3_low_beta",
+            "r5e3_collision_window",
+            "r5e3_full_stop",
+            "r5e3_missing",
+            "r5e3_worst_beam",
+            "r5e3_conservative",
+            "r5e3_raw_min_clearance",
+            "r5e3_ics_min_clearance",
         ),
     )
     _copy_r5e_top_level_keys(combined_summary, station_summary, tracking_summary)

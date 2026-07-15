@@ -38,9 +38,11 @@ import time
 from instinctRL.task_metrics import (
     COMMAND_MODE_NORMAL,
     COMMAND_MODE_RECOVERY,
+    R5E3_DIAGNOSTIC_FIELDS,
     command_curriculum_probabilities,
     compute_handbook_step_metrics,
     compute_r5e2_collision_geometry_step_metrics,
+    compute_r5e3_braking_residual_step_metrics,
     compute_termination_stats,
     nearest_obstacle_vector_from_scan,
     world_to_body_velocity,
@@ -729,6 +731,10 @@ class NavigationEnv(IsaacEnv):
             "r5e2_reason_ground": UnboundedContinuousTensorSpec((1,), device=self.device),
             "r5e2_reason_unknown": UnboundedContinuousTensorSpec((1,), device=self.device),
         }
+        info_spec_fields.update({
+            key: UnboundedContinuousTensorSpec((1,), device=self.device)
+            for key in R5E3_DIAGNOSTIC_FIELDS
+        })
         anchor_cfg = getattr(getattr(self.cfg, "instinctRL", None), "anchor", None)
         if anchor_cfg is not None and getattr(anchor_cfg, "enabled", False):
             info_spec_fields.update({
@@ -776,6 +782,7 @@ class NavigationEnv(IsaacEnv):
                 "ics_active_beam_count": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "ics_min_clearance": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "ics_worst_margin": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_worst_beam_index": UnboundedContinuousTensorSpec((1,), dtype=torch.long, device=self.device),
                 "ics_emergency": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "ics_command_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "ics_brake_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
@@ -957,6 +964,10 @@ class NavigationEnv(IsaacEnv):
         for key, value in ics_out.metrics.items():
             if key in self.info.keys():
                 self.info[key][:] = value
+        if "ics_worst_beam_index" in self.info.keys():
+            index = ics_out.cache.get("ics_worst_beam_index")
+            if index is not None:
+                self.info["ics_worst_beam_index"][:] = index.reshape(self.num_envs, 1)
 
     def _update_instinctrl_command(self):
         """Update body-frame command for the command-governor task."""
@@ -1272,6 +1283,11 @@ class NavigationEnv(IsaacEnv):
         collision = static_collision | dynamic_collision
         r5e2_min_clearance = None
         r5e2_min_clearance_source_available = None
+        r5e3_actual_velocity_b = None
+        r5e3_v_final_b = None
+        r5e3_raw_min_clearance = None
+        r5e3_raw_min_clearance_source_available = None
+        r5e3_ics_min_clearance_source_available = None
         
         # ============================================
         # 最终奖励计算（权重调优）
@@ -1300,6 +1316,7 @@ class NavigationEnv(IsaacEnv):
             )
             flat_range = obs_frame["range"].reshape(self.num_envs, -1)
             flat_mask = obs_frame["mask"].reshape(self.num_envs, -1) > 0
+            flat_weight = obs_frame["weight"].reshape(self.num_envs, -1).clamp(0.0, 1.0)
             valid_range = flat_mask & torch.isfinite(flat_range)
             min_clearance_source_available = valid_range.any(dim=1, keepdim=True).float()
             raw_min_clearance = torch.where(
@@ -1318,6 +1335,17 @@ class NavigationEnv(IsaacEnv):
                 torch.full_like(raw_min_clearance, float("nan")),
             )
             r5e2_min_clearance_source_available = min_clearance_source_available
+            ics_cfg = getattr(self.cfg.instinctRL, "ics", None)
+            ics_min_reliability = float(getattr(ics_cfg, "min_reliability", 0.1))
+            r5e3_ics_source = valid_range & (flat_weight >= ics_min_reliability)
+            r5e3_actual_velocity_b = actual_velocity_b
+            r5e3_v_final_b = issued_v_final_b
+            r5e3_raw_min_clearance = r5e2_min_clearance
+            r5e3_raw_min_clearance_source_available = min_clearance_source_available
+            r5e3_ics_min_clearance_source_available = r5e3_ics_source.any(
+                dim=1,
+                keepdim=True,
+            ).float()
             self.info["min_clearance"][:] = min_clearance
 
             reward_terms = self._reward_computer.compute(
@@ -1433,6 +1461,54 @@ class NavigationEnv(IsaacEnv):
                 ground_contact=contact_available,
             )
             for key, value in r5e2_metrics.items():
+                if key in self.info.keys():
+                    self.info[key][:] = value
+
+        if r5e3_v_final_b is not None and "r5e3_raw_min_clearance" in self.info.keys():
+            reward_cfg = getattr(getattr(self.cfg, "instinctRL", None), "reward", None)
+            ics_cfg = getattr(getattr(self.cfg, "instinctRL", None), "ics", None)
+            contact_available = (
+                torch.zeros_like(r5e3_raw_min_clearance)
+                if r5e3_raw_min_clearance is not None
+                else None
+            )
+            r5e3_metrics = compute_r5e3_braking_residual_step_metrics(
+                v_final_b=r5e3_v_final_b,
+                actual_velocity_b=r5e3_actual_velocity_b,
+                raw_min_clearance=r5e3_raw_min_clearance,
+                ics_min_clearance=(
+                    self.info["ics_min_clearance"]
+                    if "ics_min_clearance" in self.info.keys()
+                    else None
+                ),
+                raw_min_clearance_source_available=r5e3_raw_min_clearance_source_available,
+                ics_min_clearance_source_available=r5e3_ics_min_clearance_source_available,
+                ics_beta=self.info["ics_beta"] if "ics_beta" in self.info.keys() else None,
+                ics_emergency=(
+                    self.info["ics_emergency"]
+                    if "ics_emergency" in self.info.keys()
+                    else None
+                ),
+                contact_telemetry_available=contact_available,
+                ics_worst_beam_index=(
+                    self.info["ics_worst_beam_index"]
+                    if "ics_worst_beam_index" in self.info.keys()
+                    else None
+                ),
+                ray_directions_b=(
+                    self._mid360_ray_dirs_b
+                    if hasattr(self, "_mid360_ray_dirs_b")
+                    else None
+                ),
+                collision_clearance_threshold=0.3,
+                emergency_clearance=float(getattr(ics_cfg, "emergency_clearance", 0.25)),
+                d_safe=float(getattr(ics_cfg, "d_safe", 0.8)),
+                a_max=float(getattr(ics_cfg, "a_max", 2.0)),
+                latency_sec=float(getattr(ics_cfg, "latency_sec", 0.0)),
+                command_eps=float(getattr(reward_cfg, "command_eps", 1e-3)),
+                low_beta_threshold=float(getattr(ics_cfg, "low_beta_threshold", 0.999)),
+            )
+            for key, value in r5e3_metrics.items():
                 if key in self.info.keys():
                     self.info[key][:] = value
 

@@ -1643,3 +1643,82 @@ Validation:
 - `python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
 - `python -m pytest -q training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_task_metrics.py`: passed, `31 passed`.
 - `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `134 passed, 12 warnings`.
+
+## A2-R5 Evidence-3 ICS Braking-Distance Residual Diagnostics - 2026-07-15
+
+Scope and authority:
+
+- Evidence-3 is eval/logging-only. It adds passive `r5e3_*` braking-distance residual diagnostics for ICS low-beta, full-stop, and collision/pre-collision windows.
+- It does not change actor observation, gates, platform/sensor configuration, governor/controller/ICS behavior, safety-filter defaults, R5J behavior, training, sweeps, 1M confirmation, warm-starting, promotion, or hard-gate thresholds.
+- Replays used the three existing R5G checkpoint eval commands from `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json`; the only changed override was `result_path`.
+- Conservative residuals use realized body-speed norm, configured `a_max`, configured latency, and the existing `0.3m` collision threshold.
+- Worst-ICS-beam residuals use `ics_worst_beam_index` and MID360 body-frame ray directions when available. Collision-window worst-beam source availability is reported as `1 - missing_worst_ics_beam_rate`.
+- Contact-body telemetry, exact surface normals, and measured deceleration remain unavailable in this environment. The diagnostics therefore support a braking-residual mechanism plan, not an exact contact-body/deceleration proof.
+- All `r5e3_*` diagnostics remain outside actor observation. Actor audit coverage now explicitly rejects `r5e3_*` and `evidence3_*` actor-observation keys.
+
+Artifacts:
+
+| Variant | Evidence-3 replay artifact |
+|---|---|
+| `r5g_downatten_z010` | `docs/instinctRL_devlog/tests/artifacts/r5e3_braking_residual/20260714_234801/r5e3_r5g_downatten_z010_eval.json` |
+| `r5g_downatten_z005` | `docs/instinctRL_devlog/tests/artifacts/r5e3_braking_residual/20260714_234801/r5e3_r5g_downatten_z005_eval.json` |
+| `r5g_smooth040` | `docs/instinctRL_devlog/tests/artifacts/r5e3_braking_residual/20260714_234801/r5e3_r5g_smooth040_eval.json` |
+
+Step-level residual summaries:
+
+| Variant | Collision terminations | Safety collision rate | Low-beta rate | Full-stop rate | Full-stop after collision margin exhausted | Residual to collision p05 | Residual to emergency p05 | Missing worst beam rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 1 | 0.0000625 | 0.0320 | 0.0329 | 0.000219 | 0.6687 | 0.5709 | 0.7448 |
+| `r5g_downatten_z005` | 2 | 0.0001250 | 0.0353 | 0.0341 | 0.000188 | 0.8069 | 0.7080 | 0.8086 |
+| `r5g_smooth040` | 0 | 0.0000000 | 0.0689 | 0.0679 | 0.000000 | 0.3509 | 0.2530 | 0.7652 |
+
+Collision-window braking residual evidence:
+
+| Variant | Window | Episodes | Steps | Full-stop rate | Full-stop after collision margin exhausted | Residual to collision mean | Residual to collision p05 | Worst-beam residual to collision p05 | Worst-beam source availability | Actual body speed norm mean | Final body speed norm mean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 25 | 1 | 25 | 1.000 | 0.240 | 0.0139 | -0.0075 | -0.0008 | 1.000 | 0.1934 | 0.0000 |
+| `r5g_downatten_z010` | 50 | 1 | 50 | 1.000 | 0.120 | 0.0422 | -0.0047 | 0.0032 | 1.000 | 0.1975 | 0.0000 |
+| `r5g_downatten_z005` | 25 | 2 | 50 | 0.960 | 0.120 | 0.0234 | -0.0047 | -0.0039 | 1.000 | 0.1934 | 0.0000 |
+| `r5g_downatten_z005` | 50 | 2 | 100 | 0.980 | 0.060 | 0.0585 | -0.0015 | -0.0006 | 1.000 | 0.1974 | 0.0000 |
+| `r5g_smooth040` | 25 | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| `r5g_smooth040` | 50 | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+
+Low-beta event windows:
+
+| Variant | Window | Episodes | Steps | Residual to collision p05 | Worst-beam residual to collision p05 | Full-stop after collision margin exhausted | Missing worst beam rate |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 25 | 8 | 200 | 0.5337 | 0.6214 | 0.000 | 0.1200 |
+| `r5g_downatten_z010` | 50 | 8 | 400 | 0.5390 | 0.6304 | 0.000 | 0.1225 |
+| `r5g_downatten_z005` | 25 | 9 | 225 | 0.6089 | 0.6276 | 0.000 | 0.0000 |
+| `r5g_downatten_z005` | 50 | 9 | 450 | 0.6234 | 0.6381 | 0.000 | 0.0000 |
+| `r5g_smooth040` | 25 | 19 | 475 | 0.1178 | 0.1508 | 0.000 | 0.1874 |
+| `r5g_smooth040` | 50 | 19 | 950 | 0.1443 | 0.1938 | 0.000 | 0.2042 |
+
+Missing telemetry and exactness:
+
+- `r5e3_missing_contact_telemetry_rate=1.0`, `r5e3_missing_surface_normal_rate=1.0`, and `r5e3_missing_measured_deceleration_rate=1.0` for all three replayed variants.
+- `r5e3_missing_body_telemetry_rate=0.0` for all three variants, so realized body-speed residuals are available.
+- `r5e3_conservative_approximation_used_rate=1.0` for all three variants.
+- Worst-beam telemetry is sparse at the whole-pass level (`missing_worst_ics_beam_rate` about `0.745-0.809`), but available throughout the downatten collision windows (`missing_worst_ics_beam_rate=0.0`, source availability `1.0`).
+
+Interpretation:
+
+- Downatten collision windows show full-stop commands (`v_final_b` speed norm `0.0`) while realized body speed remains about `0.193-0.197 m/s`.
+- Conservative collision-threshold residual p05 is negative in every downatten collision window, meaning some stopped pre-collision steps had already exhausted the residual distance to the existing `0.3m` collision threshold.
+- Worst-ICS-beam residual p05 is also negative for `r5g_downatten_z010` 25-step windows and for both `r5g_downatten_z005` 25/50-step windows, with collision-window source availability `1.0`.
+- `r5g_downatten_z010` 50-step worst-beam p05 is slightly positive (`0.0032`), so the worst-beam evidence is strongest at the nearer collision window and in `r5g_downatten_z005`.
+- Low-beta event windows outside collision remain residual-positive at p05 and do not by themselves show late full stops. The actionable signal is specifically the downatten collision-window residual exhaustion.
+- `r5g_smooth040` has no collision windows in this replay; its low-beta windows remain residual-positive but the variant still fails other R5 safety/height criteria documented in Evidence-2.
+
+R5J status:
+
+- `R5J plan may be drafted next`.
+- This authorization is limited to drafting a plan from the Evidence-3 braking-residual mechanism. It does not authorize a behavior patch, training, sweeps, 1M confirmation, warm-starting, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, or safety-filter default changes.
+- The R5J plan must preserve actor-clean boundaries and include tests that protect actor observation, ICS/controller behavior defaults, and braking-residual diagnostics.
+- The remaining missing contact-body, surface-normal, and measured-deceleration telemetry must be treated as an exactness caveat in any R5J plan.
+
+Validation:
+
+- `python -m py_compile training/scripts/instinctRL/ics.py training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_task_metrics.py`: passed, `33 passed`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `136 passed, 12 warnings`.
