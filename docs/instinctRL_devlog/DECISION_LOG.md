@@ -31,6 +31,27 @@
 
 ---
 
+## D-2026-07-15-002: R5I Assumption Review Is Documentation-Only
+
+**Decision**: R5I is a handbook/environment/controller assumption review only. It does not authorize training, sweeps, 1M confirmation, warm-starting, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, reward/default behavior edits, body-frame velocity-governor method edits, or privileged root-height safety-filter defaults.
+
+**Evidence**:
+
+- R5I source review found the R5 simulation path still locked to TASLAB_UAV + Livox MID360, with actor observation exactly `lidar_grid + state_vec`.
+- `state_vec` source layout remains `[imu6, v_cmd3, prev_action3, frame_age1]` per latest history frame; runtime actor audit still has the known caveat that it is key/schema based rather than producer-provenance based.
+- Train/eval controller path remains body-frame `v_gov`, body-frame ICS `v_final`, body-to-world adapter, and `VelController(LeePositionController)`.
+- R5H evidence shows null final output is tiny while actual null XY remains high, `prev_action` is aligned with `v_final`, and downatten collision windows are already fully stopped at `ics_beta=0` with nonzero actual XY.
+- R5H evidence keeps anchor active/valid high while anchor error and high-loss remain high, and shows preservation loss is an objective interaction rather than a hard-gate implementation error.
+
+**Consequence**:
+
+- No concrete actor-clean implementation defect or mechanism gap has been identified.
+- R5J mechanism fix planning is not authorized from current evidence.
+- Sweeps, 1M, warm-start, promotion, hard-gate changes, actor-observation changes, platform/sensor changes, method changes, and privileged root-height safety-filter defaults remain forbidden.
+- Future work may document plan-only diagnostics for controller latency/inertia, collision geometry reason, braking-distance residual, RayCaster/MID360 transform audit, or anchor-reference drift.
+
+---
+
 ## D-2026-07-11-001: A2-R3 Station Correction Repair
 
 **Decision**: Do not promote any `20260711_111713` A2-R2 sweep candidate to 1M or formal training. Replace the hard-zero null-command interpretation with a soft, measurement-anchored station-correction path and rerun a fresh 128k A2-R3 sweep.

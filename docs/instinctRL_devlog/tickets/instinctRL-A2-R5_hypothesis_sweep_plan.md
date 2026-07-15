@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5H mechanism diagnosis completed; stop sweeps, no 1M, no R5H micro-sweep, no promotion
+**Status**: R5I assumption review completed; stop sweeps, no 1M, no R5H micro-sweep, no promotion, no R5J unless a concrete actor-clean implementation defect or mechanism gap is identified
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -1238,7 +1238,7 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-R5G execute is complete. Stop sweeps. Do not run 1M, warm-start, promote, run an R5H micro-sweep, change hard gates, change actor observation, change TASLAB_UAV + Livox MID360, change the body-frame velocity-governor method, or enable the privileged root-height safety filter in the default path. Current/next work is R5H mechanism diagnosis documentation and assumption review; a next dry-run variant design is not authorized by the R5H evidence below.
+R5G and R5H are complete, and R5I assumption review is documented below. Stop sweeps. Do not run 1M, warm-start, promote, run an R5H micro-sweep, change hard gates, change actor observation, change TASLAB_UAV + Livox MID360, change the body-frame velocity-governor method, or enable the privileged root-height safety filter in the default path. A next R5J or variant design is not authorized unless a later review identifies a concrete actor-clean implementation defect or mechanism gap.
 
 ## A2-R5G 128k Execute Sweep - 2026-07-14
 
@@ -1447,3 +1447,56 @@ R5H validation:
 - `python -m pytest -q training/unit_test/test_instinctrl_task_metrics.py`: passed, `15 passed`.
 - `python -m pytest -q training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_actor_audit.py`: passed, `13 passed`.
 - `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `131 passed, 12 warnings`.
+
+## A2-R5I Assumption Review - 2026-07-15
+
+Scope:
+
+- This review is documentation/audit only. It does not authorize training, sweeps, 1M, warm-start, promotion, hard-gate edits, actor-observation edits, reward/default behavior edits, platform/sensor edits, command-method edits, or privileged root-height safety-filter defaults.
+- R5I re-read the handbook assumptions, active implementation locations, actor-audit coverage, hard gates, and stored R5H replay artifacts. It did not replay evals or change runtime code.
+- Existing R5H artifacts are sufficient for the current review: `docs/instinctRL_devlog/tests/artifacts/r5h_diagnostics/20260714_234801/r5h_r5g_downatten_z010_eval.json`, `r5h_r5g_downatten_z005_eval.json`, and `r5h_r5g_smooth040_eval.json`.
+
+Review matrix:
+
+| Handbook / CONTEXT requirement | Implementation location | Current evidence | Pass / warn / fail / unknown | Relation to R5H failures |
+|---|---|---|---|---|
+| Locked platform is TASLAB_UAV and locked sensor is Livox MID360. | `training/cfg/drone.yaml`, `training/scripts/env.py`, `training/scripts/instinctRL/audit.py` | `drone.model_name: "TaslabUAV"`; sensor defaults are MID360 range/FOV/beams; `check_platform_lock()` asserts TaslabUAV and MID360 FOV/range; env resolves TASLAB base link dynamically and logs the MID360 pattern hash. | Pass | Not an explanation for R5H failures. R5H artifacts are under the intended platform/sensor lock. |
+| Actor input is only allowed MID360/history, IMU cues, command, previous issued command, and frame age; no pose, odometry, explicit translational velocity, map, SLAM, root state, dynamic-obstacle state, diagnostics, or privileged state. | `training/scripts/instinctRL/observation.py`, `training/scripts/ppo.py`, `training/scripts/instinctRL/audit.py`, `training/unit_test/test_instinctrl_actor_audit.py` | Actor observation schema remains exactly `lidar_grid + state_vec`. `state_vec` latest frame is `[imu6, v_cmd3, prev_action3, frame_age1]`; PPO actor feature extractor reads only `lidar_grid` and `state_vec`; audit and tests reject `r5h_*`, collision-window, root/world-height, `governor_*`, `ics_*`, `ics_downward_*`, min-clearance, map/SLAM, dynamic-obstacle, and safety-filter keys. | Pass with audit caveat | Station/null failure is not explained by actor-observation leakage. Caveat: runtime audit is key/schema based and still does not prove future `state_vec` producer provenance beyond source/tests. |
+| Learned governor action is actor-clean and body-frame: `[alpha, v_corr_x, v_corr_y, v_corr_z]`, decoded from latest actor-clean `state_vec`. | `training/scripts/instinctRL/governor.py`, `training/scripts/ppo.py`, `training/unit_test/test_instinctrl_actor_audit.py` | `TrainableGovernorDecoder` extracts `v_cmd_b` and `prev_action_b` from latest `state_vec`; produces `v_gov = alpha * v_cmd_b + v_corr`; source tests reject privileged `info["v_cmd"]` reads. | Pass | Not the observed station explanation: R5H null output XY is tiny (`0.00699`, `0.01795`, `0.01250`) while actual XY remains high (`0.177`, `0.183`, `0.169`). |
+| Controller path remains velocity-controller based: body-frame `v_gov`, ICS body-frame `v_final`, body-to-world adapter, then `VelController(LeePositionController)`. | `training/scripts/train.py`, `training/scripts/eval.py`, `training/scripts/instinctRL/ics.py`, `training/scripts/instinctRL/command_adapter.py`, `training/scripts/env.py` | Train/eval wrappers take `governor_v_gov_b`, run `RangeHistoryICSAttenuator` when enabled, store `prev_issued_action_body`, rotate `v_final_b` with `BodyToWorldVelocityAdapter`, and write world-frame `agents.action` for `VelController(LeePositionController)`. | Pass | R5H collision windows show `ics_beta=0` and `v_final_xy/z=0`, yet actual XY remains about `0.1768 m/s`; this shifts suspicion beyond actor/governor command generation to controller latency, physics inertia, termination timing, obstacle geometry, and emergency-threshold assumptions. |
+| Previous issued command in `state_vec` should be the last body-frame command issued to the controller. | `training/scripts/env.py`, `training/scripts/instinctRL/observation.py`, `training/scripts/train.py`, `training/scripts/eval.py` | Wrappers call `set_prev_issued_action_body(v_final_body)` before controller action; observation builder requires `prev_action`; R5H `prev_action_v_final_mismatch_xy` is near zero (`0.000117`, `0.000018`, `0.000016`) and alignment is high (`0.982-0.999`). | Pass | Stale or miswired `prev_action` is not the R5H station/null explanation. |
+| MID360 geometry must match handbook convention: stable body-frame rays, mount pitch, RayCaster offset, full attitude attachment, and no generic sensor fallback in the instinctRL path. | `training/scripts/instinctRL/mid360_pattern.py`, `training/scripts/env.py`, `training/cfg/drone.yaml`, `training/unit_test/test_instinctrl_mid360_pattern.py` | Pattern helper creates zero-mount MID360 rays; RayCaster applies `offset` from `lidar_mount_position=[0,0,0.05]` and `mount_quat_wxyz()` from `lidar_mount_pitch=30.0`, roll/yaw 0; `attach_yaw_only=False`; ray directions are cached as `_mid360_ray_dirs_b`. | Warn | Geometry is actor-clean and matches the current convention, but downward-safety behavior is sensitive to the composed zero-mount pattern plus RayCaster offset/quaternion. R5G z010/z005 triggered downward active at about `0.65`, unlike R5F z025, yet collisions remained near low clearance. |
+| ICS attenuation is MID360/history based and actor-clean, not a privileged root-height behavior patch. | `training/scripts/instinctRL/ics.py`, `training/cfg/train.yaml`, `training/cfg/eval.yaml`, `training/scripts/instinctRL/safety_filter.py`, actor-audit tests | ICS consumes range/mask/weight history and body-frame ray directions. Privileged height filter is default-off in train/eval and labeled sim/eval-only; actor tests forbid safety-filter and root-height keys. | Pass with mechanism warning | R5H downatten is active (`0.6555` / `0.6515` overall; z005 collision-window active `1.0`), but collision persists. This is a late/near-threshold mechanism warning, not evidence for another parameter retry. |
+| Collision and safety gates are acceptance gates; thresholds must not be relaxed to promote. | `training/scripts/instinctRL/gates.py`, `training/unit_test/test_instinctrl_gates.py`, this ticket's Current Hard Gates | Gates still require collision rate `0`, clearance p05 `>=1.0`, ICS `<=0.005`, termination collision/below/above `0`, plus station/tracking limits. No threshold changes were made in R5I. | Pass | R5H failures are real acceptance failures: downatten variants fail collision/ICS/termination-collision; smooth040 fails below-bound/clearance/ICS/preservation. |
+| Anchor is measurement-space station-keeping, actor-clean, and should remain meaningful under null command. | `training/scripts/instinctRL/anchor.py`, `training/scripts/instinctRL/rewards.py`, `training/scripts/instinctRL/task_metrics.py`, R5H artifacts | Anchor active/valid is high (`0.999`), but active/valid anchor error stays high (`3.24-3.26`), high-loss rate remains about `0.91`, and high-loss anchor error is `3.52-3.54`. | Warn | High anchor error is not explained by inactive/invalid anchors. Review whether measurement-space anchor semantics conflict with station drift, changing measurement space, or nearby geometry under the current command/controller dynamics. |
+| Tracking objective should preserve commanded motion while allowing safety intervention. | `training/scripts/instinctRL/rewards.py`, `training/scripts/instinctRL/task_metrics.py`, R5H artifacts | Preservation remains below gate: `0.5586`, `0.6203`, `0.4204`. Loss is mostly governor/pre-ICS for z010 (`0.4565`) and smooth040 (`0.6587`); z005 adds vertical post-ICS loss (`0.4674`). | Warn | This is an objective-interaction warning, not a hard-gate bug. Current evidence does not identify one actor-clean knob that fixes station, preservation, and safety together. |
+| Observability diagnostics must remain eval/logging-only and not actor input. | `training/scripts/instinctRL/observability.py`, `training/scripts/eval.py`, actor-audit tests, R5H artifacts | Short diagnostic eval includes proxy observability summaries; actor schema/source tests keep the actor on exactly `lidar_grid + state_vec`, so observability summaries stay outside actor observation. | Pass with scope caveat | R5H anchor and station failures are not explained by observability actor leakage; however, future mechanism review may need ray/anchor-reference drift diagnostics. |
+| Dynamic-obstacle claims require MID360-visible geometry; short diagnostic R5 runs are static. | `training/cfg/eval.yaml`, `_preflight_instinctrl_eval()` in `training/scripts/eval.py`, prior conformance audit | Eval defaults use `env_dyn.num_obstacles=0` and require static MID360 for short diagnostic eval. R5 artifacts used `env_dyn.num_obstacles=0`. | Pass for R5 scope | Dynamic-obstacle conformance is not part of the R5H failure explanation and must not be claimed from these artifacts. |
+
+R5I findings:
+
+- No concrete actor-observation leak, platform/sensor substitution, action-interface substitution, hard-gate edit, or privileged root-height default was found.
+- No implementation defect was identified that justifies an immediate R5J mechanism patch.
+- The clearest unresolved issue is not "policy commands too much under null"; R5H shows tiny null final output but persistent actual XY motion.
+- Collision evidence remains cause-unknown/warn: collision windows for downatten have `ics_beta=0` and `v_final_xy/z=0`, while actual XY remains about `0.1768 m/s`. Required follow-up is controller latency/inertia, termination timing, obstacle geometry, and emergency-threshold review.
+- Downward attenuation evidence is a late/near-threshold warning: z010/z005 made downward rays active at about `0.65`, but safety still failed. Do not retry by only adjusting `downward_ray_min_z`.
+- Anchor evidence is a semantics warning: active/valid rate is high, while anchor error and high-loss remain high. Review measurement-space anchor reference stability before tuning anchor weight or Huber again.
+- Tracking evidence is an objective-interaction warning: preservation loss is mostly governor/pre-ICS for z010 and smooth040, with extra post-ICS/vertical loss in z005. Do not treat this as a hard-gate implementation error.
+
+Bug and follow-up policy:
+
+- Concrete bug status: none found in R5I.
+- If a later concrete bug is found, document the bug, evidence, impact, minimal fix plan, and required tests first; do not patch behavior under the R5I authority.
+- Plan-only backlog items allowed after R5I:
+  - controller latency/inertia windows comparing `v_final_b`, world-frame command, and realized body velocity before collision/null windows;
+  - collision geometry reason codes and obstacle/ground contact classification;
+  - braking-distance residual using current `ics_beta`, emergency threshold, active beam count, and measured clearance;
+  - RayCaster/MID360 transform audit for zero-mount pattern plus RayCaster offset/quaternion;
+  - anchor-reference drift diagnostics over null windows with active/valid anchors.
+
+R5I conclusion:
+
+- Handbook deviation status: no new handbook deviation found for the R5 simulation path; existing caveats remain `state_vec` provenance audit depth, deterministic MID360 simulation, static-only diagnostic scope, and non-deployable ROS path outside this R5 scope.
+- Implementation bug status: no concrete actor-clean implementation defect found.
+- R5J status: not authorized from current evidence.
+- Sweep/1M status: sweeps, 1M, warm-start, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, method edits, and privileged root-height safety-filter defaults remain forbidden.
