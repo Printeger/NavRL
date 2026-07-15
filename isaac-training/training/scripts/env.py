@@ -676,6 +676,8 @@ class NavigationEnv(IsaacEnv):
             # Command-governor task fields. These are reward/critic/eval-only;
             # the actor observation remains lidar_grid + state_vec.
             "actual_velocity_b": UnboundedContinuousTensorSpec((1, 3), device=self.device),
+            "r5e1_controller_command_w": UnboundedContinuousTensorSpec((1, 3), device=self.device),
+            "r5e1_actual_velocity_w": UnboundedContinuousTensorSpec((1, 3), device=self.device),
             "min_clearance": UnboundedContinuousTensorSpec((1,), device=self.device),
             "command_mode_code": UnboundedContinuousTensorSpec((1,), dtype=torch.long, device=self.device),
             "command_speed": UnboundedContinuousTensorSpec((1,), device=self.device),
@@ -988,6 +990,8 @@ class NavigationEnv(IsaacEnv):
         # 包含：位置、姿态（四元数）、速度、角速度、朝向、上方向、电机推力
         self.root_state = self.drone.get_state(env_frame=False)
         self.info["drone_state"][:] = self.root_state[..., :13]  # 保存状态信息
+        if "r5e1_actual_velocity_w" in self.info.keys():
+            self.info["r5e1_actual_velocity_w"][:] = self.root_state[..., 7:10]
         root_flat = self.root_state[..., :13].reshape(self.num_envs, 13)
         if hasattr(self, "_station_origin_pos_w"):
             station_drift_w = root_flat[:, :3] - self._station_origin_pos_w

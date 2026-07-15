@@ -1527,3 +1527,57 @@ Next-stage evidence table:
 | ICS braking-distance residual | ICS may compute beta/emergency response too late or with insufficient residual stopping-distance margin even when `v_final=0`. | R5H downatten collisions happen with `v_final=0` and `ics_beta=0`, so the unresolved issue is why full stop still ends in collision. | Explain each stopped-collision window using beta, emergency threshold, active beams, clearance, realized speed, and residual stopping distance. | Yes, if it uses actor-clean ICS inputs and eval-only realized-motion diagnostics without adding actor features. | Residual stopping-distance table for low-beta and collision windows. | Supports the hypothesis only if residual distance shows a specific timing/braking calculation defect or missing diagnostic; rejects it if residuals are consistent with known physics and no implementation/mechanism gap appears. | Only if the residual exposes a specific actor-clean ICS timing/braking calculation defect or missing diagnostic. |
 | RayCaster/MID360 transform audit | The composed zero-mount MID360 pattern, RayCaster offset/quaternion, or full-attitude attachment may mismatch the ray frame used by downatten and clearance evidence. | R5G/R5H downatten is active, but collisions persist near low clearance; a ray-frame mismatch would undermine the downatten/clearance interpretation. | Verify mount pitch, `attach_yaw_only=False`, RayCaster offset/quaternion, cached body-frame ray directions, and zero-mount pattern sanity. | Yes, if this remains a sensor-geometry audit and does not change actor observation. | Transform-audit note comparing configured mount, RayCaster transform, and expected MID360 ray frame. | Supports the hypothesis only if the audit finds a concrete transform/ray-frame mismatch affecting downatten or clearance evidence; rejects it if the transform chain and zero-mount pattern are internally consistent. | Only if the transform audit finds a concrete ray-frame mismatch affecting downatten/clearance evidence. |
 | anchor-reference drift diagnostics | Active/valid anchor references may become unstable under drift, changing measurement space, or nearby geometry while still reporting high active/valid rates. | R5H anchor active/valid is high, but anchor error and high-loss remain high, so inactive anchors do not explain the station failure. | Test whether active/valid anchor references become unstable under drift by comparing anchor reference stability, anchor error, high-loss windows, station drift, null speed, and measurement validity. | Yes, if diagnostics remain measurement-space/eval-only and do not add privileged actor input. | Anchor-reference drift report for active/valid high-loss windows. | Supports the hypothesis only if active/valid anchor references drift or become unstable in a way that explains high loss; rejects it if references are stable and the failure must be attributed elsewhere. | Only if measurement-space anchor reference drift is confirmed as a concrete mechanism gap. |
+
+## A2-R5 Evidence-1 Controller Latency/Inertia Diagnostics - 2026-07-15
+
+Scope and authority:
+
+- Evidence-1 is eval/logging-only. It adds passive diagnostics for controller-boundary command, actual velocity, null/station windows, collision windows, and lag summaries.
+- It does not authorize or include training, sweeps, 1M confirmation, warm-start, promotion, hard-gate changes, actor-observation changes, platform/sensor changes, governor/controller behavior changes, safety-filter default changes, or an R5J behavior patch.
+- Replays used the three existing R5G checkpoint eval commands from `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json`; the only changed override was `result_path`.
+- All `r5e1_*` diagnostics remain outside actor observation. Actor audit coverage now rejects `r5e1_*` and `evidence1_*` actor-observation keys.
+
+Artifacts:
+
+| Variant | Evidence-1 replay artifact |
+|---|---|
+| `r5g_downatten_z010` | `docs/instinctRL_devlog/tests/artifacts/r5e1_controller_latency/20260714_234801/r5e1_r5g_downatten_z010_eval.json` |
+| `r5g_downatten_z005` | `docs/instinctRL_devlog/tests/artifacts/r5e1_controller_latency/20260714_234801/r5e1_r5g_downatten_z005_eval.json` |
+| `r5g_smooth040` | `docs/instinctRL_devlog/tests/artifacts/r5e1_controller_latency/20260714_234801/r5e1_r5g_smooth040_eval.json` |
+
+Station/null evidence:
+
+| Variant | `v_final_b` XY mean | Controller command world XY mean | Actual body XY mean | Actual world XY mean | Best lag improvement XY |
+|---|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 0.00699 | 0.00700 | 0.17744 | 0.17708 | 0.000023 |
+| `r5g_downatten_z005` | 0.01795 | 0.01795 | 0.18304 | 0.18268 | 0.000001 |
+| `r5g_smooth040` | 0.01250 | 0.01253 | 0.16924 | 0.16888 | 0.000039 |
+
+Collision-window evidence:
+
+| Variant | Window | Episodes | Steps | `v_final_b` XY mean | Controller command world XY mean | Actual body XY mean | Actual world XY mean | Best lag improvement XY |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 25 | 1 | 25 | 0.00000 | 0.00000 | 0.17678 | 0.17648 | 0.00000 |
+| `r5g_downatten_z010` | 50 | 1 | 50 | 0.00000 | 0.00000 | 0.18046 | 0.18016 | 0.00000 |
+| `r5g_downatten_z005` | 25 | 2 | 50 | 0.00000 | 0.00000 | 0.17677 | 0.17647 | 0.00000 |
+| `r5g_downatten_z005` | 50 | 2 | 100 | 0.00000 | 0.00000 | 0.18045 | 0.18015 | 0.00000 |
+| `r5g_smooth040` | 25 | 0 | 0 | n/a | n/a | n/a | n/a | n/a |
+| `r5g_smooth040` | 50 | 0 | 0 | n/a | n/a | n/a | n/a | n/a |
+
+Interpretation:
+
+- The controller latency/inertia hypothesis is supported in the bounded Evidence-1 sense: under null/station commands, `v_final_b` and the world-frame controller command are near zero, while actual body/world XY velocity remains gate-relevant at about `0.169-0.183 m/s`; in downatten collision windows, commands are exactly stopped while actual XY remains about `0.176-0.180 m/s`.
+- The lagged-command/stale-command explanation is not supported. Best-lag improvement is negligible in station/null windows and zero in collision windows, so lagged command mismatch does not meaningfully improve over current-command mismatch where the failures occur.
+- Evidence-1 therefore points to physical inertia, controller response, and termination timing after an actor-clean stop command, not to a concrete actor-clean implementation defect or mechanism gap.
+- `r5g_smooth040` has no collision-window rows because it had no collision terminations in this replay; its station/null residual-motion evidence still matches the stopped-command/nonzero-actual-velocity pattern.
+
+R5J status:
+
+- R5J remains unauthorized. Evidence-1 did not identify a specific actor-clean controller-boundary timing bug, stale command recording bug, or missing actor-clean mechanism gap.
+- The next action may be another evidence-only postmortem item from the evidence table, but no R5J plan, behavior patch, sweep, 1M confirmation, warm-start, promotion, hard-gate edit, actor-observation edit, platform/sensor edit, or safety-filter default change is authorized by Evidence-1.
+
+Validation:
+
+- `python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_task_metrics.py`: passed, `30 passed`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `133 passed, 12 warnings`.

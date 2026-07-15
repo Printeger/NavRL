@@ -65,6 +65,12 @@ class InstinctRLEvalPolicy(torch.nn.Module):
         v_final_world = self.adapter(v_final_body, drone_quat)
         if v_final_world.dim() == 3 and v_final_world.shape[-2] == 1:
             v_final_world = v_final_world.squeeze(-2)
+        controller_command_w = v_final_world.reshape(self.env.num_envs, 1, 3)
+        actual_velocity_w = tensordict["info", "drone_state"][..., 7:10]
+        tensordict["info", "r5e1_controller_command_w"] = controller_command_w
+        tensordict["info", "r5e1_actual_velocity_w"] = actual_velocity_w
+        if hasattr(self.env, "info") and "r5e1_controller_command_w" in self.env.info.keys():
+            self.env.info["r5e1_controller_command_w"][:] = controller_command_w
         tensordict["governor_v_final_b"] = v_final_body
         tensordict["governor_v_final_b_z"] = v_final_body[..., 2:3]
         tensordict["agents", "action"] = v_final_world
@@ -283,6 +289,7 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "r5g_anchor",
             "r5h_station",
             "r5h_anchor",
+            "r5e1_station_null",
         ),
     )
     _copy_handbook_keys(
@@ -310,6 +317,8 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "r5h_emergency",
             "r5h_near_floor",
             "r5h_tracking",
+            "r5e1_collision_window",
+            "r5e1_lag",
         ),
     )
     _copy_r5e_top_level_keys(combined_summary, station_summary, tracking_summary)

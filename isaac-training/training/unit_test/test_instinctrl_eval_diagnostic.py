@@ -59,6 +59,8 @@ def test_env_exposes_eval_diagnostics_without_actor_input_leakage():
         '"observability_scenario_id"',
         '"ics_downward_active"',
         '"ics_downward_attenuation_ratio"',
+        '"r5e1_controller_command_w"',
+        '"r5e1_actual_velocity_w"',
         "drift_b=station_drift_b",
         "scenario_id=scenario_id",
         "def configure_instinctrl_eval_pass(",
@@ -75,6 +77,8 @@ def test_env_exposes_eval_diagnostics_without_actor_input_leakage():
         "scenario_id",
         "drift",
         "root_state",
+        "r5e1_",
+        "evidence1_",
     ]:
         assert forbidden not in actor_block
 
@@ -122,6 +126,9 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "eval/handbook.r5e_near_floor_ics_beta_mean",
         "eval/handbook.r5e_near_floor_clearance_p05",
         "eval/handbook.r5e_ics_violation_near_floor_rate",
+        "eval/handbook.r5e1_station_null_steps",
+        "eval/handbook.r5e1_collision_window{window}_steps",
+        "r5e1_lag_best_improvement_xy",
         "eval/handbook.r5g_station_null_mismatch_xy_mean",
         "eval/handbook.r5g_station_null_actual_output_xy_ratio_mean",
         "eval/handbook.r5g_anchor_{suffix}_when_{condition}",
@@ -141,6 +148,8 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
     for key in [
         "compute_vertical_channel_step_metrics(",
         "compute_r5e_mechanism_step_metrics(",
+        "compute_r5e1_controller_latency_step_metrics(",
+        "R5E1ControllerLatencyTracker",
         "compute_r5g_station_anchor_step_metrics(",
         "compute_r5g_downward_step_metrics(",
         "compute_r5h_mechanism_step_metrics(",
@@ -165,6 +174,9 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "r5e_null_actual_speed_xy_mean",
         "r5e_command_preservation_pre_ics_ratio",
         "r5e_near_floor_clearance_p05",
+        "r5e1_station_null",
+        "r5e1_collision_window",
+        "r5e1_lag",
         "r5g_station",
         "r5g_anchor",
         "r5g_near_floor",

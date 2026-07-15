@@ -590,3 +590,148 @@ def test_r5h_collision_window_contract_tracks_25_and_50_step_pre_collision_field
         "r5h_tracking_post_ics_preservation_loss",
     ]:
         assert field_name in metrics.R5H_DIAGNOSTIC_FIELDS
+
+
+def test_r5e1_controller_latency_metrics_report_frame_splits_masks_and_prev_action():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e1_controller_latency_step_metrics(
+        v_final_b=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 1.0],
+        ]),
+        controller_command_w=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, -1.0],
+        ]),
+        actual_velocity_b=torch.tensor([
+            [0.1, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [0.0, -1.0, 0.5],
+        ]),
+        actual_velocity_w=torch.tensor([
+            [0.2, 0.0, 0.0],
+            [0.0, 0.25, 0.0],
+            [0.5, 0.0, -0.25],
+        ]),
+        prev_action_b=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [0.2, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]),
+        command_eps=0.05,
+    )
+
+    for value in summary.values():
+        assert value.shape == (3, 1)
+
+    assert torch.allclose(
+        summary["r5e1_v_final_body_speed_xy"].reshape(-1),
+        torch.tensor([0.0, 1.0, 1.0]),
+    )
+    assert torch.allclose(
+        summary["r5e1_controller_command_world_speed_xy"].reshape(-1),
+        torch.tensor([0.0, 1.0, 1.0]),
+    )
+    assert torch.allclose(
+        summary["r5e1_actual_body_speed_xy"].reshape(-1),
+        torch.tensor([0.1, 0.5, 1.0]),
+    )
+    assert torch.allclose(
+        summary["r5e1_actual_world_speed_xy"].reshape(-1),
+        torch.tensor([0.2, 0.25, 0.5]),
+    )
+    assert torch.allclose(
+        summary["r5e1_command_actual_body_mismatch_xy"].reshape(-1),
+        torch.tensor([0.1, 0.5, 2.0]),
+    )
+    assert torch.allclose(
+        summary["r5e1_command_actual_world_mismatch_xy"].reshape(-1),
+        torch.tensor([0.2, 0.75, 0.5]),
+    )
+    assert summary["r5e1_command_actual_body_alignment_xy_active"].reshape(-1).tolist() == [
+        0.0,
+        1.0,
+        1.0,
+    ]
+    assert torch.allclose(
+        summary["r5e1_command_actual_body_alignment_xy"].reshape(-1),
+        torch.tensor([0.0, 1.0, -1.0]),
+    )
+    assert summary["r5e1_command_actual_world_alignment_xy_active"].reshape(-1).tolist() == [
+        0.0,
+        1.0,
+        1.0,
+    ]
+    assert torch.allclose(
+        summary["r5e1_prev_action_v_final_mismatch_xy"].reshape(-1),
+        torch.tensor([0.0, 0.8, 1.0]),
+    )
+    assert torch.allclose(
+        summary["r5e1_prev_action_v_final_mismatch_z_abs"].reshape(-1),
+        torch.tensor([0.0, 0.0, 1.0]),
+    )
+    assert summary["r5e1_prev_action_available"].sum().item() == 3.0
+
+    no_prev = metrics.compute_r5e1_controller_latency_step_metrics(
+        v_final_b=torch.zeros(2, 3),
+        controller_command_w=torch.zeros(2, 3),
+        actual_velocity_b=torch.zeros(2, 3),
+        actual_velocity_w=torch.zeros(2, 3),
+    )
+    assert no_prev["r5e1_prev_action_available"].sum().item() == 0.0
+    assert not torch.isfinite(no_prev["r5e1_prev_action_v_final_mismatch_xy"]).any()
+
+
+def test_r5e1_lagged_command_metrics_report_best_lag_and_unavailable_masks():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e1_lagged_command_metrics(
+        current_controller_command_w=torch.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ]),
+        actual_velocity_w=torch.tensor([
+            [0.5, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ]),
+        lagged_controller_commands_w={
+            1: torch.tensor([
+                [0.5, 0.0, 0.0],
+                [0.0, 0.5, 0.0],
+            ]),
+            5: None,
+            10: torch.tensor([
+                [2.0, 0.0, 0.0],
+                [0.0, 2.0, 0.0],
+            ]),
+        },
+    )
+
+    assert torch.allclose(
+        summary["r5e1_lag0_command_actual_world_mismatch_xy"].reshape(-1),
+        torch.tensor([0.5, 1.0]),
+    )
+    assert summary["r5e1_lag1_available"].reshape(-1).tolist() == [1.0, 1.0]
+    assert torch.allclose(
+        summary["r5e1_lag1_command_actual_world_mismatch_xy"].reshape(-1),
+        torch.tensor([0.0, 0.5]),
+    )
+    assert summary["r5e1_lag5_available"].sum().item() == 0.0
+    assert not torch.isfinite(
+        summary["r5e1_lag5_command_actual_world_mismatch_xy"]
+    ).any()
+    assert torch.allclose(
+        summary["r5e1_lag_best_command_actual_world_mismatch_xy"].reshape(-1),
+        torch.tensor([0.0, 0.5]),
+    )
+    assert torch.allclose(
+        summary["r5e1_lag_best_step_xy"].reshape(-1),
+        torch.tensor([1.0, 1.0]),
+    )
+    assert torch.allclose(
+        summary["r5e1_lag_best_improvement_xy"].reshape(-1),
+        torch.tensor([0.5, 0.5]),
+    )

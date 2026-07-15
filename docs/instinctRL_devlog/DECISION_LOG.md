@@ -636,3 +636,11 @@
 **Evidence**: The controlled execution artifact `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json` contains six completed jobs with embedded `gate_report` results and no `instinctRL.safety_filter.*` train/eval overrides. No job has `passed=true` or `14/14`. The best ranked job by `sweep.py` ordering is `r5g_downatten_z010` with `6/14`, score `4.6971`, `passed=false`, and `safety_passed=false`. It fails station drift mean/p95, null speed, anchor error, tracking preservation, safety collision rate, ICS, and collision termination. Its `ics_violation_rate=0.02090625` is above the `0.01` stop threshold, and `termination_collision=0.03125`.
 
 **Consequence**: Do not promote by score alone, do not run 1M, and do not run an R5H micro-sweep. Stop sweep escalation and route to mechanism diagnosis focused on station/null command-to-motion mismatch, anchor loss under drift, and safety/ICS collision mechanisms under actor-clean TASLAB_UAV + Livox MID360 constraints.
+
+## D-2026-07-15-004: R5 Evidence-1 Supports Residual Motion, Not R5J
+
+**Decision**: Evidence-1 controller latency/inertia diagnostics may be recorded as eval/logging-only evidence, but R5J remains unauthorized because no concrete actor-clean implementation defect or mechanism gap was found.
+
+**Evidence**: Replays of the existing R5G `r5g_downatten_z010`, `r5g_downatten_z005`, and `r5g_smooth040` checkpoints live under `docs/instinctRL_devlog/tests/artifacts/r5e1_controller_latency/20260714_234801/`. They changed only `result_path` from the stored eval commands. Station/null windows show near-zero `v_final_b` and world-frame controller commands while actual body/world XY remains about `0.169-0.183 m/s`. Downatten collision windows show exactly stopped commands while actual XY remains about `0.176-0.180 m/s`. Best-lag improvement is negligible in station/null windows and zero in collision windows.
+
+**Consequence**: Treat the evidence as physical inertia, controller response, or termination-timing evidence after actor-clean stop commands. Do not draft R5J, do not patch behavior, do not run a sweep or 1M confirmation, and do not change hard gates, actor observations, platform/sensor choices, controller/governor behavior, or safety-filter defaults under this decision.

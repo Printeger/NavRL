@@ -149,6 +149,8 @@ R5H_COLLISION_WINDOW_VALUE_FIELDS = (
     "downward_active",
 )
 
+R5E1_LAG_STEPS = (1, 5, 10)
+
 
 DEFAULT_COMMAND_CURRICULUM = (
     (0, (0.55, 0.0, 0.0, 0.15, 0.30)),
@@ -1141,6 +1143,206 @@ def compute_r5h_mechanism_step_metrics(
         vertical_pre - vertical_post
     ).clamp_min(0.0) * vertical_active
 
+    return result
+
+
+def _xy_alignment(
+    command_xy: torch.Tensor,
+    actual_xy: torch.Tensor,
+    eps: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    command_norm = command_xy.norm(dim=-1, keepdim=True)
+    actual_norm = actual_xy.norm(dim=-1, keepdim=True)
+    active = (command_norm > eps).float() * (actual_norm > eps).float()
+    alignment = torch.where(
+        active.bool(),
+        (command_xy * actual_xy).sum(dim=-1, keepdim=True)
+        / (command_norm.clamp_min(eps) * actual_norm.clamp_min(eps)),
+        torch.zeros_like(command_norm),
+    ).clamp(-1.0, 1.0)
+    return alignment, active
+
+
+def compute_r5e1_controller_latency_step_metrics(
+    *,
+    v_final_b: torch.Tensor,
+    controller_command_w: torch.Tensor,
+    actual_velocity_b: torch.Tensor,
+    actual_velocity_w: torch.Tensor,
+    prev_action_b: Optional[torch.Tensor] = None,
+    command_eps: float = 1e-3,
+) -> Dict[str, torch.Tensor]:
+    """R5 Evidence-1 controller-boundary latency/inertia diagnostics.
+
+    Returned tensors are per-step scalars shaped ``[N, 1]``. Alignment values
+    are paired with explicit active masks because XY alignment is undefined
+    when either vector is near zero.
+    """
+    final_b = _as_vector_flat(v_final_b, "v_final_b")
+    N = final_b.shape[0]
+    device = final_b.device
+    command_w = _as_vector_flat(
+        controller_command_w,
+        "controller_command_w",
+    ).to(device=device)
+    actual_b = _as_vector_flat(actual_velocity_b, "actual_velocity_b").to(device=device)
+    actual_w = _as_vector_flat(actual_velocity_w, "actual_velocity_w").to(device=device)
+    if command_w.shape[0] != N or actual_b.shape[0] != N or actual_w.shape[0] != N:
+        raise ValueError("R5E1 vector inputs must flatten to the same length")
+
+    eps = float(command_eps)
+    if not math.isfinite(eps) or eps < 0.0:
+        raise ValueError("command_eps must be finite and >= 0")
+
+    body_alignment, body_alignment_active = _xy_alignment(
+        final_b[..., :2],
+        actual_b[..., :2],
+        eps,
+    )
+    world_alignment, world_alignment_active = _xy_alignment(
+        command_w[..., :2],
+        actual_w[..., :2],
+        eps,
+    )
+
+    if prev_action_b is None:
+        prev_available = torch.zeros((N, 1), dtype=torch.float32, device=device)
+        prev_xy_mismatch = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+        prev_z_mismatch = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+    else:
+        previous = _as_vector_flat(prev_action_b, "prev_action_b").to(device=device)
+        if previous.shape[0] != N:
+            raise ValueError("prev_action_b must flatten to the same length as v_final_b")
+        prev_available = torch.ones((N, 1), dtype=torch.float32, device=device)
+        prev_xy_mismatch = (previous[..., :2] - final_b[..., :2]).norm(
+            dim=-1,
+            keepdim=True,
+        )
+        prev_z_mismatch = (previous[..., 2:3] - final_b[..., 2:3]).abs()
+
+    return {
+        "r5e1_v_final_body_speed_xy": final_b[..., :2].norm(dim=-1, keepdim=True),
+        "r5e1_v_final_body_speed_z_abs": final_b[..., 2:3].abs(),
+        "r5e1_controller_command_world_speed_xy": command_w[..., :2].norm(
+            dim=-1,
+            keepdim=True,
+        ),
+        "r5e1_controller_command_world_speed_z_abs": command_w[..., 2:3].abs(),
+        "r5e1_actual_body_speed_xy": actual_b[..., :2].norm(dim=-1, keepdim=True),
+        "r5e1_actual_body_speed_z_abs": actual_b[..., 2:3].abs(),
+        "r5e1_actual_world_speed_xy": actual_w[..., :2].norm(dim=-1, keepdim=True),
+        "r5e1_actual_world_speed_z_abs": actual_w[..., 2:3].abs(),
+        "r5e1_command_actual_body_mismatch_xy": (
+            final_b[..., :2] - actual_b[..., :2]
+        ).norm(dim=-1, keepdim=True),
+        "r5e1_command_actual_body_mismatch_z_abs": (
+            final_b[..., 2:3] - actual_b[..., 2:3]
+        ).abs(),
+        "r5e1_command_actual_world_mismatch_xy": (
+            command_w[..., :2] - actual_w[..., :2]
+        ).norm(dim=-1, keepdim=True),
+        "r5e1_command_actual_world_mismatch_z_abs": (
+            command_w[..., 2:3] - actual_w[..., 2:3]
+        ).abs(),
+        "r5e1_command_actual_body_alignment_xy": body_alignment,
+        "r5e1_command_actual_body_alignment_xy_active": body_alignment_active,
+        "r5e1_command_actual_world_alignment_xy": world_alignment,
+        "r5e1_command_actual_world_alignment_xy_active": world_alignment_active,
+        "r5e1_prev_action_available": prev_available,
+        "r5e1_prev_action_v_final_mismatch_xy": prev_xy_mismatch,
+        "r5e1_prev_action_v_final_mismatch_z_abs": prev_z_mismatch,
+    }
+
+
+def compute_r5e1_lagged_command_metrics(
+    *,
+    current_controller_command_w: torch.Tensor,
+    actual_velocity_w: torch.Tensor,
+    lagged_controller_commands_w: Dict[int, Optional[torch.Tensor]],
+    lag_steps: Sequence[int] = R5E1_LAG_STEPS,
+) -> Dict[str, torch.Tensor]:
+    """Compare current actual world velocity with current and lagged commands."""
+    current = _as_vector_flat(
+        current_controller_command_w,
+        "current_controller_command_w",
+    )
+    N = current.shape[0]
+    device = current.device
+    actual = _as_vector_flat(actual_velocity_w, "actual_velocity_w").to(device=device)
+    if actual.shape[0] != N:
+        raise ValueError("actual_velocity_w must flatten to the same length")
+
+    current_xy = (current[..., :2] - actual[..., :2]).norm(dim=-1, keepdim=True)
+    current_z = (current[..., 2:3] - actual[..., 2:3]).abs()
+    result: Dict[str, torch.Tensor] = {
+        "r5e1_lag0_command_actual_world_mismatch_xy": current_xy,
+        "r5e1_lag0_command_actual_world_mismatch_z_abs": current_z,
+    }
+    lag_xy_values = []
+    lag_z_values = []
+    lag_step_values = []
+    for lag in lag_steps:
+        lag = int(lag)
+        lagged = lagged_controller_commands_w.get(lag)
+        if lagged is None:
+            available = torch.zeros((N, 1), dtype=torch.float32, device=device)
+            mismatch_xy = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+            mismatch_z = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+        else:
+            lagged_command = _as_vector_flat(
+                lagged,
+                f"lagged_controller_command_w_{lag}",
+            ).to(device=device)
+            if lagged_command.shape[0] != N:
+                raise ValueError(
+                    f"lagged command for lag {lag} must flatten to the same length"
+                )
+            available = torch.ones((N, 1), dtype=torch.float32, device=device)
+            mismatch_xy = (lagged_command[..., :2] - actual[..., :2]).norm(
+                dim=-1,
+                keepdim=True,
+            )
+            mismatch_z = (lagged_command[..., 2:3] - actual[..., 2:3]).abs()
+        result[f"r5e1_lag{lag}_available"] = available
+        result[f"r5e1_lag{lag}_command_actual_world_mismatch_xy"] = mismatch_xy
+        result[f"r5e1_lag{lag}_command_actual_world_mismatch_z_abs"] = mismatch_z
+        lag_xy_values.append(mismatch_xy)
+        lag_z_values.append(mismatch_z)
+        lag_step_values.append(
+            torch.full((N, 1), float(lag), dtype=torch.float32, device=device)
+        )
+
+    if not lag_xy_values:
+        nan = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+        result["r5e1_lag_best_command_actual_world_mismatch_xy"] = nan
+        result["r5e1_lag_best_command_actual_world_mismatch_z_abs"] = nan
+        result["r5e1_lag_best_step_xy"] = nan
+        result["r5e1_lag_best_step_z_abs"] = nan
+        result["r5e1_lag_best_improvement_xy"] = nan
+        result["r5e1_lag_best_improvement_z_abs"] = nan
+        return result
+
+    steps = torch.cat(lag_step_values, dim=1)
+    lag_xy = torch.cat(lag_xy_values, dim=1)
+    lag_z = torch.cat(lag_z_values, dim=1)
+
+    def _best(values: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        finite = torch.isfinite(values)
+        safe_values = torch.where(finite, values, torch.full_like(values, float("inf")))
+        best_value, best_index = safe_values.min(dim=1, keepdim=True)
+        has_value = finite.any(dim=1, keepdim=True)
+        best_step = torch.gather(steps, 1, best_index)
+        nan = torch.full_like(best_value, float("nan"))
+        return torch.where(has_value, best_value, nan), torch.where(has_value, best_step, nan)
+
+    best_xy, best_step_xy = _best(lag_xy)
+    best_z, best_step_z = _best(lag_z)
+    result["r5e1_lag_best_command_actual_world_mismatch_xy"] = best_xy
+    result["r5e1_lag_best_command_actual_world_mismatch_z_abs"] = best_z
+    result["r5e1_lag_best_step_xy"] = best_step_xy
+    result["r5e1_lag_best_step_z_abs"] = best_step_z
+    result["r5e1_lag_best_improvement_xy"] = current_xy - best_xy
+    result["r5e1_lag_best_improvement_z_abs"] = current_z - best_z
     return result
 
 

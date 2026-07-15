@@ -22,6 +22,7 @@ from omni_drones.utils.torchrl import RenderCallback
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from instinctRL.task_metrics import (
+    R5E1_LAG_STEPS,
     R5H_COLLISION_WINDOW_STEPS,
     R5H_COLLISION_WINDOW_VALUE_FIELDS,
     R5H_CONCENTRATION_SAMPLE_VALUE_NAMES,
@@ -35,6 +36,8 @@ from instinctRL.task_metrics import (
     TERMINATION_BELOW_BOUND,
     TERMINATION_COLLISION,
     TERMINATION_TIMEOUT,
+    compute_r5e1_controller_latency_step_metrics,
+    compute_r5e1_lagged_command_metrics,
     compute_r5h_mechanism_step_metrics,
     compute_r5g_downward_step_metrics,
     compute_r5g_station_anchor_step_metrics,
@@ -515,6 +518,18 @@ def _json_safe_eval_summary(info, trajs, cfg=None):
             ("info", "actual_velocity_b"),
             ("next", "info", "actual_velocity_b"),
         ],
+        "r5e1_controller_command_w": [
+            ("info", "r5e1_controller_command_w"),
+            ("next", "info", "r5e1_controller_command_w"),
+        ],
+        "r5e1_actual_velocity_w": [
+            ("info", "r5e1_actual_velocity_w"),
+            ("next", "info", "r5e1_actual_velocity_w"),
+        ],
+        "drone_state": [
+            ("info", "drone_state"),
+            ("next", "info", "drone_state"),
+        ],
         "min_clearance": [
             ("info", "min_clearance"),
             ("next", "info", "min_clearance"),
@@ -636,6 +651,16 @@ def _json_safe_eval_summary(info, trajs, cfg=None):
     if absent_fields:
         summary["absent_optional_fields"] = absent_fields
 
+    r5e1_accumulators = _make_r5e1_diagnostic_accumulators()
+    if _accumulate_r5e1_metrics_from_tensordict(
+        r5e1_accumulators,
+        trajs,
+        optional_fields,
+        cfg,
+    ):
+        _add_r5e1_diagnostic_summaries(summary, r5e1_accumulators)
+        _add_r5e1_handbook_summary(summary, r5e1_accumulators)
+
     r5e_accumulators = _make_r5e_diagnostic_accumulators()
     if _accumulate_r5e_metrics_from_tensordict(
         r5e_accumulators,
@@ -731,6 +756,18 @@ def _make_optional_eval_field_candidates():
         "actual_velocity_b": [
             ("info", "actual_velocity_b"),
             ("next", "info", "actual_velocity_b"),
+        ],
+        "r5e1_controller_command_w": [
+            ("info", "r5e1_controller_command_w"),
+            ("next", "info", "r5e1_controller_command_w"),
+        ],
+        "r5e1_actual_velocity_w": [
+            ("info", "r5e1_actual_velocity_w"),
+            ("next", "info", "r5e1_actual_velocity_w"),
+        ],
+        "drone_state": [
+            ("info", "drone_state"),
+            ("next", "info", "drone_state"),
         ],
         "min_clearance": [
             ("info", "min_clearance"),
@@ -1002,6 +1039,175 @@ def _r5e_eval_config(cfg):
     height_floor = float(getattr(reward_cfg, "height_floor", 0.5))
     d_safe = float(getattr(ics_cfg, "d_safe", 0.8))
     return command_eps, height_floor, d_safe
+
+
+_R5E1_CURRENT_FIELDS = (
+    "r5e1_v_final_body_speed_xy",
+    "r5e1_v_final_body_speed_z_abs",
+    "r5e1_controller_command_world_speed_xy",
+    "r5e1_controller_command_world_speed_z_abs",
+    "r5e1_actual_body_speed_xy",
+    "r5e1_actual_body_speed_z_abs",
+    "r5e1_actual_world_speed_xy",
+    "r5e1_actual_world_speed_z_abs",
+    "r5e1_command_actual_body_mismatch_xy",
+    "r5e1_command_actual_body_mismatch_z_abs",
+    "r5e1_command_actual_world_mismatch_xy",
+    "r5e1_command_actual_world_mismatch_z_abs",
+    "r5e1_command_actual_body_alignment_xy",
+    "r5e1_command_actual_body_alignment_xy_active",
+    "r5e1_command_actual_world_alignment_xy",
+    "r5e1_command_actual_world_alignment_xy_active",
+    "r5e1_prev_action_available",
+    "r5e1_prev_action_v_final_mismatch_xy",
+    "r5e1_prev_action_v_final_mismatch_z_abs",
+)
+
+_R5E1_LAG_FIELDS = (
+    "r5e1_lag0_command_actual_world_mismatch_xy",
+    "r5e1_lag0_command_actual_world_mismatch_z_abs",
+) + tuple(
+    field
+    for lag in R5E1_LAG_STEPS
+    for field in (
+        f"r5e1_lag{lag}_available",
+        f"r5e1_lag{lag}_command_actual_world_mismatch_xy",
+        f"r5e1_lag{lag}_command_actual_world_mismatch_z_abs",
+    )
+) + (
+    "r5e1_lag_best_command_actual_world_mismatch_xy",
+    "r5e1_lag_best_command_actual_world_mismatch_z_abs",
+    "r5e1_lag_best_step_xy",
+    "r5e1_lag_best_step_z_abs",
+    "r5e1_lag_best_improvement_xy",
+    "r5e1_lag_best_improvement_z_abs",
+)
+
+_R5E1_ALIGNMENT_DENOMINATORS = {
+    "r5e1_command_actual_body_alignment_xy": "r5e1_command_actual_body_alignment_xy_active",
+    "r5e1_command_actual_world_alignment_xy": "r5e1_command_actual_world_alignment_xy_active",
+}
+
+
+def _make_r5e1_diagnostic_accumulators():
+    return {
+        field_name: _TensorSummaryAccumulator()
+        for field_name in _R5E1_CURRENT_FIELDS
+    }
+
+
+def _actual_velocity_w_from_tensordict(tensordict, optional_candidates):
+    actual_w = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("r5e1_actual_velocity_w", []),
+    )
+    if actual_w is not None:
+        return actual_w
+    drone_state = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("drone_state", [])
+        + [("info", "drone_state"), ("next", "info", "drone_state")],
+    )
+    if drone_state is None:
+        return None
+    return drone_state[..., 7:10]
+
+
+def _accumulate_r5e1_metrics_from_tensordict(
+    accumulators,
+    tensordict,
+    optional_candidates,
+    cfg,
+):
+    v_final_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("governor_v_final_b", []),
+    )
+    if v_final_b is None:
+        v_final_b = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("governor_v_gov_b", []),
+        )
+    controller_command_w = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("r5e1_controller_command_w", []),
+    )
+    actual_velocity_b = _get_optional_tensor(
+        tensordict,
+        optional_candidates.get("actual_velocity_b", []),
+    )
+    actual_velocity_w = _actual_velocity_w_from_tensordict(
+        tensordict,
+        optional_candidates,
+    )
+    if any(
+        value is None
+        for value in (
+            v_final_b,
+            controller_command_w,
+            actual_velocity_b,
+            actual_velocity_w,
+        )
+    ):
+        return False
+
+    state_vec = _get_optional_tensor(
+        tensordict,
+        [
+            ("agents", "observation", "state_vec"),
+            ("next", "agents", "observation", "state_vec"),
+        ],
+    )
+    command_eps, _, _ = _r5e_eval_config(cfg)
+    metrics = compute_r5e1_controller_latency_step_metrics(
+        v_final_b=v_final_b,
+        controller_command_w=controller_command_w,
+        actual_velocity_b=actual_velocity_b,
+        actual_velocity_w=actual_velocity_w,
+        prev_action_b=_latest_prev_action_from_state_vec(state_vec),
+        command_eps=command_eps,
+    )
+    for field_name, value in metrics.items():
+        accumulators[field_name].add(value)
+    return True
+
+
+def _add_r5e1_diagnostic_summaries(summary, accumulators):
+    for field_name, accumulator in accumulators.items():
+        if accumulator.count > 0:
+            summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+
+
+def _r5e1_handbook_suffix(field_name):
+    if field_name.endswith("_available") or field_name.endswith("_active"):
+        return "rate"
+    return "mean"
+
+
+def _add_r5e1_field_summary(summary, accumulators, field_name, key_prefix):
+    if field_name in _R5E1_ALIGNMENT_DENOMINATORS:
+        value = _masked_sum_mean(
+            accumulators[field_name],
+            accumulators[_R5E1_ALIGNMENT_DENOMINATORS[field_name]],
+        )
+    else:
+        value = accumulators[field_name].mean()
+    suffix = field_name[len("r5e1_"):]
+    summary[f"{key_prefix}{suffix}_{_r5e1_handbook_suffix(field_name)}"] = (
+        float(value) if value is not None else None
+    )
+
+
+def _add_r5e1_handbook_summary(summary, accumulators):
+    if accumulators["r5e1_v_final_body_speed_xy"].count == 0:
+        return
+    for field_name in _R5E1_CURRENT_FIELDS:
+        _add_r5e1_field_summary(
+            summary,
+            accumulators,
+            field_name,
+            "eval/handbook.r5e1_",
+        )
 
 
 def _accumulate_r5e_metrics_from_tensordict(
@@ -1901,6 +2107,235 @@ class _R5GTerminationWindowTracker:
         return default.detach().cpu().reshape(-1)
 
 
+class R5E1ControllerLatencyTracker:
+    def __init__(
+        self,
+        num_envs: int,
+        *,
+        command_eps: float,
+        window_steps=R5H_COLLISION_WINDOW_STEPS,
+        lag_steps=R5E1_LAG_STEPS,
+    ):
+        self.command_eps = float(command_eps)
+        self.window_steps = tuple(int(value) for value in window_steps)
+        self.lag_steps = tuple(int(value) for value in lag_steps)
+        self._buffers = [[] for _ in range(int(num_envs))]
+        self._max_window = max(
+            [0] + list(self.window_steps) + list(self.lag_steps),
+        )
+        self._fields = _R5E1_CURRENT_FIELDS + _R5E1_LAG_FIELDS
+        self._station_null_accumulators = self._make_accumulators(include_step=True)
+        self._lag_accumulators = {
+            field_name: _TensorSummaryAccumulator()
+            for field_name in _R5E1_LAG_FIELDS
+        }
+        self._collision_episodes = {window: 0 for window in self.window_steps}
+        self._collision_accumulators = {
+            window: self._make_accumulators(include_step=True)
+            for window in self.window_steps
+        }
+
+    def _make_accumulators(self, *, include_step: bool):
+        field_names = (("step",) if include_step else ()) + self._fields
+        return {
+            field_name: _TensorSummaryAccumulator()
+            for field_name in field_names
+        }
+
+    @staticmethod
+    def _as_scalar_tensor(value):
+        return torch.tensor([float(value)], dtype=torch.float32)
+
+    def _add_record_metrics(self, accumulators, record):
+        for field_name in self._fields:
+            accumulators[field_name].add(self._as_scalar_tensor(record[field_name]))
+
+    def _add_lag_metrics(self, record):
+        for field_name in _R5E1_LAG_FIELDS:
+            self._lag_accumulators[field_name].add(
+                self._as_scalar_tensor(record[field_name])
+            )
+
+    def _make_record(self, metrics, lag_metrics, env_id, command_w, null_command):
+        record = {
+            "controller_command_w_vec": [
+                float(value)
+                for value in command_w[env_id].detach().cpu().reshape(3).tolist()
+            ],
+            "null_command": bool(null_command),
+        }
+        for field_name in _R5E1_CURRENT_FIELDS:
+            record[field_name] = float(
+                metrics[field_name][env_id].detach().float().cpu().reshape(-1)[0].item()
+            )
+        for field_name in _R5E1_LAG_FIELDS:
+            record[field_name] = float(
+                lag_metrics[field_name].detach().float().cpu().reshape(-1)[0].item()
+            )
+        return record
+
+    def add_step(self, tensordict, optional_candidates, recorded):
+        v_cmd_b = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("governor_v_cmd_b", [])
+            + [("info", "v_cmd"), ("next", "info", "v_cmd")],
+        )
+        v_final_b = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("governor_v_final_b", []),
+        )
+        if v_final_b is None:
+            v_final_b = _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("governor_v_gov_b", []),
+            )
+        controller_command_w = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("r5e1_controller_command_w", []),
+        )
+        actual_velocity_b = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("actual_velocity_b", []),
+        )
+        actual_velocity_w = _actual_velocity_w_from_tensordict(
+            tensordict,
+            optional_candidates,
+        )
+        if any(
+            value is None
+            for value in (
+                v_cmd_b,
+                v_final_b,
+                controller_command_w,
+                actual_velocity_b,
+                actual_velocity_w,
+            )
+        ):
+            return False
+
+        state_vec = _get_optional_tensor(
+            tensordict,
+            [
+                ("agents", "observation", "state_vec"),
+                ("next", "agents", "observation", "state_vec"),
+            ],
+        )
+        prev_action_b = _latest_prev_action_from_state_vec(state_vec)
+        metrics = compute_r5e1_controller_latency_step_metrics(
+            v_final_b=v_final_b,
+            controller_command_w=controller_command_w,
+            actual_velocity_b=actual_velocity_b,
+            actual_velocity_w=actual_velocity_w,
+            prev_action_b=prev_action_b,
+            command_eps=self.command_eps,
+        )
+
+        recorded_cpu = recorded.detach().cpu().reshape(-1).bool()
+        v_cmd = v_cmd_b.detach().float().cpu().reshape(-1, 3)
+        command_w = controller_command_w.detach().float().cpu().reshape(-1, 3)
+        actual_w = actual_velocity_w.detach().float().cpu().reshape(-1, 3)
+        count = min(
+            len(self._buffers),
+            int(v_cmd.shape[0]),
+            int(command_w.shape[0]),
+            int(actual_w.shape[0]),
+        )
+        null_commands = v_cmd.norm(dim=-1) <= self.command_eps
+        for env_id in range(count):
+            if recorded_cpu[env_id]:
+                continue
+            history = self._buffers[env_id]
+            lagged_commands = {}
+            for lag in self.lag_steps:
+                if len(history) >= lag:
+                    lagged_commands[lag] = torch.tensor(
+                        [history[-lag]["controller_command_w_vec"]],
+                        dtype=torch.float32,
+                    )
+                else:
+                    lagged_commands[lag] = None
+            lag_metrics = compute_r5e1_lagged_command_metrics(
+                current_controller_command_w=command_w[env_id : env_id + 1],
+                actual_velocity_w=actual_w[env_id : env_id + 1],
+                lagged_controller_commands_w=lagged_commands,
+                lag_steps=self.lag_steps,
+            )
+            record = self._make_record(
+                metrics,
+                lag_metrics,
+                env_id,
+                command_w,
+                bool(null_commands[env_id].item()),
+            )
+            if record["null_command"]:
+                self._station_null_accumulators["step"].add(torch.ones(1))
+                self._add_record_metrics(self._station_null_accumulators, record)
+            self._add_lag_metrics(record)
+            history.append(record)
+            if len(history) > self._max_window:
+                history.pop(0)
+        return True
+
+    def flush(self, newly_done, stats):
+        done_cpu = newly_done.detach().cpu().reshape(-1).bool()
+        reason_codes = _R5GTerminationWindowTracker._reason_codes(stats)
+        for env_id in done_cpu.nonzero(as_tuple=False).reshape(-1).tolist():
+            is_collision = int(reason_codes[env_id].item()) == TERMINATION_COLLISION
+            if is_collision:
+                records = self._buffers[env_id]
+                for window in self.window_steps:
+                    target = self._collision_accumulators[window]
+                    self._collision_episodes[window] += 1
+                    for record in records[-window:]:
+                        target["step"].add(torch.ones(1))
+                        self._add_record_metrics(target, record)
+            self._buffers[env_id] = []
+
+    def _add_prefixed_summaries(self, summary, accumulators, *, key_prefix):
+        for field_name in self._fields:
+            _add_r5e1_field_summary(summary, accumulators, field_name, key_prefix)
+
+    def add_diagnostic_summaries(self, summary):
+        for field_name, accumulator in self._lag_accumulators.items():
+            if accumulator.count > 0:
+                summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+
+    def add_summaries(self, summary):
+        station_steps = self._station_null_accumulators["step"].finite_count
+        summary["eval/handbook.r5e1_station_null_steps"] = int(station_steps)
+        if station_steps > 0:
+            self._add_prefixed_summaries(
+                summary,
+                self._station_null_accumulators,
+                key_prefix="eval/handbook.r5e1_station_null_",
+            )
+
+        for field_name in _R5E1_LAG_FIELDS:
+            _add_r5e1_field_summary(
+                summary,
+                self._lag_accumulators,
+                field_name,
+                "eval/handbook.r5e1_",
+            )
+
+        for window in self.window_steps:
+            accumulators = self._collision_accumulators[window]
+            window_steps = accumulators["step"].finite_count
+            summary[f"eval/handbook.r5e1_collision_window{window}_steps"] = int(
+                window_steps
+            )
+            summary[f"eval/handbook.r5e1_collision_window{window}_episodes"] = int(
+                self._collision_episodes[window]
+            )
+            if window_steps <= 0:
+                continue
+            self._add_prefixed_summaries(
+                summary,
+                accumulators,
+                key_prefix=f"eval/handbook.r5e1_collision_window{window}_",
+            )
+
+
 class _R5HCollisionWindowTracker:
     def __init__(
         self,
@@ -2124,12 +2559,18 @@ def _evaluate_streaming(
             "vertical_ics_emergency",
         )
     }
+    r5e1_diagnostic_accumulators = _make_r5e1_diagnostic_accumulators()
     r5e_diagnostic_accumulators = _make_r5e_diagnostic_accumulators()
     r5g_station_accumulators = _make_r5g_station_accumulators()
     r5g_downward_accumulators = _make_r5g_downward_accumulators()
     r5h_diagnostic_accumulators = _make_r5h_diagnostic_accumulators()
     v_corr_limit = _governor_v_corr_limit(cfg)
     _, r5g_height_floor, _ = _r5e_eval_config(cfg)
+    r5e1_command_eps, _, _ = _r5e_eval_config(cfg)
+    r5e1_latency_tracker = R5E1ControllerLatencyTracker(
+        num_envs,
+        command_eps=r5e1_command_eps,
+    )
     r5g_termination_tracker = _R5GTerminationWindowTracker(
         num_envs,
         height_floor=r5g_height_floor,
@@ -2193,6 +2634,12 @@ def _evaluate_streaming(
                 for field_name, value in vertical_metrics.items():
                     vertical_diagnostic_accumulators[field_name].add(value)
 
+            _accumulate_r5e1_metrics_from_tensordict(
+                r5e1_diagnostic_accumulators,
+                step_td,
+                optional_candidates,
+                cfg,
+            )
             _accumulate_r5e_metrics_from_tensordict(
                 r5e_diagnostic_accumulators,
                 step_td,
@@ -2216,6 +2663,7 @@ def _evaluate_streaming(
                 optional_candidates,
                 cfg,
             )
+            r5e1_latency_tracker.add_step(step_td, optional_candidates, recorded)
             r5g_termination_tracker.add_step(step_td, optional_candidates, recorded)
             r5h_collision_tracker.add_step(step_td, optional_candidates, recorded)
 
@@ -2240,6 +2688,7 @@ def _evaluate_streaming(
                     if key not in first_episode_stats:
                         first_episode_stats[key] = torch.zeros_like(value_cpu)
                     first_episode_stats[key][newly_done.cpu()] = value_cpu[newly_done.cpu()]
+                r5e1_latency_tracker.flush(newly_done, next_stats)
                 r5g_termination_tracker.flush(newly_done, next_stats)
                 r5h_collision_tracker.flush(newly_done, next_stats)
                 recorded |= newly_done
@@ -2252,6 +2701,7 @@ def _evaluate_streaming(
             if key not in first_episode_stats:
                 first_episode_stats[key] = torch.zeros_like(value_cpu)
             first_episode_stats[key][missing.cpu()] = value_cpu[missing.cpu()]
+        r5e1_latency_tracker.flush(missing, last_stats)
         r5g_termination_tracker.flush(missing, last_stats)
         r5h_collision_tracker.flush(missing, last_stats)
 
@@ -2289,6 +2739,8 @@ def _evaluate_streaming(
     for field_name, accumulator in vertical_diagnostic_accumulators.items():
         if accumulator.count > 0:
             summary[f"eval/diagnostics.{field_name}"] = accumulator.summary()
+    _add_r5e1_diagnostic_summaries(summary, r5e1_diagnostic_accumulators)
+    r5e1_latency_tracker.add_diagnostic_summaries(summary)
     _add_r5e_diagnostic_summaries(summary, r5e_diagnostic_accumulators)
     _add_r5g_diagnostic_summaries(
         summary,
@@ -2455,6 +2907,8 @@ def _evaluate_streaming(
     violation_rate = diagnostic_accumulators["ics_violation"].mean()
     if violation_rate is not None:
         summary["eval/handbook.ics_violation_rate"] = float(violation_rate)
+    _add_r5e1_handbook_summary(summary, r5e1_diagnostic_accumulators)
+    r5e1_latency_tracker.add_summaries(summary)
     _add_r5e_handbook_summary(summary, r5e_diagnostic_accumulators)
     _add_r5g_handbook_summary(
         summary,
