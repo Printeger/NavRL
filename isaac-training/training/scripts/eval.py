@@ -317,8 +317,18 @@ def _run_short_diagnostic_eval(*, raw_env, transformed_env, policy, cfg, evaluat
             "r5h_emergency",
             "r5h_near_floor",
             "r5h_tracking",
+            "r5e2_collision",
             "r5e1_collision_window",
             "r5e1_lag",
+            "r5e2_collision_window",
+            "r5e2_reason",
+            "r5e2_missing",
+            "r5e2_contact",
+            "r5e2_min_clearance",
+            "r5e2_lidar_collision",
+            "r5e2_height",
+            "r5e2_below_bound",
+            "r5e2_ceiling",
         ),
     )
     _copy_r5e_top_level_keys(combined_summary, station_summary, tracking_summary)

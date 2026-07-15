@@ -592,6 +592,141 @@ def test_r5h_collision_window_contract_tracks_25_and_50_step_pre_collision_field
         assert field_name in metrics.R5H_DIAGNOSTIC_FIELDS
 
 
+def test_r5e2_collision_geometry_reason_codes_and_window_contract():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5e2_collision_geometry_step_metrics(
+        collision=torch.tensor([[1.0], [1.0], [1.0], [1.0], [1.0], [1.0], [0.0]]),
+        terminated_collision=torch.tensor([[1.0], [1.0], [1.0], [1.0], [1.0], [0.0], [1.0]]),
+        below_bound=torch.tensor([[1.0], [0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]),
+        above_bound=torch.tensor([[0.0], [1.0], [0.0], [0.0], [0.0], [0.0], [0.0]]),
+        root_z=torch.tensor([[0.25], [3.95], [1.0], [1.0], [1.0], [1.0], [1.0]]),
+        min_clearance=torch.tensor([[0.2], [0.2], [0.25], [0.5], [float("nan")], [0.2], [0.5]]),
+        min_clearance_source_available=torch.tensor([[1.0], [1.0], [1.0], [1.0], [0.0], [1.0], [1.0]]),
+        contact_telemetry_available=torch.tensor([[0.0], [0.0], [0.0], [1.0], [0.0], [0.0], [0.0]]),
+        ground_contact=torch.tensor([[0.0], [0.0], [0.0], [1.0], [0.0], [0.0], [0.0]]),
+    )
+
+    for field_name in metrics.R5E2_DIAGNOSTIC_FIELDS:
+        assert field_name in summary
+        assert summary[field_name].shape == (7, 1)
+
+    assert summary["r5e2_reason_code"].reshape(-1).tolist() == [
+        metrics.R5E2_REASON_BELOW_BOUND_ADJACENT,
+        metrics.R5E2_REASON_CEILING,
+        metrics.R5E2_REASON_OBSTACLE,
+        metrics.R5E2_REASON_GROUND,
+        metrics.R5E2_REASON_UNKNOWN,
+        metrics.R5E2_REASON_NOT_COLLISION_TERMINATION,
+        metrics.R5E2_REASON_UNKNOWN,
+    ]
+    assert summary["r5e2_reason_below_bound_adjacent"].sum().item() == 1.0
+    assert summary["r5e2_reason_ceiling"].sum().item() == 1.0
+    assert summary["r5e2_reason_obstacle"].sum().item() == 1.0
+    assert summary["r5e2_reason_ground"].sum().item() == 1.0
+    assert summary["r5e2_reason_unknown"].sum().item() == 2.0
+    assert summary["r5e2_below_bound_adjacent"].reshape(-1).tolist() == [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    ]
+    assert summary["r5e2_ceiling_adjacent"].reshape(-1).tolist() == [
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+    ]
+    assert summary["r5e2_min_clearance_source_available"].reshape(-1).tolist() == [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+    ]
+    assert summary["r5e2_missing_contact_telemetry"].reshape(-1).tolist() == [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        1.0,
+        1.0,
+        1.0,
+    ]
+    assert summary["r5e2_lidar_collision_evidence"].reshape(-1).tolist() == [
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+    ]
+    assert summary["r5e2_collision_termination_same_step"].reshape(-1).tolist() == [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        0.0,
+        0.0,
+    ]
+    assert summary["r5e2_collision_without_termination"].reshape(-1).tolist() == [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+    ]
+    assert summary["r5e2_termination_collision_without_collision"].reshape(-1).tolist() == [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+    ]
+
+    assert metrics.R5E2_COLLISION_WINDOW_STEPS == (25, 50)
+    for field_name in [
+        "v_final_body_x",
+        "v_final_body_y",
+        "v_final_body_z",
+        "v_final_body_speed_xy",
+        "controller_command_world_x",
+        "controller_command_world_y",
+        "controller_command_world_z",
+        "controller_command_world_speed_xy",
+        "actual_body_x",
+        "actual_body_y",
+        "actual_body_z",
+        "actual_body_speed_xy",
+        "actual_world_x",
+        "actual_world_y",
+        "actual_world_z",
+        "actual_world_speed_xy",
+        "ics_beta",
+        "ics_emergency",
+        "ics_active_beam_count",
+        "min_clearance",
+        "root_z",
+        "collision_termination_same_step",
+        "steps_before_termination",
+    ]:
+        assert field_name in metrics.R5E2_COLLISION_WINDOW_VALUE_FIELDS
+
+
 def test_r5e1_controller_latency_metrics_report_frame_splits_masks_and_prev_action():
     metrics = _load_task_metrics()
 

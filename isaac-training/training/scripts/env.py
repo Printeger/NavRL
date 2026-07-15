@@ -40,6 +40,7 @@ from instinctRL.task_metrics import (
     COMMAND_MODE_RECOVERY,
     command_curriculum_probabilities,
     compute_handbook_step_metrics,
+    compute_r5e2_collision_geometry_step_metrics,
     compute_termination_stats,
     nearest_obstacle_vector_from_scan,
     world_to_body_velocity,
@@ -703,6 +704,30 @@ class NavigationEnv(IsaacEnv):
             "safety_collision": UnboundedContinuousTensorSpec((1,), device=self.device),
             "ics_intervention": UnboundedContinuousTensorSpec((1,), device=self.device),
             "ics_violation": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_collision": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_terminated_collision": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_below_bound": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_above_bound": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_root_z": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_below_bound_adjacent": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_ceiling_adjacent": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_height_adjacent": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_min_clearance": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_min_clearance_source_available": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_missing_clearance_source": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_lidar_collision_evidence": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_contact_telemetry_available": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_missing_contact_telemetry": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_ground_contact": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_collision_termination_same_step": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_collision_without_termination": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_termination_collision_without_collision": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_reason_code": UnboundedContinuousTensorSpec((1,), dtype=torch.long, device=self.device),
+            "r5e2_reason_below_bound_adjacent": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_reason_ceiling": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_reason_obstacle": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_reason_ground": UnboundedContinuousTensorSpec((1,), device=self.device),
+            "r5e2_reason_unknown": UnboundedContinuousTensorSpec((1,), device=self.device),
         }
         anchor_cfg = getattr(getattr(self.cfg, "instinctRL", None), "anchor", None)
         if anchor_cfg is not None and getattr(anchor_cfg, "enabled", False):
@@ -1245,6 +1270,8 @@ class NavigationEnv(IsaacEnv):
         else:
             static_collision = einops.reduce(self.lidar_scan, "n 1 w h -> n 1", "max") > (self.lidar_range - 0.3)
         collision = static_collision | dynamic_collision
+        r5e2_min_clearance = None
+        r5e2_min_clearance_source_available = None
         
         # ============================================
         # 最终奖励计算（权重调优）
@@ -1273,16 +1300,24 @@ class NavigationEnv(IsaacEnv):
             )
             flat_range = obs_frame["range"].reshape(self.num_envs, -1)
             flat_mask = obs_frame["mask"].reshape(self.num_envs, -1) > 0
-            min_clearance = torch.where(
-                flat_mask,
+            valid_range = flat_mask & torch.isfinite(flat_range)
+            min_clearance_source_available = valid_range.any(dim=1, keepdim=True).float()
+            raw_min_clearance = torch.where(
+                valid_range,
                 flat_range,
                 torch.full_like(flat_range, float("inf")),
             ).min(dim=1, keepdim=True).values
             min_clearance = torch.where(
-                torch.isfinite(min_clearance),
-                min_clearance,
-                torch.full_like(min_clearance, self.lidar_range),
+                min_clearance_source_available.bool(),
+                raw_min_clearance,
+                torch.full_like(raw_min_clearance, self.lidar_range),
             )
+            r5e2_min_clearance = torch.where(
+                min_clearance_source_available.bool(),
+                raw_min_clearance,
+                torch.full_like(raw_min_clearance, float("nan")),
+            )
+            r5e2_min_clearance_source_available = min_clearance_source_available
             self.info["min_clearance"][:] = min_clearance
 
             reward_terms = self._reward_computer.compute(
@@ -1378,6 +1413,28 @@ class NavigationEnv(IsaacEnv):
         )
         for key, value in termination_stats.items():
             self.stats[key] = value
+
+        if r5e2_min_clearance is not None and "r5e2_collision" in self.info.keys():
+            contact_available = torch.zeros_like(r5e2_min_clearance)
+            clearance_source_available = (
+                r5e2_min_clearance_source_available
+                if r5e2_min_clearance_source_available is not None
+                else torch.zeros_like(r5e2_min_clearance)
+            )
+            r5e2_metrics = compute_r5e2_collision_geometry_step_metrics(
+                collision=collision,
+                terminated_collision=termination_stats["terminated_collision"],
+                below_bound=below_bound,
+                above_bound=above_bound,
+                root_z=self.root_state[..., 2].reshape(self.num_envs, 1),
+                min_clearance=r5e2_min_clearance,
+                min_clearance_source_available=clearance_source_available,
+                contact_telemetry_available=contact_available,
+                ground_contact=contact_available,
+            )
+            for key, value in r5e2_metrics.items():
+                if key in self.info.keys():
+                    self.info[key][:] = value
 
         return TensorDict({
             "agents": TensorDict(

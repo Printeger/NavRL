@@ -151,6 +151,91 @@ R5H_COLLISION_WINDOW_VALUE_FIELDS = (
 
 R5E1_LAG_STEPS = (1, 5, 10)
 
+R5E2_REASON_NOT_COLLISION_TERMINATION = 0
+R5E2_REASON_BELOW_BOUND_ADJACENT = 1
+R5E2_REASON_CEILING = 2
+R5E2_REASON_OBSTACLE = 3
+R5E2_REASON_GROUND = 4
+R5E2_REASON_UNKNOWN = 5
+
+R5E2_COLLISION_REASON_LABELS = {
+    R5E2_REASON_BELOW_BOUND_ADJACENT: "below_bound_adjacent",
+    R5E2_REASON_CEILING: "ceiling",
+    R5E2_REASON_OBSTACLE: "obstacle",
+    R5E2_REASON_GROUND: "ground",
+    R5E2_REASON_UNKNOWN: "unknown",
+}
+
+R5E2_REASON_FIELD_NAMES = tuple(
+    f"r5e2_reason_{label}"
+    for label in R5E2_COLLISION_REASON_LABELS.values()
+)
+
+R5E2_COLLISION_WINDOW_STEPS = (25, 50)
+R5E2_COLLISION_WINDOW_VALUE_FIELDS = (
+    "v_final_body_x",
+    "v_final_body_y",
+    "v_final_body_z",
+    "v_final_body_speed_xy",
+    "v_final_body_speed_z_abs",
+    "controller_command_world_x",
+    "controller_command_world_y",
+    "controller_command_world_z",
+    "controller_command_world_speed_xy",
+    "controller_command_world_speed_z_abs",
+    "actual_body_x",
+    "actual_body_y",
+    "actual_body_z",
+    "actual_body_speed_xy",
+    "actual_body_speed_z_abs",
+    "actual_world_x",
+    "actual_world_y",
+    "actual_world_z",
+    "actual_world_speed_xy",
+    "actual_world_speed_z_abs",
+    "ics_beta",
+    "ics_emergency",
+    "ics_active_beam_count",
+    "min_clearance",
+    "root_z",
+    "below_bound_adjacent",
+    "ceiling_adjacent",
+    "height_adjacent",
+    "lidar_collision_evidence",
+    "min_clearance_source_available",
+    "missing_clearance_source",
+    "contact_telemetry_available",
+    "missing_contact_telemetry",
+    "collision",
+    "terminated_collision",
+    "collision_termination_same_step",
+    "collision_without_termination",
+    "termination_collision_without_collision",
+    "steps_before_termination",
+)
+
+R5E2_DIAGNOSTIC_FIELDS = (
+    "r5e2_collision",
+    "r5e2_terminated_collision",
+    "r5e2_below_bound",
+    "r5e2_above_bound",
+    "r5e2_root_z",
+    "r5e2_below_bound_adjacent",
+    "r5e2_ceiling_adjacent",
+    "r5e2_height_adjacent",
+    "r5e2_min_clearance",
+    "r5e2_min_clearance_source_available",
+    "r5e2_missing_clearance_source",
+    "r5e2_lidar_collision_evidence",
+    "r5e2_contact_telemetry_available",
+    "r5e2_missing_contact_telemetry",
+    "r5e2_ground_contact",
+    "r5e2_collision_termination_same_step",
+    "r5e2_collision_without_termination",
+    "r5e2_termination_collision_without_collision",
+    "r5e2_reason_code",
+) + R5E2_REASON_FIELD_NAMES
+
 
 DEFAULT_COMMAND_CURRICULUM = (
     (0, (0.55, 0.0, 0.0, 0.15, 0.30)),
@@ -1343,6 +1428,197 @@ def compute_r5e1_lagged_command_metrics(
     result["r5e1_lag_best_step_z_abs"] = best_step_z
     result["r5e1_lag_best_improvement_xy"] = current_xy - best_xy
     result["r5e1_lag_best_improvement_z_abs"] = current_z - best_z
+    return result
+
+
+def compute_r5e2_collision_geometry_step_metrics(
+    *,
+    collision: torch.Tensor,
+    terminated_collision: torch.Tensor,
+    below_bound: torch.Tensor,
+    above_bound: torch.Tensor,
+    root_z: torch.Tensor,
+    min_clearance: Optional[torch.Tensor] = None,
+    min_clearance_source_available: Optional[torch.Tensor] = None,
+    contact_telemetry_available: Optional[torch.Tensor] = None,
+    ground_contact: Optional[torch.Tensor] = None,
+    below_bound_threshold: float = 0.2,
+    ceiling_threshold: float = 4.0,
+    height_adjacency_margin: float = 0.10,
+    collision_clearance_threshold: float = 0.3,
+) -> Dict[str, torch.Tensor]:
+    """R5 Evidence-2 eval-only collision geometry and reason diagnostics.
+
+    Reason codes are meaningful only for collision terminations. Non-terminating
+    rows receive ``R5E2_REASON_NOT_COLLISION_TERMINATION`` with all reason
+    one-hots set to zero.
+    """
+    coll = collision.float().reshape(-1, 1).clamp(0.0, 1.0)
+    N = coll.shape[0]
+    device = coll.device
+    term = _as_scalar_flat(
+        terminated_collision,
+        "terminated_collision",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    below = _as_scalar_flat(
+        below_bound,
+        "below_bound",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    above = _as_scalar_flat(
+        above_bound,
+        "above_bound",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    height = _as_scalar_flat(
+        root_z,
+        "root_z",
+        N,
+        default=float("nan"),
+        device=device,
+    )
+
+    if min_clearance is None:
+        clearance = torch.full((N, 1), float("nan"), dtype=torch.float32, device=device)
+        inferred_clearance_source = torch.zeros_like(clearance)
+    else:
+        if min_clearance.numel() != N:
+            raise ValueError("min_clearance must have N elements after flattening")
+        clearance = min_clearance.float().reshape(N, 1).to(device=device)
+        inferred_clearance_source = torch.isfinite(clearance).float()
+    if min_clearance_source_available is None:
+        clearance_source = inferred_clearance_source
+    else:
+        clearance_source = _as_scalar_flat(
+            min_clearance_source_available,
+            "min_clearance_source_available",
+            N,
+            default=0.0,
+            device=device,
+        ).clamp(0.0, 1.0)
+    clearance = torch.where(
+        clearance_source.bool() & torch.isfinite(clearance),
+        clearance,
+        torch.full_like(clearance, float("nan")),
+    )
+
+    contact_available = _as_scalar_flat(
+        contact_telemetry_available,
+        "contact_telemetry_available",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    ground = _as_scalar_flat(
+        ground_contact,
+        "ground_contact",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+
+    below_threshold = float(below_bound_threshold)
+    ceiling = float(ceiling_threshold)
+    adjacency = float(height_adjacency_margin)
+    clearance_threshold = float(collision_clearance_threshold)
+    if not math.isfinite(below_threshold):
+        raise ValueError("below_bound_threshold must be finite")
+    if not math.isfinite(ceiling):
+        raise ValueError("ceiling_threshold must be finite")
+    if not math.isfinite(adjacency) or adjacency < 0.0:
+        raise ValueError("height_adjacency_margin must be finite and >= 0")
+    if not math.isfinite(clearance_threshold) or clearance_threshold < 0.0:
+        raise ValueError("collision_clearance_threshold must be finite and >= 0")
+
+    finite_height = torch.isfinite(height)
+    below_adjacent = (
+        (below >= 0.5)
+        | (finite_height & (height <= below_threshold + adjacency))
+    ).float()
+    ceiling_adjacent = (
+        (above >= 0.5)
+        | (finite_height & (height >= ceiling - adjacency))
+    ).float()
+    height_adjacent = torch.maximum(below_adjacent, ceiling_adjacent)
+    lidar_collision_evidence = (
+        (coll >= 0.5)
+        & (clearance_source >= 0.5)
+        & torch.isfinite(clearance)
+        & (clearance <= clearance_threshold)
+    ).float()
+    reliable_ground = (
+        (contact_available >= 0.5)
+        & (ground >= 0.5)
+    ).float()
+    is_collision_termination = term >= 0.5
+
+    code = torch.full(
+        (N, 1),
+        R5E2_REASON_NOT_COLLISION_TERMINATION,
+        dtype=torch.long,
+        device=device,
+    )
+    unknown_code = torch.full_like(code, R5E2_REASON_UNKNOWN)
+    code = torch.where(is_collision_termination, unknown_code, code)
+    code = torch.where(
+        is_collision_termination & (reliable_ground >= 0.5) & (height_adjacent < 0.5),
+        torch.full_like(code, R5E2_REASON_GROUND),
+        code,
+    )
+    code = torch.where(
+        is_collision_termination
+        & (lidar_collision_evidence >= 0.5)
+        & (height_adjacent < 0.5),
+        torch.full_like(code, R5E2_REASON_OBSTACLE),
+        code,
+    )
+    code = torch.where(
+        is_collision_termination & (ceiling_adjacent >= 0.5),
+        torch.full_like(code, R5E2_REASON_CEILING),
+        code,
+    )
+    code = torch.where(
+        is_collision_termination & (below_adjacent >= 0.5),
+        torch.full_like(code, R5E2_REASON_BELOW_BOUND_ADJACENT),
+        code,
+    )
+
+    same_step = ((coll >= 0.5) & is_collision_termination).float()
+    collision_without_termination = ((coll >= 0.5) & ~is_collision_termination).float()
+    termination_without_collision = ((coll < 0.5) & is_collision_termination).float()
+
+    result: Dict[str, torch.Tensor] = {
+        "r5e2_collision": coll,
+        "r5e2_terminated_collision": term,
+        "r5e2_below_bound": below,
+        "r5e2_above_bound": above,
+        "r5e2_root_z": height,
+        "r5e2_below_bound_adjacent": below_adjacent,
+        "r5e2_ceiling_adjacent": ceiling_adjacent,
+        "r5e2_height_adjacent": height_adjacent,
+        "r5e2_min_clearance": clearance,
+        "r5e2_min_clearance_source_available": clearance_source,
+        "r5e2_missing_clearance_source": 1.0 - clearance_source,
+        "r5e2_lidar_collision_evidence": lidar_collision_evidence,
+        "r5e2_contact_telemetry_available": contact_available,
+        "r5e2_missing_contact_telemetry": 1.0 - contact_available,
+        "r5e2_ground_contact": reliable_ground,
+        "r5e2_collision_termination_same_step": same_step,
+        "r5e2_collision_without_termination": collision_without_termination,
+        "r5e2_termination_collision_without_collision": termination_without_collision,
+        "r5e2_reason_code": code,
+    }
+    for reason_code, label in R5E2_COLLISION_REASON_LABELS.items():
+        result[f"r5e2_reason_{label}"] = (
+            is_collision_termination & (code == int(reason_code))
+        ).float()
     return result
 
 

@@ -1581,3 +1581,65 @@ Validation:
 - `python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
 - `python -m pytest -q training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_task_metrics.py`: passed, `30 passed`.
 - `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `133 passed, 12 warnings`.
+
+## A2-R5 Evidence-2 Collision Geometry Reason-Code Diagnostics - 2026-07-15
+
+Scope and authority:
+
+- Evidence-2 is eval/logging-only. It adds passive `r5e2_*` collision geometry, reason-code, missing-telemetry, and 25/50-step pre-collision window diagnostics.
+- It does not authorize or include training, sweeps, 1M confirmation, warm-start, promotion, hard-gate changes, actor-observation changes, platform/sensor changes, governor/controller behavior changes, safety-filter default changes, or an R5J behavior patch.
+- Replays used the three existing R5G checkpoint eval commands from `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json`; the only changed override was `result_path`.
+- All `r5e2_*` diagnostics remain outside actor observation. Actor audit coverage now explicitly rejects `r5e2_*` and `evidence2_*` actor-observation keys.
+- Collision-window summaries include component means for `v_final_b`, controller world command, actual body velocity, and actual world velocity, plus compact XY/Z speed summaries used in the table below.
+
+Artifacts:
+
+| Variant | Evidence-2 replay artifact |
+|---|---|
+| `r5g_downatten_z010` | `docs/instinctRL_devlog/tests/artifacts/r5e2_collision_geometry/20260714_234801/r5e2_r5g_downatten_z010_eval.json` |
+| `r5g_downatten_z005` | `docs/instinctRL_devlog/tests/artifacts/r5e2_collision_geometry/20260714_234801/r5e2_r5g_downatten_z005_eval.json` |
+| `r5g_smooth040` | `docs/instinctRL_devlog/tests/artifacts/r5e2_collision_geometry/20260714_234801/r5e2_r5g_smooth040_eval.json` |
+
+Episode-level collision-termination reason distribution:
+
+| Variant | Collision-termination episodes | Obstacle | Below-bound adjacent | Ceiling | Ground | Unknown | Missing contact telemetry | Min-clearance source available |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 1 | 1.000 | 0.000 | 0 | 0 | 0 | 1.000 | 1.000 |
+| `r5g_downatten_z005` | 2 | 1.000 | 0.000 | 0 | 0 | 0 | 1.000 | 1.000 |
+| `r5g_smooth040` | 0 | n/a | n/a | 0 | 0 | 0 | n/a | n/a |
+
+Collision-window evidence:
+
+| Variant | Window | Episodes | Min clearance p05 | Root z min | `v_final_b` XY mean | Controller world XY mean | Actual body XY mean | ICS beta mean | Emergency mean |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `r5g_downatten_z010` | 25 | 1 | 0.3011 | 0.5951 | 0.0000 | 0.0000 | 0.1768 | 0.0000 | 1.000 |
+| `r5g_downatten_z010` | 50 | 1 | 0.3032 | 0.5951 | 0.0000 | 0.0000 | 0.1805 | 0.0000 | 0.900 |
+| `r5g_downatten_z005` | 25 | 2 | 0.3026 | 0.8177 | 0.0000 | 0.0000 | 0.1768 | 0.0000 | 1.000 |
+| `r5g_downatten_z005` | 50 | 2 | 0.3057 | 0.8177 | 0.0000 | 0.0000 | 0.1805 | 0.0000 | 0.700 |
+| `r5g_smooth040` | 25 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| `r5g_smooth040` | 50 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+
+Downatten interpretation:
+
+- Both downatten variants produced collision terminations classified as `obstacle` by the Evidence-2 rules: the terminal collision had MID360/LiDAR collision evidence, finite min clearance at or below the existing `0.3m` collision threshold, and no below/ceiling height adjacency.
+- `r5g_downatten_z010` had terminal min-clearance p05 `0.2984`, `termination_collision=0.03125`, and `safety_collision_rate=0.0000625`.
+- `r5g_downatten_z005` had terminal min-clearance p05 `0.2997`, `termination_collision=0.0625`, and `safety_collision_rate=0.000125`.
+- The result supports a LiDAR-threshold static-geometry explanation for the downatten collision labels. It does not prove the collided body identity.
+- `r5g_smooth040` had no collision terminations, but still failed by height/safety shape: `termination_below_bound=0.3125`, `height_world_z_min=0.20015`, `r5e2_below_bound_adjacent_rate=0.0273125`, and `safety_min_clearance_p05=0.6604`.
+
+Missing telemetry:
+
+- Evidence-2 records contact telemetry as missing for this environment: `r5e2_missing_contact_telemetry_rate=1.0`.
+- Ground is therefore not inferred from low root height or clearance. The `ground` reason count remains zero because no reliable ground-contact telemetry exists, not because ground contact has been ruled out.
+- `obstacle` means MID360/LiDAR-threshold geometry evidence, not a proven contact-body classifier.
+
+R5J status:
+
+- R5J remains unauthorized. Evidence-2 did not identify a concrete actor-clean implementation defect or mechanism gap.
+- The next action may be another evidence-only postmortem item from the evidence table, but no R5J plan, behavior patch, sweep, 1M confirmation, warm-start, promotion, hard-gate edit, actor-observation edit, platform/sensor edit, or safety-filter default change is authorized by Evidence-2.
+
+Validation:
+
+- `python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_task_metrics.py`: passed, `31 passed`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `134 passed, 12 warnings`.

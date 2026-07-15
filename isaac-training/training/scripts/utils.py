@@ -23,6 +23,11 @@ from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from instinctRL.task_metrics import (
     R5E1_LAG_STEPS,
+    R5E2_COLLISION_REASON_LABELS,
+    R5E2_COLLISION_WINDOW_STEPS,
+    R5E2_COLLISION_WINDOW_VALUE_FIELDS,
+    R5E2_DIAGNOSTIC_FIELDS,
+    R5E2_REASON_NOT_COLLISION_TERMINATION,
     R5H_COLLISION_WINDOW_STEPS,
     R5H_COLLISION_WINDOW_VALUE_FIELDS,
     R5H_CONCENTRATION_SAMPLE_VALUE_NAMES,
@@ -497,6 +502,16 @@ def _get_optional_tensor(tensordict, candidates):
     return None
 
 
+def _r5e2_optional_field_candidates():
+    return {
+        field_name: [
+            ("info", field_name),
+            ("next", "info", field_name),
+        ]
+        for field_name in R5E2_DIAGNOSTIC_FIELDS
+    }
+
+
 def _json_safe_eval_summary(info, trajs, cfg=None):
     summary = {
         key: _json_safe_scalar(value)
@@ -630,14 +645,21 @@ def _json_safe_eval_summary(info, trajs, cfg=None):
         "v_cmd_z": [("info", "v_cmd_z"), ("next", "info", "v_cmd_z")],
         "v_final_b_z": [("info", "v_final_b_z"), ("next", "info", "v_final_b_z")],
     }
+    optional_fields.update(_r5e2_optional_field_candidates())
 
     absent_fields = []
+    r5e2_step_accumulators = {
+        field_name: _TensorSummaryAccumulator()
+        for field_name in R5E2_DIAGNOSTIC_FIELDS
+    }
     for field_name, candidates in optional_fields.items():
         value = _get_optional_tensor(trajs, candidates)
         if value is None:
             absent_fields.append(field_name)
             continue
         summary[f"eval/diagnostics.{field_name}"] = _tensor_summary(value)
+        if field_name in r5e2_step_accumulators:
+            r5e2_step_accumulators[field_name].add(value)
 
     reward = _get_optional_tensor(trajs, [("next", "agents", "reward")])
     if reward is not None:
@@ -681,6 +703,7 @@ def _json_safe_eval_summary(info, trajs, cfg=None):
     ):
         _add_r5h_diagnostic_summaries(summary, r5h_accumulators)
         _add_r5h_handbook_summary(summary, r5h_accumulators)
+    _add_r5e2_step_handbook_summary(summary, r5e2_step_accumulators)
 
     return summary
 
@@ -743,7 +766,7 @@ class _TensorSummaryAccumulator:
 
 
 def _make_optional_eval_field_candidates():
-    return {
+    candidates = {
         "governor_alpha": ["governor_alpha", ("next", "governor_alpha")],
         "governor_v_corr": ["governor_v_corr", ("next", "governor_v_corr")],
         "governor_v_corr_z": ["governor_v_corr_z", ("next", "governor_v_corr_z")],
@@ -973,6 +996,8 @@ def _make_optional_eval_field_candidates():
             ("next", "info", "observability_scenario_id"),
         ],
     }
+    candidates.update(_r5e2_optional_field_candidates())
+    return candidates
 
 
 def _categorical_fractions(accumulator: _TensorSummaryAccumulator, labels):
@@ -998,6 +1023,39 @@ def _masked_sum_mean(
     if denominator.sum <= 0.0:
         return None
     return numerator.sum / denominator.sum
+
+
+def _add_r5e2_step_handbook_summary(summary, accumulators):
+    if accumulators["r5e2_collision"].count == 0:
+        return
+    for field_name, handbook_name in (
+        ("r5e2_collision", "r5e2_collision_rate"),
+        ("r5e2_terminated_collision", "r5e2_terminated_collision_step_rate"),
+        ("r5e2_below_bound_adjacent", "r5e2_below_bound_adjacent_rate"),
+        ("r5e2_ceiling_adjacent", "r5e2_ceiling_adjacent_rate"),
+        ("r5e2_height_adjacent", "r5e2_height_adjacent_rate"),
+        ("r5e2_min_clearance_source_available", "r5e2_min_clearance_source_available_rate"),
+        ("r5e2_missing_clearance_source", "r5e2_missing_clearance_source_rate"),
+        ("r5e2_lidar_collision_evidence", "r5e2_lidar_collision_evidence_rate"),
+        ("r5e2_contact_telemetry_available", "r5e2_contact_telemetry_available_rate"),
+        ("r5e2_missing_contact_telemetry", "r5e2_missing_contact_telemetry_rate"),
+        ("r5e2_collision_termination_same_step", "r5e2_collision_termination_same_step_rate"),
+        ("r5e2_collision_without_termination", "r5e2_collision_without_termination_rate"),
+        (
+            "r5e2_termination_collision_without_collision",
+            "r5e2_termination_collision_without_collision_rate",
+        ),
+    ):
+        value = accumulators[field_name].mean()
+        if value is not None:
+            summary[f"eval/handbook.{handbook_name}"] = float(value)
+
+    clearance_p05 = accumulators["r5e2_min_clearance"].quantile(0.05)
+    if clearance_p05 is not None:
+        summary["eval/handbook.r5e2_min_clearance_p05"] = float(clearance_p05)
+    root_z_min = accumulators["r5e2_root_z"].summary().get("min")
+    if root_z_min is not None:
+        summary["eval/handbook.r5e2_root_z_min"] = float(root_z_min)
 
 
 _R5E_DIAGNOSTIC_FIELDS = (
@@ -2336,6 +2394,377 @@ class R5E1ControllerLatencyTracker:
             )
 
 
+_R5E2_WINDOW_RATE_FIELDS = {
+    "below_bound_adjacent",
+    "ceiling_adjacent",
+    "height_adjacent",
+    "lidar_collision_evidence",
+    "min_clearance_source_available",
+    "missing_clearance_source",
+    "contact_telemetry_available",
+    "missing_contact_telemetry",
+    "collision",
+    "terminated_collision",
+    "collision_termination_same_step",
+    "collision_without_termination",
+    "termination_collision_without_collision",
+}
+
+
+class _R5E2CollisionGeometryTracker:
+    def __init__(
+        self,
+        num_envs: int,
+        *,
+        window_steps=R5E2_COLLISION_WINDOW_STEPS,
+    ):
+        self.window_steps = tuple(int(value) for value in window_steps)
+        self._buffers = [[] for _ in range(int(num_envs))]
+        self._max_window = max(self.window_steps) if self.window_steps else 0
+        self._collision_termination_episodes = 0
+        self._reason_counts = {
+            label: 0
+            for label in R5E2_COLLISION_REASON_LABELS.values()
+        }
+        self._terminal_accumulators = {
+            field_name: _TensorSummaryAccumulator()
+            for field_name in (
+                "min_clearance",
+                "root_z",
+                "below_bound_adjacent",
+                "ceiling_adjacent",
+                "height_adjacent",
+                "lidar_collision_evidence",
+                "min_clearance_source_available",
+                "missing_clearance_source",
+                "contact_telemetry_available",
+                "missing_contact_telemetry",
+                "collision_termination_same_step",
+                "termination_collision_without_collision",
+            )
+        }
+        self._window_accumulators = {
+            window: {
+                field_name: _TensorSummaryAccumulator()
+                for field_name in ("window_step",) + R5E2_COLLISION_WINDOW_VALUE_FIELDS
+            }
+            for window in self.window_steps
+        }
+        self._collision_episodes = {window: 0 for window in self.window_steps}
+
+    @staticmethod
+    def _as_scalar_tensor(value):
+        return torch.tensor([float(value)], dtype=torch.float32)
+
+    @staticmethod
+    def _r5e2_tensor(tensordict, optional_candidates, suffix):
+        field_name = f"r5e2_{suffix}"
+        return _get_optional_tensor(
+            tensordict,
+            optional_candidates.get(field_name, []),
+        )
+
+    def add_step(self, tensordict, optional_candidates, recorded):
+        v_final_b = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("governor_v_final_b", []),
+        )
+        if v_final_b is None:
+            v_final_b = _get_optional_tensor(
+                tensordict,
+                optional_candidates.get("governor_v_gov_b", []),
+            )
+        controller_command_w = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("r5e1_controller_command_w", []),
+        )
+        actual_velocity_b = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("actual_velocity_b", []),
+        )
+        actual_velocity_w = _actual_velocity_w_from_tensordict(
+            tensordict,
+            optional_candidates,
+        )
+        r5e2_required = {
+            suffix: self._r5e2_tensor(tensordict, optional_candidates, suffix)
+            for suffix in (
+                "collision",
+                "terminated_collision",
+                "root_z",
+                "below_bound_adjacent",
+                "ceiling_adjacent",
+                "height_adjacent",
+                "min_clearance",
+                "min_clearance_source_available",
+                "missing_clearance_source",
+                "lidar_collision_evidence",
+                "contact_telemetry_available",
+                "missing_contact_telemetry",
+                "collision_termination_same_step",
+                "collision_without_termination",
+                "termination_collision_without_collision",
+                "reason_code",
+            )
+        }
+        if any(
+            value is None
+            for value in (
+                v_final_b,
+                controller_command_w,
+                actual_velocity_b,
+                actual_velocity_w,
+                *r5e2_required.values(),
+            )
+        ):
+            return False
+
+        beta = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_beta", []),
+        )
+        emergency = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_emergency", []),
+        )
+        active_beams = _get_optional_tensor(
+            tensordict,
+            optional_candidates.get("ics_active_beam_count", []),
+        )
+
+        recorded_cpu = recorded.detach().cpu().reshape(-1).bool()
+        final_b = v_final_b.detach().float().cpu().reshape(-1, 3)
+        command_w = controller_command_w.detach().float().cpu().reshape(-1, 3)
+        actual_b = actual_velocity_b.detach().float().cpu().reshape(-1, 3)
+        actual_w = actual_velocity_w.detach().float().cpu().reshape(-1, 3)
+        flat = {
+            suffix: value.detach().float().cpu().reshape(-1)
+            for suffix, value in r5e2_required.items()
+            if suffix != "reason_code"
+        }
+        reason_code = r5e2_required["reason_code"].detach().cpu().reshape(-1).long()
+        beta = (
+            beta.detach().float().cpu().reshape(-1)
+            if beta is not None
+            else torch.ones_like(flat["collision"])
+        )
+        emergency = (
+            emergency.detach().float().cpu().reshape(-1)
+            if emergency is not None
+            else torch.zeros_like(flat["collision"])
+        )
+        active_beams = (
+            active_beams.detach().float().cpu().reshape(-1)
+            if active_beams is not None
+            else torch.zeros_like(flat["collision"])
+        )
+
+        count = min(
+            len(self._buffers),
+            int(final_b.shape[0]),
+            int(command_w.shape[0]),
+            int(actual_b.shape[0]),
+            int(actual_w.shape[0]),
+            int(flat["collision"].numel()),
+            int(reason_code.numel()),
+        )
+        for env_id in range(count):
+            if recorded_cpu[env_id]:
+                continue
+            record = {
+                "v_final_body_x": float(final_b[env_id, 0].item()),
+                "v_final_body_y": float(final_b[env_id, 1].item()),
+                "v_final_body_z": float(final_b[env_id, 2].item()),
+                "v_final_body_speed_xy": float(final_b[env_id, :2].norm().item()),
+                "v_final_body_speed_z_abs": float(final_b[env_id, 2].abs().item()),
+                "controller_command_world_x": float(command_w[env_id, 0].item()),
+                "controller_command_world_y": float(command_w[env_id, 1].item()),
+                "controller_command_world_z": float(command_w[env_id, 2].item()),
+                "controller_command_world_speed_xy": float(command_w[env_id, :2].norm().item()),
+                "controller_command_world_speed_z_abs": float(command_w[env_id, 2].abs().item()),
+                "actual_body_x": float(actual_b[env_id, 0].item()),
+                "actual_body_y": float(actual_b[env_id, 1].item()),
+                "actual_body_z": float(actual_b[env_id, 2].item()),
+                "actual_body_speed_xy": float(actual_b[env_id, :2].norm().item()),
+                "actual_body_speed_z_abs": float(actual_b[env_id, 2].abs().item()),
+                "actual_world_x": float(actual_w[env_id, 0].item()),
+                "actual_world_y": float(actual_w[env_id, 1].item()),
+                "actual_world_z": float(actual_w[env_id, 2].item()),
+                "actual_world_speed_xy": float(actual_w[env_id, :2].norm().item()),
+                "actual_world_speed_z_abs": float(actual_w[env_id, 2].abs().item()),
+                "ics_beta": float(beta[env_id].item()),
+                "ics_emergency": float(emergency[env_id].item()),
+                "ics_active_beam_count": float(active_beams[env_id].item()),
+                "reason_code": int(reason_code[env_id].item()),
+            }
+            for suffix in (
+                "min_clearance",
+                "root_z",
+                "below_bound_adjacent",
+                "ceiling_adjacent",
+                "height_adjacent",
+                "lidar_collision_evidence",
+                "min_clearance_source_available",
+                "missing_clearance_source",
+                "contact_telemetry_available",
+                "missing_contact_telemetry",
+                "collision",
+                "terminated_collision",
+                "collision_termination_same_step",
+                "collision_without_termination",
+                "termination_collision_without_collision",
+            ):
+                record[suffix] = float(flat[suffix][env_id].item())
+            self._buffers[env_id].append(record)
+            if len(self._buffers[env_id]) > self._max_window:
+                self._buffers[env_id].pop(0)
+        return True
+
+    def flush(self, newly_done, stats):
+        done_cpu = newly_done.detach().cpu().reshape(-1).bool()
+        reason_codes = _R5GTerminationWindowTracker._reason_codes(stats)
+        for env_id in done_cpu.nonzero(as_tuple=False).reshape(-1).tolist():
+            records = self._buffers[env_id]
+            if not records:
+                continue
+            final_record = records[-1]
+            is_collision_termination = (
+                int(reason_codes[env_id].item()) == TERMINATION_COLLISION
+                or final_record["terminated_collision"] >= 0.5
+            )
+            if is_collision_termination:
+                self._collision_termination_episodes += 1
+                code = int(final_record["reason_code"])
+                if code == R5E2_REASON_NOT_COLLISION_TERMINATION:
+                    label = "unknown"
+                else:
+                    label = R5E2_COLLISION_REASON_LABELS.get(code, "unknown")
+                self._reason_counts[label] += 1
+                for field_name, accumulator in self._terminal_accumulators.items():
+                    accumulator.add(self._as_scalar_tensor(final_record[field_name]))
+                for window in self.window_steps:
+                    target = self._window_accumulators[window]
+                    self._collision_episodes[window] += 1
+                    selected = records[-window:]
+                    for index, record in enumerate(selected):
+                        target["window_step"].add(torch.ones(1))
+                        for field_name in R5E2_COLLISION_WINDOW_VALUE_FIELDS:
+                            if field_name == "steps_before_termination":
+                                value = float(len(selected) - index - 1)
+                            else:
+                                value = record[field_name]
+                            target[field_name].add(self._as_scalar_tensor(value))
+            self._buffers[env_id] = []
+
+    def add_summaries(self, summary):
+        episodes = int(self._collision_termination_episodes)
+        summary["eval/handbook.r5e2_collision_termination_episodes"] = episodes
+        for label, count in self._reason_counts.items():
+            summary[f"eval/handbook.r5e2_reason_{label}_count"] = int(count)
+            summary[f"eval/handbook.r5e2_reason_{label}_fraction"] = (
+                float(count / episodes) if episodes > 0 else None
+            )
+
+        for field_name, handbook_key in (
+            (
+                "missing_contact_telemetry",
+                "eval/handbook.r5e2_missing_contact_telemetry_collision_termination_rate",
+            ),
+            (
+                "contact_telemetry_available",
+                "eval/handbook.r5e2_contact_telemetry_collision_termination_rate",
+            ),
+            (
+                "missing_clearance_source",
+                "eval/handbook.r5e2_missing_clearance_source_collision_termination_rate",
+            ),
+            (
+                "min_clearance_source_available",
+                "eval/handbook.r5e2_min_clearance_source_collision_termination_rate",
+            ),
+            (
+                "lidar_collision_evidence",
+                "eval/handbook.r5e2_lidar_collision_evidence_collision_termination_rate",
+            ),
+            (
+                "below_bound_adjacent",
+                "eval/handbook.r5e2_below_bound_adjacent_collision_termination_rate",
+            ),
+            (
+                "ceiling_adjacent",
+                "eval/handbook.r5e2_ceiling_adjacent_collision_termination_rate",
+            ),
+            (
+                "height_adjacent",
+                "eval/handbook.r5e2_height_adjacent_collision_termination_rate",
+            ),
+            (
+                "collision_termination_same_step",
+                "eval/handbook.r5e2_collision_termination_same_step_collision_termination_rate",
+            ),
+            (
+                "termination_collision_without_collision",
+                "eval/handbook.r5e2_termination_collision_without_collision_collision_termination_rate",
+            ),
+        ):
+            value = self._terminal_accumulators[field_name].mean()
+            if episodes > 0:
+                summary[handbook_key] = float(value) if value is not None else None
+        clearance_p05 = self._terminal_accumulators["min_clearance"].quantile(0.05)
+        if episodes > 0:
+            summary["eval/handbook.r5e2_min_clearance_p05_at_collision_termination"] = (
+                float(clearance_p05) if clearance_p05 is not None else None
+            )
+
+        for window in self.window_steps:
+            accumulators = self._window_accumulators[window]
+            window_steps = accumulators["window_step"].finite_count
+            summary[f"eval/handbook.r5e2_collision_window{window}_steps"] = int(window_steps)
+            summary[f"eval/handbook.r5e2_collision_window{window}_episodes"] = int(
+                self._collision_episodes[window]
+            )
+            if window_steps <= 0:
+                continue
+            for field_name in R5E2_COLLISION_WINDOW_VALUE_FIELDS:
+                accumulator = accumulators[field_name]
+                if field_name == "min_clearance":
+                    mean = accumulator.mean()
+                    p05 = accumulator.quantile(0.05)
+                    summary[f"eval/handbook.r5e2_collision_window{window}_min_clearance_mean"] = (
+                        float(mean) if mean is not None else None
+                    )
+                    summary[f"eval/handbook.r5e2_collision_window{window}_min_clearance_p05"] = (
+                        float(p05) if p05 is not None else None
+                    )
+                elif field_name == "root_z":
+                    root_summary = accumulator.summary()
+                    mean = accumulator.mean()
+                    summary[f"eval/handbook.r5e2_collision_window{window}_root_z_mean"] = (
+                        float(mean) if mean is not None else None
+                    )
+                    for suffix in ("min", "max"):
+                        if suffix in root_summary:
+                            summary[
+                                f"eval/handbook.r5e2_collision_window{window}_root_z_{suffix}"
+                            ] = float(root_summary[suffix])
+                elif field_name == "steps_before_termination":
+                    mean = accumulator.mean()
+                    maximum = accumulator.summary().get("max")
+                    summary[
+                        f"eval/handbook.r5e2_collision_window{window}_steps_before_termination_mean"
+                    ] = float(mean) if mean is not None else None
+                    if maximum is not None:
+                        summary[
+                            f"eval/handbook.r5e2_collision_window{window}_steps_before_termination_max"
+                        ] = float(maximum)
+                else:
+                    value = accumulator.mean()
+                    suffix = "rate" if field_name in _R5E2_WINDOW_RATE_FIELDS else "mean"
+                    summary[f"eval/handbook.r5e2_collision_window{window}_{field_name}_{suffix}"] = (
+                        float(value) if value is not None else None
+                    )
+
+
 class _R5HCollisionWindowTracker:
     def __init__(
         self,
@@ -2564,6 +2993,7 @@ def _evaluate_streaming(
     r5g_station_accumulators = _make_r5g_station_accumulators()
     r5g_downward_accumulators = _make_r5g_downward_accumulators()
     r5h_diagnostic_accumulators = _make_r5h_diagnostic_accumulators()
+    r5e2_collision_tracker = _R5E2CollisionGeometryTracker(num_envs)
     v_corr_limit = _governor_v_corr_limit(cfg)
     _, r5g_height_floor, _ = _r5e_eval_config(cfg)
     r5e1_command_eps, _, _ = _r5e_eval_config(cfg)
@@ -2666,6 +3096,7 @@ def _evaluate_streaming(
             r5e1_latency_tracker.add_step(step_td, optional_candidates, recorded)
             r5g_termination_tracker.add_step(step_td, optional_candidates, recorded)
             r5h_collision_tracker.add_step(step_td, optional_candidates, recorded)
+            r5e2_collision_tracker.add_step(step_td, optional_candidates, recorded)
 
             reward = _get_optional_tensor(step_td, [("next", "agents", "reward")])
             if reward is not None:
@@ -2691,6 +3122,7 @@ def _evaluate_streaming(
                 r5e1_latency_tracker.flush(newly_done, next_stats)
                 r5g_termination_tracker.flush(newly_done, next_stats)
                 r5h_collision_tracker.flush(newly_done, next_stats)
+                r5e2_collision_tracker.flush(newly_done, next_stats)
                 recorded |= newly_done
             if recorded.all():
                 break
@@ -2704,6 +3136,7 @@ def _evaluate_streaming(
         r5e1_latency_tracker.flush(missing, last_stats)
         r5g_termination_tracker.flush(missing, last_stats)
         r5h_collision_tracker.flush(missing, last_stats)
+        r5e2_collision_tracker.flush(missing, last_stats)
 
     env.enable_render(not cfg.headless)
     env.reset()
@@ -2748,6 +3181,7 @@ def _evaluate_streaming(
         r5g_downward_accumulators,
     )
     _add_r5h_diagnostic_summaries(summary, r5h_diagnostic_accumulators)
+    _add_r5e2_step_handbook_summary(summary, diagnostic_accumulators)
     actual_error = diagnostic_accumulators["tracking_actual_error_sq"].mean()
     if actual_error is not None:
         summary["eval/handbook.tracking_rmse_actual_body_vs_v_cmd"] = float(
@@ -2918,6 +3352,7 @@ def _evaluate_streaming(
     _add_r5h_handbook_summary(summary, r5h_diagnostic_accumulators)
     r5g_termination_tracker.add_summaries(summary)
     r5h_collision_tracker.add_summaries(summary)
+    r5e2_collision_tracker.add_summaries(summary)
     vertical_corr = vertical_diagnostic_accumulators["vertical_corr_z"].mean()
     if vertical_corr is not None:
         summary["eval/handbook.vertical_v_corr_limit"] = float(v_corr_limit)
