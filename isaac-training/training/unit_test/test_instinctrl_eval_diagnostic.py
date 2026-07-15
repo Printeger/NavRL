@@ -129,6 +129,12 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "eval/handbook.r5g_downward_attenuation_ratio_mean_when_active",
         "eval/handbook.r5g_near_floor_rate_before_",
         "eval/handbook.r5g_near_floor_{suffix}_before_",
+        "eval/handbook.r5h_{condition}_rate",
+        "eval/handbook.r5h_{value_name}_mean_when_{condition}",
+        "eval/handbook.r5h_station_null_{value_name}_mean",
+        "eval/handbook.r5h_anchor_{value_name}_mean_when_{condition}",
+        "eval/handbook.r5h_collision_window{window}_steps",
+        "eval/handbook.r5h_collision_window{window}_{field_name}_{suffix}",
         "eval/handbook.observability_is_proxy",
     ]:
         assert key in source
@@ -137,10 +143,15 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "compute_r5e_mechanism_step_metrics(",
         "compute_r5g_station_anchor_step_metrics(",
         "compute_r5g_downward_step_metrics(",
+        "compute_r5h_mechanism_step_metrics(",
         "vertical_diagnostic_accumulators",
         "r5e_diagnostic_accumulators",
         "r5g_station_accumulators",
+        "r5h_diagnostic_accumulators",
         "r5g_termination_tracker",
+        "_R5HCollisionWindowTracker",
+        "r5h_collision_tracker",
+        "R5H_COLLISION_WINDOW_STEPS",
         "v_corr_limit = _governor_v_corr_limit(cfg)",
     ]:
         assert key in source
@@ -158,6 +169,11 @@ def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
         "r5g_anchor",
         "r5g_near_floor",
         "r5g_downward",
+        "r5h_station",
+        "r5h_anchor",
+        "r5h_collision",
+        "r5h_low_beta",
+        "r5h_tracking",
     ]:
         assert key in eval_source
     for key in [

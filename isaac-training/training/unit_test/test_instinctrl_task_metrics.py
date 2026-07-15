@@ -471,3 +471,122 @@ def test_r5g_downward_metrics_mask_active_effectiveness():
     assert abs(
         summary["r5g_downward_attenuation_ratio_when_active"].sum().item() / active - 0.65
     ) < 1e-6
+
+
+def test_r5h_metrics_report_condition_concentration_station_mismatch_and_tracking_loss():
+    metrics = _load_task_metrics()
+
+    summary = metrics.compute_r5h_mechanism_step_metrics(
+        v_cmd_b=torch.tensor([
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0],
+        ]),
+        actual_velocity_b=torch.tensor([
+            [0.4, 0.0, 0.1],
+            [0.6, 0.0, 0.0],
+            [0.0, 0.0, -0.3],
+        ]),
+        v_gov_b=torch.tensor([
+            [0.2, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+            [0.0, 0.0, -0.5],
+        ]),
+        v_final_b=torch.tensor([
+            [0.3, 0.0, 0.0],
+            [0.5, 0.0, 0.0],
+            [0.0, 0.0, -0.2],
+        ]),
+        min_clearance=torch.tensor([[0.2], [0.4], [1.2]]),
+        height_world_z=torch.tensor([[0.55], [1.0], [0.4]]),
+        ics_beta=torch.tensor([[0.2], [0.5], [1.0]]),
+        ics_emergency=torch.tensor([[0.0], [0.0], [1.0]]),
+        ics_violation=torch.tensor([[0.0], [1.0], [0.0]]),
+        ics_active_beam_count=torch.tensor([[7.0], [5.0], [0.0]]),
+        ics_downward_active=torch.tensor([[1.0], [0.0], [1.0]]),
+        ics_downward_beta=torch.tensor([[0.4], [1.0], [0.8]]),
+        ics_downward_min_clearance=torch.tensor([[0.15], [0.9], [0.6]]),
+        collision=torch.tensor([[1.0], [0.0], [0.0]]),
+        governor_alpha=torch.tensor([[0.25], [0.75], [0.5]]),
+        governor_v_corr=torch.tensor([
+            [0.2, 0.0, 0.0],
+            [-0.2, 0.0, 0.0],
+            [0.0, 0.0, 0.5],
+        ]),
+        prev_action_b=torch.tensor([
+            [0.1, 0.0, 0.0],
+            [9.0, 0.0, 0.0],
+            [0.0, 9.0, 0.0],
+        ]),
+        station_drift=torch.tensor([[2.0], [3.0], [4.0]]),
+        anchor_active=torch.tensor([[1.0], [1.0], [0.0]]),
+        anchor_valid_fraction=torch.tensor([[0.2], [0.05], [0.0]]),
+        anchor_error_mean=torch.tensor([[1.5], [2.5], [0.0]]),
+        anchor_loss=torch.tensor([[0.1], [0.01], [0.0]]),
+        command_eps=0.05,
+        height_floor=0.5,
+        d_safe=0.8,
+        low_beta_threshold=0.999,
+        min_anchor_valid_fraction=0.1,
+        anchor_loss_high_threshold=0.05,
+    )
+
+    assert summary["r5h_collision"].reshape(-1).tolist() == [1.0, 0.0, 0.0]
+    assert summary["r5h_ics_violation"].reshape(-1).tolist() == [1.0, 1.0, 0.0]
+    assert summary["r5h_downward_active"].reshape(-1).tolist() == [1.0, 0.0, 1.0]
+    assert summary["r5h_low_beta"].reshape(-1).tolist() == [1.0, 1.0, 0.0]
+    assert summary["r5h_emergency"].reshape(-1).tolist() == [0.0, 0.0, 1.0]
+    assert summary["r5h_near_floor"].reshape(-1).tolist() == [1.0, 0.0, 1.0]
+    assert abs(summary["r5h_ics_beta_when_collision"].sum().item() - 0.2) < 1e-6
+    assert abs(summary["r5h_ics_active_beam_count_when_collision"].sum().item() - 7.0) < 1e-6
+    assert torch.isfinite(
+        summary["r5h_min_clearance_sample_when_collision"].reshape(-1)
+    ).tolist() == [True, False, False]
+
+    assert summary["r5h_station_null_command"].reshape(-1).tolist() == [1.0, 0.0, 0.0]
+    assert abs(summary["r5h_station_null_actual_speed_xy"].sum().item() - 0.4) < 1e-6
+    assert abs(summary["r5h_station_null_alpha"].sum().item() - 0.25) < 1e-6
+    assert abs(summary["r5h_station_null_prev_action_v_final_mismatch_xy"].sum().item() - 0.2) < 1e-6
+    assert abs(summary["r5h_station_null_prev_action_v_final_alignment_xy"].sum().item() - 1.0) < 1e-6
+
+    assert summary["r5h_anchor_active"].sum().item() == 2.0
+    assert summary["r5h_anchor_valid"].sum().item() == 1.0
+    assert summary["r5h_anchor_high_loss"].sum().item() == 1.0
+    assert abs(summary["r5h_anchor_station_drift_when_high_loss"].sum().item() - 2.0) < 1e-6
+    assert abs(summary["r5h_anchor_anchor_error_when_valid"].sum().item() - 1.5) < 1e-6
+
+    command_count = summary["r5h_tracking_active"].sum().item()
+    assert command_count == 2.0
+    assert abs(summary["r5h_tracking_pre_ics_preservation"].sum().item() / command_count - 0.65) < 1e-6
+    assert abs(summary["r5h_tracking_post_ics_preservation"].sum().item() / command_count - 0.35) < 1e-6
+    assert abs(summary["r5h_tracking_governor_preservation_loss"].sum().item() - 0.7) < 1e-6
+    assert abs(summary["r5h_tracking_post_ics_preservation_loss"].sum().item() - 0.6) < 1e-6
+    assert summary["r5h_tracking_horizontal_active"].sum().item() == 1.0
+    assert summary["r5h_tracking_vertical_active"].sum().item() == 1.0
+
+
+def test_r5h_collision_window_contract_tracks_25_and_50_step_pre_collision_fields():
+    metrics = _load_task_metrics()
+
+    assert metrics.R5H_COLLISION_WINDOW_STEPS == (25, 50)
+    for field_name in [
+        "min_clearance",
+        "ics_beta",
+        "ics_downward_beta",
+        "ics_active_beam_count",
+        "v_cmd_xy_norm",
+        "v_gov_z_abs",
+        "v_final_xy_norm",
+        "actual_z_abs",
+        "near_floor",
+        "downward_active",
+    ]:
+        assert field_name in metrics.R5H_COLLISION_WINDOW_VALUE_FIELDS
+    for field_name in [
+        "r5h_collision",
+        "r5h_ics_beta_when_collision",
+        "r5h_station_null_prev_action_v_final_mismatch_xy",
+        "r5h_anchor_station_drift_when_high_loss",
+        "r5h_tracking_post_ics_preservation_loss",
+    ]:
+        assert field_name in metrics.R5H_DIAGNOSTIC_FIELDS

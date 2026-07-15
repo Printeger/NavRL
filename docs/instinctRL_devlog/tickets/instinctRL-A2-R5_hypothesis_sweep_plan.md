@@ -1,6 +1,6 @@
 # instinctRL-A2-R5 Hypothesis-Driven Sweep Plan
 
-**Status**: R5F dry-run sweep design and validation completed; no `--execute`, 1M, promotion, warm-start, parameter change, or hard-gate change
+**Status**: R5H mechanism diagnosis completed; stop sweeps, no 1M, no R5H micro-sweep, no promotion
 **Created**: 2026-07-12  
 **Owner for next Codex turn**: update this document after every code change, dry-run, sweep, eval, and decision  
 **Artifact root**: `docs/instinctRL_devlog/tests/artifacts/sweeps/`
@@ -1238,7 +1238,7 @@ Do not rely on chat history for experimental state.
 
 ## Current Next Action
 
-R5G dry-run readiness is complete for review with six default `r5g_*` variants under tag `a2r5g_sweep`. Do not promote, run 1M, warm-start, change hard gates, change actor observation, change platform/sensor, or include the privileged root-height safety filter in the default deployable sweep set. The next step may request human approval for a controlled 128k R5G execute sweep, but execute remains unauthorized until explicitly approved later.
+R5G execute is complete. Stop sweeps. Do not run 1M, warm-start, promote, run an R5H micro-sweep, change hard gates, change actor observation, change TASLAB_UAV + Livox MID360, change the body-frame velocity-governor method, or enable the privileged root-height safety filter in the default path. Current/next work is R5H mechanism diagnosis documentation and assumption review; a next dry-run variant design is not authorized by the R5H evidence below.
 
 ## A2-R5G 128k Execute Sweep - 2026-07-14
 
@@ -1359,3 +1359,91 @@ Best candidate and decision:
 - Failed gates for best: `station_drift_mean`=1.5319 (above max by 0.2319), `station_drift_p95`=2.9870 (above max by 0.387048), `station_null_speed_mean`=0.195142 (above max by 0.115142), `station_anchor_error_mean`=3.2438 (above max by 1.2438), `tracking_preservation_ratio`=0.558618 (below min by 0.191382), `safety_collision_rate`=0.000063 (above max by 6.25e-05), `ics_violation_rate`=0.020906 (above max by 0.0159063), `termination_collision`=0.03125 (above max by 0.03125).
 - Decision rule hit: best is below 10/14, `safety_passed=false`, collision termination is 0.03125, and `ics_violation_rate` is 0.020906 (> 0.01).
 - Final decision: stop sweeps, do not run 1M, forbid R5H micro-sweep, and route to mechanism diagnosis.
+
+## A2-R5H Mechanism Diagnosis Plan/Backfill - 2026-07-15
+
+Scope:
+
+- R5H is eval/logging-only diagnostics, tests, documentation, and replay of existing checkpoints.
+- No training, sweep, 1M run, warm-start, promotion, hard-gate change, actor-observation change, platform/sensor change, method change, or privileged root-height safety-filter default path was authorized or run.
+- Replay scope was exactly three R5G checkpoints: `r5g_downatten_z010`, `r5g_downatten_z005`, and `r5g_smooth040`.
+
+Code changes:
+
+- Added R5H eval-only tensor diagnostics in `training/scripts/instinctRL/task_metrics.py`.
+- Added streaming and non-streaming eval aggregation in `training/scripts/utils.py`.
+- Added collision pre-termination window summaries for 25-step and 50-step windows before collision terminations.
+- Copied relevant R5H handbook summaries from the station/tracking diagnostic passes into the combined eval summary in `training/scripts/eval.py`.
+- Extended actor-audit tests so `r5h_*`, collision-window, root/world-height, `ics_downward_*`, and privileged diagnostics remain forbidden actor-observation keys.
+- Actor input remains exactly `lidar_grid + state_vec`; R5H diagnostics are `info` / eval summary only.
+
+Diagnostics added:
+
+- Concentration masks for `collision`, `ics_violation`, `downward_active`, `low_beta`, `emergency`, and `near_floor`.
+- Conditional summaries for `ics_beta`, `ics_downward_beta`, `ics_active_beam_count`, `ics_downward_min_clearance`, `min_clearance`, command/gov/final XY and Z norms, and actual XY/Z velocity.
+- Station/null mismatch summaries for actual velocity versus `v_gov`/`v_final`, `alpha`, `v_corr`, and latest-frame `prev_action` extracted from actor-clean `state_vec`.
+- Anchor active/valid/high-loss summaries for station drift, null speed, actual XY/Z velocity, anchor error, and anchor loss.
+- Tracking preservation split into pre-ICS, post-ICS, governor preservation loss, post-ICS preservation loss, and horizontal/vertical components.
+- Collision timing summaries over 25-step and 50-step windows before collision termination.
+
+Replay artifacts:
+
+| Variant | R5H replay artifact |
+|---|---|
+| `r5g_downatten_z010` | `docs/instinctRL_devlog/tests/artifacts/r5h_diagnostics/20260714_234801/r5h_r5g_downatten_z010_eval.json` |
+| `r5g_downatten_z005` | `docs/instinctRL_devlog/tests/artifacts/r5h_diagnostics/20260714_234801/r5h_r5g_downatten_z005_eval.json` |
+| `r5g_smooth040` | `docs/instinctRL_devlog/tests/artifacts/r5h_diagnostics/20260714_234801/r5h_r5g_smooth040_eval.json` |
+
+Replay method:
+
+- Each replay used the corresponding job's `eval_command` from `docs/instinctRL_devlog/tests/artifacts/sweeps/20260714_234801/summary.json`.
+- The only changed override was `result_path`.
+- The three artifacts contain top-level `eval/handbook.r5h_*` summaries and per-pass `eval/station/diagnostics.r5h_*` / `eval/tracking/diagnostics.r5h_*` summaries.
+
+R5G pure-parse recap:
+
+- `r5g_downatten_z010` was best by rank but only `6/14`, with `passed=false` and `safety_passed=false`.
+- Best failed station drift mean/p95, station null speed, station anchor error, tracking preservation, safety collision, ICS violation, and termination collision.
+- `r5g_downatten_z010` and `r5g_downatten_z005` both triggered downward has-ray/active diagnostics and eliminated below-bound termination, but collision/ICS failures remained.
+- `r5g_smooth040` removed collision but regressed below-bound, clearance, ICS, and preservation.
+
+R5H key findings:
+
+| Metric | `downatten_z010` | `downatten_z005` | `smooth040` |
+|---|---:|---:|---:|
+| Station drift mean | 1.5319 | 1.5706 | 1.4883 |
+| Null command speed mean | 0.1951 | 0.1998 | 0.1893 |
+| Anchor error mean | 3.2438 | 3.2565 | 3.2372 |
+| Tracking RMSE actual | 0.4115 | 0.4064 | 0.4534 |
+| Command preservation | 0.5586 | 0.6203 | 0.4204 |
+| Safety collision rate | 0.000063 | 0.000125 | 0 |
+| Safety clearance p05 | 1.0047 | 1.1229 | 0.6604 |
+| ICS violation rate | 0.0209 | 0.0277 | 0.0767 |
+| Termination collision | 0.03125 | 0.0625 | 0 |
+| Termination below-bound | 0 | 0 | 0.3125 |
+| R5H downward active rate | 0.6555 | 0.6515 | 0 |
+| R5H low-beta rate | 0.0320 | 0.0353 | 0.0689 |
+| R5H near-floor rate | 0.0313 | 0 | 0.1167 |
+
+Mechanism interpretation:
+
+- Collision/ICS failures are concentrated in low-beta intervention regimes, not normal tracking regimes. Collision windows for both downatten variants have `ics_beta_mean=0.0` and `v_final_xy/z=0.0`, so the final command is already fully stopped before collision termination.
+- `downatten_z005` collision windows are strongly downward-active (`25-step rate=1.0`, `50-step rate=0.75`) with `ics_downward_beta_mean=0.0`; this points to downward attenuation being active but too late/too close to prevent collision termination.
+- `downatten_z010` collision windows are less downward-active (`25-step rate=0.08`, `50-step rate=0.04`) but still have `ics_beta_mean=0.0` and clearance p05 near `0.30`, so its collision is a low-clearance emergency-stop timing failure rather than a failure to command braking.
+- `smooth040` has no collision and no downward activity, but it has below-bound termination `0.3125`, clearance p05 `0.6604`, near-floor rate `0.1167`, and the worst ICS rate `0.0767`; smoothing trades collision for height/clearance failure, not safety.
+- Station failures are not caused by stale `prev_action` mismatch: `prev_action_v_final_mismatch_xy` is near zero and `prev_action_v_final_alignment_xy` is about `0.982-0.999`. The policy output under null is small, but actual null speed remains about `0.17-0.18 m/s` XY.
+- Anchor high-loss condition remains bad across the replay set: station drift when high-loss is `1.63-1.72`, and anchor error when high-loss is about `3.52-3.54`.
+- Tracking preservation loss is mostly pre-ICS/governor-side in `downatten_z010` and `smooth040` (`governor_preservation_loss` `0.4565` and `0.6587`). `downatten_z005` also has substantial post-ICS vertical preservation loss (`0.4674`), consistent with aggressive downward attenuation.
+
+R5H decision:
+
+- R5H found useful mechanisms but did not identify a single concrete actor-clean next variant that plausibly fixes station, preservation, collision/ICS, and height together.
+- Do not design or run an R5H micro-sweep from this evidence.
+- Stop and re-review task/environment/handbook assumptions before any next dry-run variant design.
+
+R5H validation:
+
+- `python -m py_compile training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
+- `python -m pytest -q training/unit_test/test_instinctrl_task_metrics.py`: passed, `15 passed`.
+- `python -m pytest -q training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_actor_audit.py`: passed, `13 passed`.
+- `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `131 passed, 12 warnings`.

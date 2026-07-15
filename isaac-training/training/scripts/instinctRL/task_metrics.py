@@ -23,6 +23,132 @@ TERMINATION_ABOVE_BOUND = 2
 TERMINATION_COLLISION = 3
 TERMINATION_TIMEOUT = 4
 
+R5H_CONDITION_NAMES = (
+    "collision",
+    "ics_violation",
+    "downward_active",
+    "low_beta",
+    "emergency",
+    "near_floor",
+)
+
+R5H_CONCENTRATION_VALUE_NAMES = (
+    "ics_beta",
+    "ics_downward_beta",
+    "ics_active_beam_count",
+    "ics_downward_min_clearance",
+    "min_clearance",
+    "v_cmd_xy_norm",
+    "v_cmd_z_abs",
+    "v_gov_xy_norm",
+    "v_gov_z_abs",
+    "v_final_xy_norm",
+    "v_final_z_abs",
+    "actual_xy_speed",
+    "actual_z_abs",
+)
+
+R5H_CONCENTRATION_SAMPLE_VALUE_NAMES = (
+    "ics_downward_min_clearance",
+    "min_clearance",
+)
+
+R5H_STATION_VALUE_NAMES = (
+    "actual_speed_xy",
+    "actual_speed_z_abs",
+    "v_gov_speed_xy",
+    "v_gov_speed_z_abs",
+    "v_final_speed_xy",
+    "v_final_speed_z_abs",
+    "actual_v_gov_mismatch_xy",
+    "actual_v_gov_mismatch_z_abs",
+    "actual_v_final_mismatch_xy",
+    "actual_v_final_mismatch_z_abs",
+    "alpha",
+    "v_corr_norm",
+    "v_corr_z_abs",
+    "prev_action_speed_xy",
+    "prev_action_speed_z_abs",
+    "prev_action_v_final_mismatch_xy",
+    "prev_action_v_final_mismatch_z_abs",
+    "prev_action_actual_mismatch_xy",
+    "prev_action_actual_mismatch_z_abs",
+    "prev_action_v_final_alignment_xy",
+)
+
+R5H_ANCHOR_CONDITION_NAMES = ("active", "valid", "high_loss")
+
+R5H_ANCHOR_VALUE_NAMES = (
+    "station_drift",
+    "null_speed",
+    "actual_xy_speed",
+    "actual_z_abs",
+    "anchor_error",
+    "anchor_loss",
+)
+
+R5H_TRACKING_FIELD_NAMES = (
+    "r5h_tracking_active",
+    "r5h_tracking_pre_ics_preservation",
+    "r5h_tracking_post_ics_preservation",
+    "r5h_tracking_governor_preservation_loss",
+    "r5h_tracking_post_ics_preservation_loss",
+    "r5h_tracking_horizontal_active",
+    "r5h_tracking_horizontal_pre_ics_preservation",
+    "r5h_tracking_horizontal_post_ics_preservation",
+    "r5h_tracking_horizontal_governor_preservation_loss",
+    "r5h_tracking_horizontal_post_ics_preservation_loss",
+    "r5h_tracking_vertical_active",
+    "r5h_tracking_vertical_pre_ics_preservation",
+    "r5h_tracking_vertical_post_ics_preservation",
+    "r5h_tracking_vertical_governor_preservation_loss",
+    "r5h_tracking_vertical_post_ics_preservation_loss",
+)
+
+R5H_DIAGNOSTIC_FIELDS = (
+    tuple(f"r5h_{condition}" for condition in R5H_CONDITION_NAMES)
+    + tuple(
+        f"r5h_{value_name}_when_{condition}"
+        for condition in R5H_CONDITION_NAMES
+        for value_name in R5H_CONCENTRATION_VALUE_NAMES
+    )
+    + tuple(
+        f"r5h_{value_name}_sample_when_{condition}"
+        for condition in R5H_CONDITION_NAMES
+        for value_name in R5H_CONCENTRATION_SAMPLE_VALUE_NAMES
+    )
+    + ("r5h_station_null_command",)
+    + tuple(
+        f"r5h_station_null_{value_name}"
+        for value_name in R5H_STATION_VALUE_NAMES
+    )
+    + tuple(f"r5h_anchor_{condition}" for condition in R5H_ANCHOR_CONDITION_NAMES)
+    + tuple(
+        f"r5h_anchor_{value_name}_when_{condition}"
+        for condition in R5H_ANCHOR_CONDITION_NAMES
+        for value_name in R5H_ANCHOR_VALUE_NAMES
+    )
+    + R5H_TRACKING_FIELD_NAMES
+)
+
+R5H_COLLISION_WINDOW_STEPS = (25, 50)
+R5H_COLLISION_WINDOW_VALUE_FIELDS = (
+    "min_clearance",
+    "ics_beta",
+    "ics_downward_beta",
+    "ics_active_beam_count",
+    "v_cmd_xy_norm",
+    "v_cmd_z_abs",
+    "v_gov_xy_norm",
+    "v_gov_z_abs",
+    "v_final_xy_norm",
+    "v_final_z_abs",
+    "actual_xy_speed",
+    "actual_z_abs",
+    "near_floor",
+    "downward_active",
+)
+
 
 DEFAULT_COMMAND_CURRICULUM = (
     (0, (0.55, 0.0, 0.0, 0.15, 0.30)),
@@ -652,6 +778,370 @@ def compute_r5g_downward_step_metrics(
         "r5g_downward_z_delta_abs_when_active": delta * active,
         "r5g_downward_attenuation_ratio_when_active": attenuation_ratio * active,
     }
+
+
+def _condition_sample(value: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    inactive = torch.full_like(value, float("nan"))
+    return torch.where(mask.bool(), value, inactive)
+
+
+def compute_r5h_mechanism_step_metrics(
+    *,
+    v_cmd_b: torch.Tensor,
+    actual_velocity_b: torch.Tensor,
+    v_gov_b: torch.Tensor,
+    v_final_b: torch.Tensor,
+    min_clearance: torch.Tensor,
+    height_world_z: Optional[torch.Tensor] = None,
+    ics_beta: Optional[torch.Tensor] = None,
+    ics_emergency: Optional[torch.Tensor] = None,
+    ics_violation: Optional[torch.Tensor] = None,
+    ics_active_beam_count: Optional[torch.Tensor] = None,
+    ics_downward_active: Optional[torch.Tensor] = None,
+    ics_downward_beta: Optional[torch.Tensor] = None,
+    ics_downward_min_clearance: Optional[torch.Tensor] = None,
+    collision: Optional[torch.Tensor] = None,
+    governor_alpha: Optional[torch.Tensor] = None,
+    governor_v_corr: Optional[torch.Tensor] = None,
+    prev_action_b: Optional[torch.Tensor] = None,
+    station_drift: Optional[torch.Tensor] = None,
+    anchor_active: Optional[torch.Tensor] = None,
+    anchor_valid_fraction: Optional[torch.Tensor] = None,
+    anchor_error_mean: Optional[torch.Tensor] = None,
+    anchor_loss: Optional[torch.Tensor] = None,
+    command_eps: float = 1e-3,
+    height_floor: float = 0.5,
+    d_safe: float = 0.8,
+    low_beta_threshold: float = 0.999,
+    min_anchor_valid_fraction: float = 0.1,
+    anchor_loss_high_threshold: float = 0.05,
+) -> Dict[str, torch.Tensor]:
+    """R5H eval-only mechanism diagnostics.
+
+    Returned tensors are per-step scalars shaped ``[N, 1]``. Conditional
+    means are encoded as masked numerators plus explicit mask fields; eval
+    summary code owns all divisions and quantiles.
+    """
+    v_cmd = _as_vector_flat(v_cmd_b, "v_cmd_b")
+    N = v_cmd.shape[0]
+    device = v_cmd.device
+    actual = _as_vector_flat(actual_velocity_b, "actual_velocity_b").to(device=device)
+    gov = _as_vector_flat(v_gov_b, "v_gov_b").to(device=device)
+    final = _as_vector_flat(v_final_b, "v_final_b").to(device=device)
+    if actual.shape[0] != N or gov.shape[0] != N or final.shape[0] != N:
+        raise ValueError("R5H vector inputs must flatten to the same length")
+
+    clearance = _as_scalar_flat(
+        min_clearance,
+        "min_clearance",
+        N,
+        default=float("inf"),
+        device=device,
+    )
+    height = _as_scalar_flat(
+        height_world_z,
+        "height_world_z",
+        N,
+        default=float("inf"),
+        device=device,
+    )
+    beta = _as_scalar_flat(ics_beta, "ics_beta", N, default=1.0, device=device).clamp(0.0, 1.0)
+    emergency = _as_scalar_flat(
+        ics_emergency,
+        "ics_emergency",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    violation = _as_scalar_flat(
+        ics_violation,
+        "ics_violation",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    active_beams = _as_scalar_flat(
+        ics_active_beam_count,
+        "ics_active_beam_count",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+    downward_active = _as_scalar_flat(
+        ics_downward_active,
+        "ics_downward_active",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    downward_beta = _as_scalar_flat(
+        ics_downward_beta,
+        "ics_downward_beta",
+        N,
+        default=1.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    downward_clearance = _as_scalar_flat(
+        ics_downward_min_clearance,
+        "ics_downward_min_clearance",
+        N,
+        default=float("nan"),
+        device=device,
+    )
+    collision_mask = _as_scalar_flat(
+        collision,
+        "collision",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    alpha = _as_scalar_flat(
+        governor_alpha,
+        "governor_alpha",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    v_corr = (
+        _as_vector_flat(governor_v_corr, "governor_v_corr").to(device=device)
+        if governor_v_corr is not None
+        else torch.zeros_like(v_cmd)
+    )
+    previous_action = (
+        _as_vector_flat(prev_action_b, "prev_action_b").to(device=device)
+        if prev_action_b is not None
+        else torch.zeros_like(v_cmd)
+    )
+    drift = _as_scalar_flat(
+        station_drift,
+        "station_drift",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+    anchor_is_active_raw = _as_scalar_flat(
+        anchor_active,
+        "anchor_active",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    valid_fraction = _as_scalar_flat(
+        anchor_valid_fraction,
+        "anchor_valid_fraction",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp(0.0, 1.0)
+    anchor_error = _as_scalar_flat(
+        anchor_error_mean,
+        "anchor_error_mean",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+    anchor_loss_value = _as_scalar_flat(
+        anchor_loss,
+        "anchor_loss",
+        N,
+        default=0.0,
+        device=device,
+    ).clamp_min(0.0)
+
+    eps = float(command_eps)
+    if not math.isfinite(eps) or eps <= 0.0:
+        raise ValueError("command_eps must be finite and > 0")
+    floor = float(height_floor)
+    if not math.isfinite(floor) or floor < 0.0:
+        raise ValueError("height_floor must be finite and >= 0")
+    safe = float(d_safe)
+    if not math.isfinite(safe) or safe < 0.0:
+        raise ValueError("d_safe must be finite and >= 0")
+    beta_threshold = float(low_beta_threshold)
+    if not math.isfinite(beta_threshold) or not (0.0 <= beta_threshold <= 1.0):
+        raise ValueError("low_beta_threshold must be finite and in [0, 1]")
+    min_anchor_valid = float(min_anchor_valid_fraction)
+    if not math.isfinite(min_anchor_valid) or not (0.0 <= min_anchor_valid <= 1.0):
+        raise ValueError("min_anchor_valid_fraction must be finite and in [0, 1]")
+    high_loss_threshold = float(anchor_loss_high_threshold)
+    if not math.isfinite(high_loss_threshold) or high_loss_threshold < 0.0:
+        raise ValueError("anchor_loss_high_threshold must be finite and >= 0")
+
+    command_norm = v_cmd.norm(dim=-1, keepdim=True)
+    command_active = (command_norm > eps).float()
+    null_command = 1.0 - command_active
+    near_floor = (height <= floor + 0.10).float()
+    derived_violation = ((clearance < safe) & (emergency < 0.5)).float()
+    violation = torch.maximum(violation, derived_violation)
+
+    value_map = {
+        "ics_beta": beta,
+        "ics_downward_beta": downward_beta,
+        "ics_active_beam_count": active_beams,
+        "ics_downward_min_clearance": downward_clearance,
+        "min_clearance": clearance,
+        "v_cmd_xy_norm": v_cmd[..., :2].norm(dim=-1, keepdim=True),
+        "v_cmd_z_abs": v_cmd[..., 2:3].abs(),
+        "v_gov_xy_norm": gov[..., :2].norm(dim=-1, keepdim=True),
+        "v_gov_z_abs": gov[..., 2:3].abs(),
+        "v_final_xy_norm": final[..., :2].norm(dim=-1, keepdim=True),
+        "v_final_z_abs": final[..., 2:3].abs(),
+        "actual_xy_speed": actual[..., :2].norm(dim=-1, keepdim=True),
+        "actual_z_abs": actual[..., 2:3].abs(),
+    }
+    condition_map = {
+        "collision": (collision_mask >= 0.5).float(),
+        "ics_violation": (violation >= 0.5).float(),
+        "downward_active": (downward_active >= 0.5).float(),
+        "low_beta": (beta < beta_threshold).float(),
+        "emergency": (emergency >= 0.5).float(),
+        "near_floor": near_floor,
+    }
+
+    result: Dict[str, torch.Tensor] = {}
+    for condition, mask in condition_map.items():
+        result[f"r5h_{condition}"] = mask
+        for value_name, value in value_map.items():
+            result[f"r5h_{value_name}_when_{condition}"] = value * mask
+        for value_name in R5H_CONCENTRATION_SAMPLE_VALUE_NAMES:
+            result[f"r5h_{value_name}_sample_when_{condition}"] = _condition_sample(
+                value_map[value_name],
+                mask,
+            )
+
+    gov_xy = gov[..., :2]
+    final_xy = final[..., :2]
+    actual_xy = actual[..., :2]
+    prev_xy = previous_action[..., :2]
+    prev_norm = prev_xy.norm(dim=-1, keepdim=True)
+    final_norm_xy = final_xy.norm(dim=-1, keepdim=True)
+    alignment_active = null_command * (prev_norm > eps).float() * (final_norm_xy > eps).float()
+    prev_final_alignment = torch.where(
+        alignment_active.bool(),
+        (prev_xy * final_xy).sum(dim=-1, keepdim=True)
+        / (prev_norm.clamp_min(eps) * final_norm_xy.clamp_min(eps)),
+        torch.zeros_like(final_norm_xy),
+    ).clamp(-1.0, 1.0)
+    result["r5h_station_null_command"] = null_command
+    station_values = {
+        "actual_speed_xy": actual_xy.norm(dim=-1, keepdim=True),
+        "actual_speed_z_abs": actual[..., 2:3].abs(),
+        "v_gov_speed_xy": gov_xy.norm(dim=-1, keepdim=True),
+        "v_gov_speed_z_abs": gov[..., 2:3].abs(),
+        "v_final_speed_xy": final_xy.norm(dim=-1, keepdim=True),
+        "v_final_speed_z_abs": final[..., 2:3].abs(),
+        "actual_v_gov_mismatch_xy": (actual_xy - gov_xy).norm(dim=-1, keepdim=True),
+        "actual_v_gov_mismatch_z_abs": (actual[..., 2:3] - gov[..., 2:3]).abs(),
+        "actual_v_final_mismatch_xy": (actual_xy - final_xy).norm(dim=-1, keepdim=True),
+        "actual_v_final_mismatch_z_abs": (actual[..., 2:3] - final[..., 2:3]).abs(),
+        "alpha": alpha,
+        "v_corr_norm": v_corr.norm(dim=-1, keepdim=True),
+        "v_corr_z_abs": v_corr[..., 2:3].abs(),
+        "prev_action_speed_xy": prev_norm,
+        "prev_action_speed_z_abs": previous_action[..., 2:3].abs(),
+        "prev_action_v_final_mismatch_xy": (prev_xy - final_xy).norm(dim=-1, keepdim=True),
+        "prev_action_v_final_mismatch_z_abs": (
+            previous_action[..., 2:3] - final[..., 2:3]
+        ).abs(),
+        "prev_action_actual_mismatch_xy": (prev_xy - actual_xy).norm(dim=-1, keepdim=True),
+        "prev_action_actual_mismatch_z_abs": (
+            previous_action[..., 2:3] - actual[..., 2:3]
+        ).abs(),
+        "prev_action_v_final_alignment_xy": prev_final_alignment,
+    }
+    for value_name, value in station_values.items():
+        result[f"r5h_station_null_{value_name}"] = value * null_command
+
+    anchor_is_active = (anchor_is_active_raw >= 0.5).float()
+    anchor_conditions = {
+        "active": anchor_is_active,
+        "valid": anchor_is_active * (valid_fraction >= min_anchor_valid).float(),
+        "high_loss": anchor_is_active * (anchor_loss_value > high_loss_threshold).float(),
+    }
+    anchor_values = {
+        "station_drift": drift,
+        "null_speed": actual.norm(dim=-1, keepdim=True) * null_command,
+        "actual_xy_speed": actual_xy.norm(dim=-1, keepdim=True),
+        "actual_z_abs": actual[..., 2:3].abs(),
+        "anchor_error": anchor_error,
+        "anchor_loss": anchor_loss_value,
+    }
+    for condition, mask in anchor_conditions.items():
+        result[f"r5h_anchor_{condition}"] = mask
+        for value_name, value in anchor_values.items():
+            result[f"r5h_anchor_{value_name}_when_{condition}"] = value * mask
+
+    gov_norm = gov.norm(dim=-1, keepdim=True)
+    final_norm = final.norm(dim=-1, keepdim=True)
+    pre_ics_preservation = torch.where(
+        command_active.bool(),
+        gov_norm / command_norm.clamp_min(eps),
+        torch.zeros_like(command_norm),
+    ).clamp(0.0, 2.0)
+    post_ics_preservation = torch.where(
+        command_active.bool(),
+        final_norm / command_norm.clamp_min(eps),
+        torch.zeros_like(command_norm),
+    ).clamp(0.0, 2.0)
+    result["r5h_tracking_active"] = command_active
+    result["r5h_tracking_pre_ics_preservation"] = pre_ics_preservation * command_active
+    result["r5h_tracking_post_ics_preservation"] = post_ics_preservation * command_active
+    result["r5h_tracking_governor_preservation_loss"] = (
+        1.0 - pre_ics_preservation
+    ).clamp_min(0.0) * command_active
+    result["r5h_tracking_post_ics_preservation_loss"] = (
+        pre_ics_preservation - post_ics_preservation
+    ).clamp_min(0.0) * command_active
+
+    horizontal_cmd = v_cmd[..., :2].norm(dim=-1, keepdim=True)
+    horizontal_gov = gov_xy.norm(dim=-1, keepdim=True)
+    horizontal_final = final_xy.norm(dim=-1, keepdim=True)
+    horizontal_active = (horizontal_cmd > eps).float()
+    horizontal_pre = torch.where(
+        horizontal_active.bool(),
+        horizontal_gov / horizontal_cmd.clamp_min(eps),
+        torch.zeros_like(horizontal_cmd),
+    ).clamp(0.0, 2.0)
+    horizontal_post = torch.where(
+        horizontal_active.bool(),
+        horizontal_final / horizontal_cmd.clamp_min(eps),
+        torch.zeros_like(horizontal_cmd),
+    ).clamp(0.0, 2.0)
+    result["r5h_tracking_horizontal_active"] = horizontal_active
+    result["r5h_tracking_horizontal_pre_ics_preservation"] = horizontal_pre * horizontal_active
+    result["r5h_tracking_horizontal_post_ics_preservation"] = horizontal_post * horizontal_active
+    result["r5h_tracking_horizontal_governor_preservation_loss"] = (
+        1.0 - horizontal_pre
+    ).clamp_min(0.0) * horizontal_active
+    result["r5h_tracking_horizontal_post_ics_preservation_loss"] = (
+        horizontal_pre - horizontal_post
+    ).clamp_min(0.0) * horizontal_active
+
+    vertical_cmd = v_cmd[..., 2:3].abs()
+    vertical_gov = gov[..., 2:3].abs()
+    vertical_final = final[..., 2:3].abs()
+    vertical_active = (vertical_cmd > eps).float()
+    vertical_pre = torch.where(
+        vertical_active.bool(),
+        vertical_gov / vertical_cmd.clamp_min(eps),
+        torch.zeros_like(vertical_cmd),
+    ).clamp(0.0, 2.0)
+    vertical_post = torch.where(
+        vertical_active.bool(),
+        vertical_final / vertical_cmd.clamp_min(eps),
+        torch.zeros_like(vertical_cmd),
+    ).clamp(0.0, 2.0)
+    result["r5h_tracking_vertical_active"] = vertical_active
+    result["r5h_tracking_vertical_pre_ics_preservation"] = vertical_pre * vertical_active
+    result["r5h_tracking_vertical_post_ics_preservation"] = vertical_post * vertical_active
+    result["r5h_tracking_vertical_governor_preservation_loss"] = (
+        1.0 - vertical_pre
+    ).clamp_min(0.0) * vertical_active
+    result["r5h_tracking_vertical_post_ics_preservation_loss"] = (
+        vertical_pre - vertical_post
+    ).clamp_min(0.0) * vertical_active
+
+    return result
 
 
 def compute_vertical_channel_step_metrics(

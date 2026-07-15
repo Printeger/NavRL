@@ -5,6 +5,32 @@
 
 ---
 
+## D-2026-07-15-001: R5H Mechanism Diagnosis Boundary
+
+**Decision**: R5H is limited to eval/logging-only diagnostics, tests, documentation, and replay of existing checkpoints. Do not run training, sweeps, 1M, warm-start, promotion, hard-gate changes, actor-observation changes, platform/sensor changes, body-frame velocity-governor method changes, or privileged root-height safety-filter defaults.
+
+**Authorized replay scope**:
+
+- `r5g_downatten_z010`
+- `r5g_downatten_z005`
+- `r5g_smooth040`
+
+**Evidence**:
+
+- Best R5G candidate `r5g_downatten_z010` remained only `6/14`, `passed=false`, and `safety_passed=false`.
+- R5H replay artifacts show downatten variants eliminated below-bound but retained collision/ICS failures.
+- R5H replay artifacts show `smooth040` removed collision but regressed below-bound, clearance, ICS, and preservation.
+- Collision windows for downatten variants have `ics_beta_mean=0.0` and final command speed zero, so collision is not caused by missing final-command braking.
+- Station/null failure is not explained by stale `prev_action`: `prev_action` and `v_final` remain tightly aligned while actual null speed stays high.
+
+**Consequence**:
+
+- Do not design or run an R5H micro-sweep.
+- A later dry-run variant design is allowed only if a future review identifies a concrete actor-clean mechanism hypothesis.
+- Current state is stop and re-review task/environment/handbook assumptions before any next dry-run design.
+
+---
+
 ## D-2026-07-11-001: A2-R3 Station Correction Repair
 
 **Decision**: Do not promote any `20260711_111713` A2-R2 sweep candidate to 1M or formal training. Replace the hard-zero null-command interpretation with a soft, measurement-anchored station-correction path and rerun a fresh 128k A2-R3 sweep.
