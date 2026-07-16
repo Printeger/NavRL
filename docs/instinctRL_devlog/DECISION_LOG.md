@@ -5,6 +5,41 @@
 
 ---
 
+## D-2026-07-17-007: R5J Disabled Replay GO (Design Only)
+
+**Decision**: Record `GO (design only)` for the one clean disabled
+default-equivalence replay. This is not authorization to execute an enabled
+R5J experiment.
+
+**Evidence**: Documentation synchronization
+`5c9ab7a71365fb3899d586b09ba6ea8e231aa80e` was pushed to the dedicated
+branch and porcelain was empty. Raw `nvidia-smi` exited `0`; the specified
+`/home/mint/miniconda3/envs/NavRL/bin/python -c "import torch;
+print(torch.cuda.is_available())"` exited `0` and printed `True`. The sole
+wrapper attempt is
+`tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T161710730878Z-5c9ab7a/`.
+`wrapper_record.json` records branch `a2-r5j-default-off-residual`, matching
+source/compatibility commit `5c9ab7a`, clean worktree, verified checkpoint
+SHA-256 `9b0ab9df5dda083b1121d722cd79ba4fd59fdbd10610a4db2467444ba2c44ac2`,
+seed `0`, unchanged stored overrides, CUDA ready, eval exit `0`, and fresh
+path-matching result JSON. `comparison.json` has `GO (design only)`: all 27
+checks pass, all eight disabled R5J diagnostic checks are finite exact zero,
+and legacy JSON plus recomputed gate report are exact.
+
+The captured eval stdout/stderr are retained in the attempt. Stderr includes
+ordinary Isaac/W&B warnings and a fatal Python segmentation-fault trace during
+Isaac/W&B shutdown. The wrapper nevertheless captured subprocess exit `0`,
+the result was fresh, and the strict comparator returned `GO (design only)`;
+this record does not hide that shutdown evidence.
+
+**Consequence**: The one clean disabled replay is consumed. Do not retry it,
+reuse its result, or infer permission for enabled execution. Direct push/no-PR
+remains limited to the dedicated branch; do not change, push, or merge `main`.
+No enabled replay, dry-run, sweep, training, warm-start, or promotion is
+authorized.
+
+---
+
 ## D-2026-07-17-006: R5J CUDA-Ready Decision Pending
 
 **Decision**: Continue from the pushed `927e166` baseline; do not roll back to

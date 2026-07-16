@@ -2,35 +2,31 @@
 
 > **Updated**: 2026-07-17
 >
-> **Current step**: A2-R5J CUDA-ready decision pending execution
+> **Current step**: A2-R5J disabled default-equivalence replay passed — GO (design only)
 
 ## Task
 
 R5J default-off ICS behavior and provenance repair are already implemented.
 `8298a7d256bec6a82dee49d9af41a87628135ed6` is the provenance repair;
-`927e166` is the current pushed baseline on
-`origin/a2-r5j-default-off-residual`. A prior environmental observation found
-`nvidia-smi` exit `0` and NavRL Torch CUDA available with one device. It is
-informative only: replay authorization requires a new raw gate after the
-documentation commit below.
+`927e166` was the incoming pushed baseline, and documentation synchronization
+`5c9ab7a71365fb3899d586b09ba6ea8e231aa80e` was pushed before the decision.
+From that clean source commit, raw `nvidia-smi` exited `0` and the specified
+NavRL Torch command printed `True` with exit `0`.
 
-Work only in this order:
+The one authorized, argument-free stored disabled wrapper ran once and created
+`attempts/20260716T161710730878Z-5c9ab7a/`. Its record has matching branch and
+source/compatibility commit, empty pre-attempt porcelain, verified checkpoint
+SHA-256, seed `0`, unchanged legacy argv, CUDA ready, eval exit `0`, and a
+fresh matching result. `comparison.json` records exact legacy JSON and gate
+equality plus all eight required disabled R5J diagnostic summaries as finite
+exact zero. It returned `GO (design only)`.
 
-1. Run the specified py_compile and pytest verification, then commit and push
-   only the six R5J status documents. Confirm empty porcelain.
-2. From that clean pushed commit, record the literal output and exit code of
-   raw `nvidia-smi` and `/home/mint/miniconda3/envs/NavRL/bin/python -c
-   "import torch; print(torch.cuda.is_available())"`.
-3. Only if both raw CUDA gates pass, reconfirm empty porcelain and invoke the
-   stored `replay_wrapper.py` exactly once, without arguments or JSON edits.
-   It alone chooses the attempt ID/result path and appends
-   `instinctRL.ics.residual_preemption_enabled=false`. A failed CUDA gate stops
-   here: do not invoke the wrapper or create/reuse a replay JSON.
-4. Inspect the one wrapper record, fresh result, comparison, and stdout/stderr.
-   Record `GO (design only)` only after strict provenance, CUDA, eval,
-   freshness, eight exact-zero diagnostics, legacy JSON, and gate equality;
-   otherwise record `HOLD`. Never execute an enabled replay, dry-run, sweep,
-   training, warm-start, or promotion.
+Do not rerun, reuse, or modify this replay or JSON. The artifact's stderr
+contains the captured Isaac/W&B shutdown segfault trace even though its eval
+subprocess returned `0` and the wrapper/comparator returned `GO (design only)`;
+preserve that evidence. This conclusion authorizes only later design work. Do
+not execute an enabled replay, dry-run, sweep, training, warm-start, or
+promotion without separate authorization.
 
 ## Required provenance contract
 

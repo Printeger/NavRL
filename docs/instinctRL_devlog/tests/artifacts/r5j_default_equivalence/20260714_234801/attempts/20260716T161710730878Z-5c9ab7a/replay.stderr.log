@@ -1,0 +1,71 @@
+/home/mint/rl_dev/exts/omni.isaac.core_archive/pip_prebundle/gunicorn/util.py:25: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  import pkg_resources
+wandb: Tracking run with wandb version 0.23.1
+wandb: W&B syncing is set to `offline` in this directory. Run `wandb online` or set WANDB_MODE=online to enable cloud syncing.
+wandb: Run data is saved locally in /home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260717_001717-l8z7616w
+/home/mint/rl_dev/extscache/omni.pip.torch-2_0_1-2.0.2+105.1.lx64/torch-2-0-1/torch/nn/modules/lazy.py:180: UserWarning: Lazy modules are a new feature under heavy development so changes to the API or functionality can happen at any moment.
+  warnings.warn('Lazy modules are a new feature under heavy development '
+/home/mint/rl_dev/extscache/omni.pip.torch-2_0_1-2.0.2+105.1.lx64/torch-2-0-1/torch/nn/modules/conv.py:459: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  return F.conv2d(input, weight, bias, self.stride,
+/home/mint/rl_dev/extscache/omni.pip.torch-2_0_1-2.0.2+105.1.lx64/torch-2-0-1/torch/_functorch/deprecated.py:58: UserWarning: We've integrated functorch into PyTorch. As the final step of the integration, functorch.vmap is deprecated as of PyTorch 2.0 and will be deleted in a future version of PyTorch >= 2.3. Please use torch.vmap instead; see the PyTorch 2.0 release notes and/or the torch.func migration guide for more details https://pytorch.org/docs/master/func.migrating.html
+  warn_deprecated('vmap', 'torch.vmap')
+/home/mint/rl_dev/NavRL/isaac-training/third_party/rl/torchrl/envs/utils.py:160: UserWarning: The expected key set and actual key set differ. This will work but with a slower throughput than when the specs match exactly the actual key set in the data. Expected - Actual keys=set(), 
+Actual - Expected keys={'governor_alpha', 'sample_log_prob', 'beta', '_critic_actual_velocity_b', ('agents', 'action_normalized'), '_merged', '_critic_drone_state', 'governor_v_final_b_z', '_state_feature', 'governor_v_cmd_b_z', '_critic_input', 'state_value', 'governor_v_corr', 'alpha', 'governor_v_gov_b', '_critic_feature', '_cnn_feature', '_critic_v_cmd', '_actor_feature', 'governor_v_cmd_b', 'governor_v_gov_b_z', '_critic_min_clearance', 'governor_v_final_b', 'governor_v_corr_z'}.
+  warnings.warn(
+wandb: 
+wandb: Run history:
+wandb:                eval/handbook.anchor_active_fraction ▁
+wandb:                      eval/handbook.anchor_error_max ▁
+wandb:                     eval/handbook.anchor_error_mean ▁
+wandb:                           eval/handbook.anchor_loss ▁
+wandb: eval/handbook.command_amplification_horizontal_mean ▁
+wandb: eval/handbook.command_amplification_horizontal_rate ▁
+wandb:            eval/handbook.command_amplification_mean ▁
+wandb:            eval/handbook.command_amplification_rate ▁
+wandb:   eval/handbook.command_amplification_vertical_mean ▁
+wandb:   eval/handbook.command_amplification_vertical_rate ▁
+wandb:                                              +2,190 ...
+wandb: 
+wandb: Run summary:
+wandb:                eval/handbook.anchor_active_fraction 0.999
+wandb:                      eval/handbook.anchor_error_max 36.37469
+wandb:                     eval/handbook.anchor_error_mean 3.2438
+wandb:                           eval/handbook.anchor_loss 0.23444
+wandb: eval/handbook.command_amplification_horizontal_mean 0.01612
+wandb: eval/handbook.command_amplification_horizontal_rate 0.01875
+wandb:            eval/handbook.command_amplification_mean 0.00935
+wandb:            eval/handbook.command_amplification_rate 0.01122
+wandb:   eval/handbook.command_amplification_vertical_mean 0.01256
+wandb:   eval/handbook.command_amplification_vertical_rate 0.019
+wandb:                                              +2,190 ...
+wandb: 
+wandb: You can sync this run to the cloud by running:
+wandb: wandb sync /home/mint/rl_dev/NavRL/isaac-training/wandb/offline-run-20260717_001717-l8z7616w
+wandb: Find logs at: ./wandb/offline-run-20260717_001717-l8z7616w/logs
+Fatal Python error: Segmentation fault
+
+Thread 0x0000757e783dc6c0 (most recent call first):
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/selectors.py", line 469 in select
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/asyncio/base_events.py", line 1871 in _run_once
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/asyncio/base_events.py", line 603 in run_forever
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/asyncio/base_events.py", line 636 in run_until_complete
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/asyncio/runners.py", line 44 in run
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_compat.py", line 75 in run
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/wandb/sdk/lib/asyncio_manager.py", line 233 in _main
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/threading.py", line 953 in run
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/threading.py", line 1016 in _bootstrap_inner
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/threading.py", line 973 in _bootstrap
+
+Thread 0x0000758f56c8e400 (most recent call first):
+  File "/home/mint/rl_dev/exts/omni.isaac.kit/omni/isaac/kit/simulation_app.py", line 482 in close
+  File "/home/mint/rl_dev/NavRL/isaac-training/training/scripts/eval.py", line 586 in main
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/core/utils.py", line 186 in run_job
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/_internal/hydra.py", line 119 in run
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/_internal/utils.py", line 458 in <lambda>
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/_internal/utils.py", line 220 in run_and_report
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/_internal/utils.py", line 457 in _run_app
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/_internal/utils.py", line 394 in _run_hydra
+  File "/home/mint/miniconda3/envs/NavRL/lib/python3.10/site-packages/hydra/main.py", line 94 in decorated_main
+  File "/home/mint/rl_dev/NavRL/isaac-training/training/scripts/eval.py", line 589 in <module>
+
+Extension modules: yaml._yaml, google.protobuf.pyext._message

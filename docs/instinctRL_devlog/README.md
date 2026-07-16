@@ -63,12 +63,16 @@ provenance, and `927e166` is the current pushed baseline on
 preflight-only `HOLD`: eval did not run and it created no replay JSON, so it
 did not consume the single clean disabled replay.
 
-CUDA is reported ready in the current environment (`nvidia-smi` exit `0`, and
-NavRL Torch reports CUDA available with one device), but that observation is
-not replay authorization. The current decision is pending the four ordered
-steps in `NEXT_PROMPT.md`: commit/push this documentation synchronization,
-run fresh raw CUDA gates from that clean commit, run exactly one stored
-disabled replay only if both gates pass, then record `GO (design only)` or
-`HOLD`. The prior `19 passed, 1 warning`, `163 passed, 13 warnings`, and
-Evidence-3 limitations (no contact-body identity, surface normals, measured
-deceleration, or final safety-fix proof) remain unchanged.
+After synchronization commit `5c9ab7a`, raw `nvidia-smi` exited `0` and the
+specified NavRL Torch command printed `True` with exit `0`. Exactly one stored
+disabled replay then ran at
+`tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T161710730878Z-5c9ab7a/`.
+Its source commit, checkpoint SHA-256, seed `0`, argv, freshness, CUDA
+preflight, eval exit `0`, legacy JSON, gates, and eight exact-zero diagnostics
+all passed; the recorded result is `GO (design only)`. The captured stderr
+also contains the Isaac/W&B shutdown segfault trace; it is retained verbatim
+in the artifact, while the subprocess exit and strict comparator result remain
+`0` and `GO (design only)`, respectively. This authorizes design only, not an
+enabled execution. The prior `19 passed, 1 warning`, `163 passed, 13 warnings`,
+and Evidence-3 limitations (no contact-body identity, surface normals,
+measured deceleration, or final safety-fix proof) remain unchanged.

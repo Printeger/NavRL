@@ -6,6 +6,19 @@
 
 ## 2026-07-17
 
+### A2-R5J disabled default-equivalence replay — GO (design only)
+
+- From clean pushed commit `5c9ab7a`, raw `nvidia-smi` exited `0` and the
+  specified NavRL Torch check printed `True` with exit `0`.
+- Ran exactly one argument-free stored wrapper attempt:
+  `20260716T161710730878Z-5c9ab7a`. Its provenance, checkpoint SHA, seed `0`,
+  stored/replay argv, CUDA preflight, eval exit `0`, and fresh result passed.
+- `comparison.json` returned `GO (design only)`: all 27 checks passed,
+  including exact legacy JSON and gates and eight finite exact-zero disabled
+  R5J diagnostics. The attempt's captured stderr includes the Isaac/W&B
+  shutdown segfault trace despite the recorded zero subprocess exit; it is
+  retained as evidence. No enabled execution is authorized.
+
 ### A2-R5J CUDA-ready decision pending
 
 - Continued from the pushed `927e166` baseline (not a rollback to `8298a7d`)
