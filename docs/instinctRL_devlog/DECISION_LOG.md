@@ -5,6 +5,30 @@
 
 ---
 
+## D-2026-07-16-002: R5J Test-First Implementation and Equivalence Boundary
+
+**Decision**: Evidence-3 and the completed R5J plan are sufficient to authorize only a test-first, default-off actor-clean ICS residual-margin pre-emption implementation and one disabled default-equivalence replay of the existing `r5g_downatten_z010` checkpoint.
+
+**Evidence**:
+
+- Downatten collision windows have stopped final commands while realized body speed remains about `0.193-0.197 m/s`.
+- Conservative residual-to-collision p05 is negative in every downatten collision window; worst-beam residual support is also negative in the strongest windows.
+- Low-beta non-collision windows remain residual-positive, so the actionable signal is collision-window residual exhaustion rather than a reason to resume broad tuning.
+- Contact-body telemetry, exact surface normals, and measured deceleration remain unavailable; R5J is a bounded mechanism test, not a proven final fix.
+
+**Required gate**:
+
+- Default-off config and disabled behavioral equivalence.
+- Synthetic exhausted-margin trigger and positive-residual/no-closing/invalid-beam unchanged coverage.
+- Invalid-config rejection and actor-audit rejection of new keys.
+- Targeted/full regression pass followed by disabled `r5g_downatten_z010` replay equivalence.
+
+**Consequence**: No enabled R5J behavior replay, dry-run variant execution, sweep, 1M confirmation, formal training, warm-start, promotion, hard-gate edit, actor-observation edit, platform/sensor edit, governor/controller method edit, reward-default edit, or privileged safety-filter default is authorized. If every required gate passes, the next turn may design one enabled single-variable R5J dry-run but may not execute it without another decision.
+
+**Execution prompt**: `docs/instinctRL_devlog/NEXT_PROMPT.md`.
+
+---
+
 ## D-2026-07-15-001: R5H Mechanism Diagnosis Boundary
 
 **Decision**: R5H is limited to eval/logging-only diagnostics, tests, documentation, and replay of existing checkpoints. Do not run training, sweeps, 1M, warm-start, promotion, hard-gate changes, actor-observation changes, platform/sensor changes, body-frame velocity-governor method changes, or privileged root-height safety-filter defaults.

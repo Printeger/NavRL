@@ -16,8 +16,11 @@ This devlog tracks the design, implementation, testing, and deployment of instin
 ```
 docs/instinctRL_devlog/
 ├── README.md              ← This file
+├── NEXT_PROMPT.md         ← Current bounded next step and copy/paste agent prompt
 ├── CHANGELOG.md           ← Chronological change log
 ├── DEV_STATUS.md          ← Current development status dashboard
+├── DECISION_LOG.md        ← Go/no-go and scope-boundary decisions
+├── TEST_PLAN.md           ← Required tests and runtime acceptance gates
 └── tickets/               ← Individual ticket reports
     ├── instinctRL-0_platform_sensor_audit.md
     ├── instinctRL-A_direct_velocity_governor.md
@@ -42,6 +45,9 @@ docs/instinctRL_devlog/
 ## Quick Links
 
 - [Development Status](./DEV_STATUS.md)
+- [Current Next-Step Prompt](./NEXT_PROMPT.md)
+- [Test Plan](./TEST_PLAN.md)
+- [Decision Log](./DECISION_LOG.md)
 - [Change Log](./CHANGELOG.md)
 - [Platform & Sensor Audit (instinctRL-0)](./tickets/instinctRL-0_platform_sensor_audit.md)
 - [Full Audit Report](../instinctRL_0_platform_sensor_audit.md)

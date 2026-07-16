@@ -1,14 +1,45 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-11 (A2-R3 station correction repair)
+> **Last Updated**: 2026-07-16 (A2-R5J implementation/equivalence authorization)
 > **Purpose**: Define verification procedures for each instinctRL stage.
+
+---
+
+## instinctRL-A2-R5J: Braking-Residual Pre-emption
+
+**Current verdict**: Evidence-3 supports a test-first, default-off implementation followed by one disabled default-equivalence replay. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training remain forbidden.
+
+### Required A2-R5J Tests
+
+| Test | Required evidence | Current status |
+|------|-------------------|----------------|
+| R5J.1 Default-off config | New residual pre-emption enable flag is false in code, train config, and eval config | Pending |
+| R5J.2 Disabled equivalence | Disabled guard preserves current `v_final_b`, existing public metrics, and existing cache behavior | Pending |
+| R5J.3 Non-redundant trigger | Synthetic eligible-beam case triggers residual pre-emption before current ICS would fully stop | Pending |
+| R5J.4 Unchanged safe cases | Positive residual, no closing evidence, unreliable/invalid beams, and empty active set do not pre-empt | Pending |
+| R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Pending |
+| R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Pending |
+| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Pending |
+| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | Pending |
+
+### Runtime Order and Exit Gate
+
+1. Write failing unit/config/actor-audit tests before behavior code.
+2. Implement only the default-off, actor-clean residual guard.
+3. Pass targeted and full regression suites.
+4. Replay only the stored `r5g_downatten_z010` checkpoint with the new guard disabled; change only `result_path` plus an explicit false enable override if required.
+5. Record one exit decision:
+   - `GO (design only)` if all tests and default equivalence pass. This permits design, but not execution, of one enabled single-variable R5J dry-run in the next turn.
+   - `HOLD` if any test/equivalence condition fails or the proposed mechanism is redundant with existing ICS.
+
+The exact execution prompt is stored in [`NEXT_PROMPT.md`](./NEXT_PROMPT.md).
 
 ---
 
 ## instinctRL-A2-R3: Station Correction Repair
 
-**Current verdict**: SOURCE/UNIT COMPLETE. A fresh 128k A2-R3 sweep is required before any 1M run.
+**Historical verdict**: SOURCE/UNIT COMPLETE; the `20260711_144051` 128k sweep ran, all six candidates failed, and the path was superseded by later R4/R5 investigation. No A2-R3 candidate is eligible for 1M.
 
 ### Required A2-R3 Tests
 
@@ -19,7 +50,7 @@
 | A2-R3.3 Low-loss/null-anchor bias penalty | Low anchor loss or inactive anchor still penalizes null output bias | Passed |
 | A2-R3.4 Hard gate update | `null_command_output_speed_mean` is diagnostic-only and cannot fail the gate by itself | Passed |
 | A2-R3.5 Sweep variants | A2-R3 dry-run emits the six `r3_*` variants and no R2 warm-start assumption | Passed |
-| A2-R3.6 Runtime sweep | 128k A2-R3 candidates are trained, evaled, ranked, and screened before 1M | Pending |
+| A2-R3.6 Runtime sweep | 128k A2-R3 candidates are trained, evaled, ranked, and screened before 1M | Passed as execution evidence; all candidates failed the promotion gate |
 
 ### Actual Commands and Results
 

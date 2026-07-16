@@ -4,6 +4,26 @@
 
 ---
 
+## 2026-07-16 (A2-R5J next-step decision)
+
+### instinctRL-A2-R5J: Default-Off Implementation Validation Authorized
+
+**Status**: R5J mechanism plan complete; tests, default-off implementation, and disabled default-equivalence replay are the only authorized next work.
+
+- Reviewed the R5G/R5H/R5I and Evidence-1/2/3 chain against the platform-locked handbook.
+- Confirmed that the latest evidence does not support another parameter sweep or any 1M/formal learned-governor training.
+- Selected the primary next mechanism as an actor-clean ICS residual-margin pre-emption guard.
+- Defined a test-first gate covering default-disabled equivalence, a non-redundant synthetic trigger, positive-residual/no-closing/invalid-beam cases, invalid config, actor-audit isolation, regression tests, and disabled checkpoint replay equivalence.
+- Added `NEXT_PROMPT.md` as the copy/paste execution prompt and updated current status, decision, test-plan, and README navigation records.
+
+**Scope boundary**:
+
+- No runtime behavior code or experiment was executed in this documentation decision.
+- No enabled R5J replay, sweep, 1M, warm-start, promotion, gate change, actor-observation change, platform/sensor change, governor/controller method change, reward-default change, or privileged safety-filter default is authorized.
+- Passing the bounded R5J step permits only the design of one enabled single-variable dry-run in a later turn.
+
+---
+
 ## 2026-07-11 (A2-R3 station correction repair)
 
 ### instinctRL-A2-R3: Soft Null Station Correction Implemented

@@ -1773,3 +1773,23 @@ R5J decision:
 - Secondary mechanism: downatten / ICS emergency-threshold coupling.
 - R5J remains plan-only. No patch, training, sweep, 1M confirmation, warm-start, promotion, hard-gate edit, actor-observation edit, platform/sensor edit, governor/controller/ICS behavior change, or privileged root-height safety-filter default is authorized by this plan.
 - The next authorized step, if separately approved, is a default-off implementation plan with the precondition tests above. Until then, training/sweep/1M remain forbidden.
+
+## A2-R5J Implementation/Equivalence Authorization - 2026-07-16
+
+Decision:
+
+- The Evidence-3 result and R5J mechanism plan are sufficient to proceed with a test-first, default-off implementation of the primary ICS residual-margin pre-emption mechanism.
+- After source, unit, config, and actor-audit tests pass, one default-equivalence replay of the existing `r5g_downatten_z010` checkpoint is authorized with the R5J guard explicitly disabled.
+- The exact bounded task and stop conditions are recorded in `docs/instinctRL_devlog/NEXT_PROMPT.md`.
+
+Required exit gate:
+
+- Disabled behavior is equivalent to current ICS across normal, emergency, downward, clipping, and empty-active cases.
+- A synthetic enabled case proves the guard can pre-empt in a case where current ICS would not yet fully stop; positive-residual/no-closing/unreliable/invalid cases remain unchanged.
+- Invalid config is rejected and actor audit prevents every new R5J diagnostic/cache key from entering actor input.
+- Targeted/full regression tests pass and the disabled `r5g_downatten_z010` replay is equivalent under the documented comparison method.
+
+Hard boundary:
+
+- This does not authorize an enabled R5J behavior replay, dry-run execution, sweep, 1M confirmation, formal training, warm-start, promotion, hard-gate change, actor-observation change, TASLAB_UAV/Livox MID360 change, governor/controller method change, reward-default change, or privileged root-height safety filtering.
+- If the exit gate passes, only the design of one enabled single-variable R5J dry-run may be authorized next; execution requires a later decision.

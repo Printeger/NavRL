@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
-> **Last Updated**: 2026-07-11
-> **Current Stage**: A2-R3 station correction repair source/unit complete; fresh 128k sweep pending
+> **Last Updated**: 2026-07-16
+> **Current Stage**: A2-R5J test-first default-off implementation and equivalence validation authorized
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,10 +10,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | A2-R3 station correction repair source/unit complete |
-| **Active ticket** | A2-R3 station correction repair |
-| **Next ticket** | Dry-run and execute fresh 128k A2-R3 corrective sweep; do not warm-start from A2-R2 |
-| **Final go/no-go** | Long training remains HOLD until short sweep selects candidates, 1M top candidates pass hard gates, and multi-seed stability is checked |
+| **Current stage** | A2-R5J braking-residual pre-emption: tests/default-off implementation/default-equivalence replay only |
+| **Active ticket** | A2-R5J braking-residual mechanism |
+| **Next ticket** | Implement the guard default-off test-first, then replay only `r5g_downatten_z010` with the guard disabled |
+| **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD until source/unit/audit/default-equivalence gates pass |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
 | **instinctRL-C** | COMPLETE |
@@ -23,8 +23,10 @@
 | **instinctRL-A2** | COMPLETE for trainable governor and training-readiness smoke |
 | **instinctRL-A2-S** | SOURCE/UNIT READY; runtime acceptance pending |
 | **instinctRL-A2-R** | SOURCE/UNIT COMPLETE; runtime diagnostic retrain pending |
-| **instinctRL-A2-R2** | SOURCE/UNIT COMPLETE; short corrective sweep pending |
-| **instinctRL-A2-R3** | SOURCE/UNIT COMPLETE; fresh 128k sweep pending |
+| **instinctRL-A2-R2** | SOURCE/UNIT COMPLETE; superseded by later failed sweep evidence |
+| **instinctRL-A2-R3** | SOURCE/UNIT COMPLETE; superseded by the R4/R5 investigation path |
+| **instinctRL-A2-R5** | SWEEPS STOPPED; no R5 candidate passed all 14 gates; Evidence-1/2/3 completed |
+| **instinctRL-A2-R5J** | PLAN COMPLETE; test-first default-off implementation and disabled equivalence replay authorized |
 | **train/eval semantic repair** | SOURCE/UNIT COMPLETE; corrected 16-frame GPU smoke passed |
 
 ---
@@ -44,7 +46,9 @@
 | instinctRL-A2-S | SOURCE/UNIT READY; runtime acceptance pending | PPO now has bounded Beta concentrations, finite tensor/gradient/parameter audits, grad clipping for all PPO modules, safe advantage normalization, target-KL early stop, and diagnostic snapshots. Runtime smoke was blocked before env import by missing Omniverse/Nucleus assets root. |
 | instinctRL-A2-R | SOURCE/UNIT COMPLETE; runtime diagnostic retrain pending | Reward/curriculum now explicitly targets null-command station-keeping and command-amplification control. New 1M static MID360 retrain required before long training. |
 | instinctRL-A2-R2 | SOURCE/UNIT COMPLETE; superseded by A2-R3 | Decoder-level hard null prior, preservation band rewards, hard gate scorer, and dry-run-first sweep runner were implemented. The `20260711_111713` sweep failed all six candidates, so R2 is diagnostic evidence only. |
-| instinctRL-A2-R3 | SOURCE/UNIT COMPLETE; fresh 128k sweep pending | Soft null-command station correction is implemented with anchor-aware output-bias reward, A2-R3 gate semantics, and six R3 sweep variants. `r2_balanced` is reference only, not a warm start. |
+| instinctRL-A2-R3 | SOURCE/UNIT COMPLETE; runtime sweep failed and was superseded | Soft null-command station correction was implemented, but the `20260711_144051` sweep produced no passing candidate; best was `r3_soft_null_min025` at `7/14`, `passed=false`, `safety_passed=false`. Later R4/R5 work supersedes it. |
+| instinctRL-A2-R5 | BLOCKED / STOP SWEEPS | R5G best was `r5g_downatten_z010` at `6/14`, `passed=false`, `safety_passed=false`. R5H/R5I and Evidence-1/2/3 closed parameter tuning and identified a braking-residual mechanism gap for bounded R5J planning only. |
+| instinctRL-A2-R5J | PLAN COMPLETE; bounded implementation validation authorized | Proceed only with tests, default-off actor-clean ICS implementation, and disabled replay equivalence. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
 | instinctRL-G | GO for baseline/evaluation harness only | Reward integration passes. Do not claim learned-policy success without training logs. |
 
 ---
@@ -137,7 +141,9 @@
 - `instinctRL-A2`: COMPLETE for trainable governor and training-readiness audit hooks; learned-governor 16-frame training smoke passed
 - `instinctRL-A2-S`: SOURCE/UNIT READY for PPO numerical-stability hardening; runtime acceptance pending
 - `instinctRL-A2-R2`: SOURCE/UNIT COMPLETE but superseded by failed `20260711_111713` sweep evidence
-- `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE for station correction repair; fresh 128k sweep pending
-- Formal learned-governor long training: HOLD until A2-R3 short sweep selects candidates, top 1M runs pass hard gates, and multi-seed stability is checked
+- `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE; the `20260711_144051` runtime sweep failed all six candidates and was superseded by R4/R5
+- `instinctRL-A2-R5`: all R5 sweeps stopped; best R5G result was `6/14`, and no candidate is promotable
+- `instinctRL-A2-R5J`: braking-residual plan complete; tests, default-off implementation, and disabled default-equivalence replay are the only authorized next work
+- Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD until R5J source/unit/audit/default-equivalence gates pass
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only
