@@ -59,6 +59,8 @@ def test_env_exposes_eval_diagnostics_without_actor_input_leakage():
         '"observability_scenario_id"',
         '"ics_downward_active"',
         '"ics_downward_attenuation_ratio"',
+        '"ics_residual_preemption_trigger"',
+        '"ics_residual_preemption_range_rate_available"',
         '"r5e1_controller_command_w"',
         '"r5e1_actual_velocity_w"',
         '"r5e2_collision"',
@@ -95,6 +97,13 @@ def test_env_exposes_eval_diagnostics_without_actor_input_leakage():
 
 def test_streaming_eval_summary_reports_missing_handbook_diagnostic_keys():
     source = _read(os.path.join(SCRIPTS, "utils.py"))
+
+    for key in [
+        '"ics_residual_preemption_trigger"',
+        '"ics_residual_preemption_range_rate_available"',
+        '"eval/diagnostics.{field_name}"',
+    ]:
+        assert key in source
 
     for key in [
         "eval/handbook.station_keeping_drift_mean",

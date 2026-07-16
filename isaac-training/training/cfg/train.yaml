@@ -102,6 +102,9 @@ instinctRL:
     downward_attenuation_enabled: false
     downward_ray_min_z: 0.25
     downward_clearance_margin: 0.0
+    residual_preemption_enabled: false
+    residual_margin: 0.0
+    collision_clearance_threshold: 0.3
 
   # R5F sim/eval-only privileged safety-filter hook. Disabled by default and
   # not part of the deployable actor method.

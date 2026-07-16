@@ -619,6 +619,14 @@ def _json_safe_eval_summary(info, trajs, cfg=None):
             ("info", "ics_downward_attenuation_ratio"),
             ("next", "info", "ics_downward_attenuation_ratio"),
         ],
+        "ics_residual_preemption_trigger": [
+            ("info", "ics_residual_preemption_trigger"),
+            ("next", "info", "ics_residual_preemption_trigger"),
+        ],
+        "ics_residual_preemption_range_rate_available": [
+            ("info", "ics_residual_preemption_range_rate_available"),
+            ("next", "info", "ics_residual_preemption_range_rate_available"),
+        ],
         "null_command_speed": [
             ("info", "null_command_speed"),
             ("next", "info", "null_command_speed"),
@@ -984,6 +992,14 @@ def _make_optional_eval_field_candidates():
         "ics_downward_attenuation_ratio": [
             ("info", "ics_downward_attenuation_ratio"),
             ("next", "info", "ics_downward_attenuation_ratio"),
+        ],
+        "ics_residual_preemption_trigger": [
+            ("info", "ics_residual_preemption_trigger"),
+            ("next", "info", "ics_residual_preemption_trigger"),
+        ],
+        "ics_residual_preemption_range_rate_available": [
+            ("info", "ics_residual_preemption_range_rate_available"),
+            ("next", "info", "ics_residual_preemption_range_rate_available"),
         ],
         "observability_valid_fraction": [
             ("info", "observability_valid_fraction"),

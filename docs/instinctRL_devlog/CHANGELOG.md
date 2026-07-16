@@ -690,3 +690,11 @@ This entry supersedes earlier 2026-07-04 entries that described instinctRL-B as 
 - Change 1
 - Change 2
 ```
+
+## 2026-07-16
+
+### A2-R5J default-off residual pre-emption — HOLD recorded
+
+- Added default-off R5J per-beam residual guard, config validation/defaults, neutral disabled diagnostics, internal evidence cache, and scalar info specs.
+- Added full six-case `6f6dee3` legacy golden coverage, R5J eval summaries, pure comparator tests, and an artifact-local replay wrapper under `tests/artifacts/r5j_default_equivalence/20260714_234801/`.
+- The wrapper recorded `nvidia-smi` exit 9 (driver communication failure) and `torch.cuda.is_available() == false`; it did not launch eval or produce replay JSON. `comparison.json` records that actual wrapper failure as `HOLD`. No enabled replay, sweep, training, or main merge occurred.

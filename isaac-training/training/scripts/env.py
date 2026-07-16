@@ -796,6 +796,8 @@ class NavigationEnv(IsaacEnv):
                 "ics_downward_post_z": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "ics_downward_z_delta_abs": UnboundedContinuousTensorSpec((1,), device=self.device),
                 "ics_downward_attenuation_ratio": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_residual_preemption_trigger": UnboundedContinuousTensorSpec((1,), device=self.device),
+                "ics_residual_preemption_range_rate_available": UnboundedContinuousTensorSpec((1,), device=self.device),
             })
         info_spec = CompositeSpec(info_spec_fields).expand(self.num_envs).to(self.device)
         self.observation_spec["stats"] = stats_spec

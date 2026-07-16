@@ -84,3 +84,9 @@ The prompt should end with one of two recorded outcomes:
 
 - `GO (design only)`: default-off implementation and equivalence replay passed; one enabled single-variable dry-run may be designed next, but not executed.
 - `HOLD`: a source/unit/audit/equivalence condition failed or the mechanism was redundant; no enabled experiment or training is allowed.
+
+## A2-R5J current status — HOLD (2026-07-16)
+
+The default-off implementation is on isolated branch `a2-r5j-default-off-residual`. The targeted ICS/config/actor/eval/comparator tests pass (`41 passed`), while the broader instinctRL collection records six unrelated pre-existing PPO-stability failures. The mandatory disabled `r5g_downatten_z010` replay was not launched because its wrapper recorded `nvidia-smi` exit 9 (NVIDIA-driver communication failure) and `torch.cuda.is_available() == false`. The argv, preflight, comparator, checkpoint-hash check, and `comparison.json` are at `docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/`.
+
+Next allowed action: on a CUDA-capable worker, run `replay_wrapper.py`, which reconstructs the documented argv, preflights CUDA, records provenance, and invokes `compare_disabled_replay.py`. Only `GO (design only)` from its zero-tolerance comparison can unblock drafting (not executing) one enabled single-variable R5J dry-run. Do not run an enabled replay, dry-run, sweep, training, warm-start, promotion, or modify actor/gates/controller/reward/platform defaults.

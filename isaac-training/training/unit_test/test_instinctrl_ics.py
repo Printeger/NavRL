@@ -98,6 +98,10 @@ def test_config_validation():
         {"range_rate_mode": "other"},
         {"downward_ray_min_z": -0.1},
         {"downward_clearance_margin": -0.1},
+        {"residual_margin": -0.1},
+        {"collision_clearance_threshold": -0.1},
+        {"residual_margin": float("nan")},
+        {"collision_clearance_threshold": float("inf")},
     ]
     for kwargs in bad_kwargs:
         try:
@@ -106,6 +110,16 @@ def test_config_validation():
             pass
         else:
             raise AssertionError(f"expected ValueError for {kwargs}")
+
+
+def test_residual_preemption_defaults_and_namespace_loading_are_off():
+    mod = _load_ics()
+    cfg = mod.ICSConfig()
+    loaded = mod.ICSConfig.from_namespace(type("Cfg", (), {})())
+    for value in (cfg, loaded):
+        assert value.residual_preemption_enabled is False
+        assert value.residual_margin == 0.0
+        assert value.collision_clearance_threshold == 0.3
 
 
 def test_shape_validation_for_histories_rays_and_commands():
@@ -211,6 +225,229 @@ def test_range_rate_cache_and_optional_filter():
     one_frame = _history([[[0.7]]])
     one_out = rate_ics(*one_frame, rays, command)
     assert torch.allclose(one_out.cache["ics_range_rate_estimate"], torch.zeros(1, 1))
+
+
+def test_disabled_residual_preemption_is_neutral_and_preserves_legacy_output():
+    _, baseline = _attenuator(
+        d_safe=0.8,
+        clearance_margin=0.15,
+        a_max=2.0,
+        residual_preemption_enabled=False,
+        collision_clearance_threshold=0.3,
+    )
+    ranges, masks, weights = _history([[[1.2], [1.0]]])
+    out = baseline(ranges, masks, weights, _rays(1), torch.tensor([[0.1, 0.0, 0.0]]), dt=0.1)
+
+    assert out.metrics["ics_beta"].item() == 1.0
+    assert out.metrics["ics_emergency"].item() == 0.0
+    assert out.metrics["ics_residual_preemption_trigger"].item() == 0.0
+    assert out.metrics["ics_residual_preemption_range_rate_available"].item() == 0.0
+    assert torch.count_nonzero(out.cache["ics_residual_preemption_command_closing"]).item() == 0
+    assert torch.count_nonzero(out.cache["ics_residual_preemption_range_closing"]).item() == 0
+    assert out.cache["ics_residual_preemption_source"].item() == 0
+    assert not out.cache["ics_residual_preemption_range_rate_available"].item()
+    assert not out.cache["ics_residual_preemption_eligible"].item()
+    assert not out.cache["ics_residual_preemption_beam_trigger"].item()
+
+
+def test_disabled_residual_preemption_matches_literal_legacy_golden_matrix():
+    # Frozen from 6f6dee3; do not obtain expectations from Git at test time.
+    # These are complete legacy snapshots: every public metric and every cache
+    # tensor is checked with zero tolerance for each behavioral class.
+    base = {
+        "d_safe": 0.5, "emergency_clearance": 0.2, "a_max": 1.0,
+        "velocity_limit": 3.0, "active_horizon_margin": 0.5,
+        "latency_sec": 0.0, "clearance_margin": 0.0,
+        "approach_eps": 0.0, "range_rate_eps": 0.0,
+        "residual_preemption_enabled": False,
+    }
+    downward_metrics_off = {
+        "ics_downward_beta": [[1.0]], "ics_downward_active": [[0.0]],
+        "ics_downward_has_ray": [[0.0]], "ics_downward_min_clearance": [[0.0]],
+        "ics_downward_pre_z": [[0.0]], "ics_downward_post_z": [[0.0]],
+        "ics_downward_z_delta_abs": [[0.0]], "ics_downward_attenuation_ratio": [[0.0]],
+    }
+    downward_cache_off = dict(downward_metrics_off)
+    cases = {
+        "empty_active": (base, [[[2.0], [2.0]]], _rays(1), [[1.0, 0.0, 0.0]], None, {
+            "v_final_b": [[1.0, 0.0, 0.0]],
+            "metrics": {**downward_metrics_off, "ics_beta": [[1.0]], "ics_active_beam_count": [[0.0]], "ics_min_clearance": [[2.0]], "ics_worst_margin": [[0.0]], "ics_emergency": [[0.0]], "ics_command_speed": [[1.0]], "ics_brake_speed": [[0.0]], "ics_final_speed": [[1.0]], "ics_clip_ratio": [[1.0]]},
+            "cache": {**downward_cache_off, "ics_active_mask": [[False]], "ics_approach_speed": [[1.0]], "ics_closing_speed": [[1.0]], "ics_range_rate_estimate": [[0.0]], "ics_safety_margin": [[0.7320507764816284]], "ics_worst_beam_index": [-1], "ics_effective_clearance": [[2.0]]},
+        }),
+        "normal": (base, [[[0.9], [0.9]]], _rays(1), [[1.0, 0.0, 0.0]], None, {
+            "v_final_b": [[0.8944271802902222, 0.0, 0.0]],
+            "metrics": {**downward_metrics_off, "ics_beta": [[0.8944271802902222]], "ics_active_beam_count": [[1.0]], "ics_min_clearance": [[0.8999999761581421]], "ics_worst_margin": [[-0.10557281970977783]], "ics_emergency": [[0.0]], "ics_command_speed": [[1.0]], "ics_brake_speed": [[0.0]], "ics_final_speed": [[0.8944271802902222]], "ics_clip_ratio": [[1.0]]},
+            "cache": {**downward_cache_off, "ics_active_mask": [[True]], "ics_approach_speed": [[1.0]], "ics_closing_speed": [[1.0]], "ics_range_rate_estimate": [[0.0]], "ics_safety_margin": [[-0.10557281970977783]], "ics_worst_beam_index": [0], "ics_effective_clearance": [[0.8999999761581421]]},
+        }),
+        "emergency": (base, [[[0.15], [0.15]]], _rays(1), [[1.0, 0.0, 0.0]], None, {
+            "v_final_b": [[0.0, 0.0, 0.0]],
+            "metrics": {**downward_metrics_off, "ics_beta": [[0.0]], "ics_active_beam_count": [[1.0]], "ics_min_clearance": [[0.15000000596046448]], "ics_worst_margin": [[-1.0]], "ics_emergency": [[1.0]], "ics_command_speed": [[1.0]], "ics_brake_speed": [[0.0]], "ics_final_speed": [[0.0]], "ics_clip_ratio": [[1.0]]},
+            "cache": {**downward_cache_off, "ics_active_mask": [[True]], "ics_approach_speed": [[1.0]], "ics_closing_speed": [[1.0]], "ics_range_rate_estimate": [[0.0]], "ics_safety_margin": [[-1.0]], "ics_worst_beam_index": [0], "ics_effective_clearance": [[0.15000000596046448]]},
+        }),
+        "downward": ({**base, "d_safe": 0.1, "emergency_clearance": 0.05, "active_horizon_margin": 0.0, "downward_attenuation_enabled": True, "downward_ray_min_z": 0.25}, [[[0.3, 0.3], [0.3, 0.3]]], torch.tensor([[0.0, 0.0, -1.0], [1.0, 0.0, 0.0]]), [[0.4, 0.0, -1.0]], None, {
+            "v_final_b": [[0.4000000059604645, 0.0, -0.7071067690849304]],
+            "metrics": {"ics_beta": [[1.0]], "ics_active_beam_count": [[0.0]], "ics_min_clearance": [[0.30000001192092896]], "ics_worst_margin": [[0.0]], "ics_emergency": [[0.0]], "ics_command_speed": [[1.0770329236984253]], "ics_brake_speed": [[0.0]], "ics_final_speed": [[0.8124037981033325]], "ics_clip_ratio": [[1.0]], "ics_downward_beta": [[0.7071067690849304]], "ics_downward_active": [[1.0]], "ics_downward_has_ray": [[1.0]], "ics_downward_min_clearance": [[0.30000001192092896]], "ics_downward_pre_z": [[-1.0]], "ics_downward_post_z": [[-0.7071067690849304]], "ics_downward_z_delta_abs": [[0.2928932309150696]], "ics_downward_attenuation_ratio": [[0.2928932309150696]]},
+            "cache": {"ics_active_mask": [[False, False]], "ics_approach_speed": [[1.0, 0.4000000059604645]], "ics_closing_speed": [[1.0, 0.4000000059604645]], "ics_range_rate_estimate": [[0.0, 0.0]], "ics_safety_margin": [[-0.36754441261291504, 0.23245558142662048]], "ics_worst_beam_index": [-1], "ics_effective_clearance": [[0.30000001192092896, 0.30000001192092896]], "ics_downward_beta": [[0.7071067690849304]], "ics_downward_active": [[1.0]], "ics_downward_has_ray": [[1.0]], "ics_downward_min_clearance": [[0.30000001192092896]], "ics_downward_pre_z": [[-1.0]], "ics_downward_post_z": [[-0.7071067690849304]], "ics_downward_z_delta_abs": [[0.2928932309150696]], "ics_downward_attenuation_ratio": [[0.2928932309150696]]},
+        }),
+        "clipping": ({**base, "velocity_limit": 0.5}, [[[0.9], [0.9]]], _rays(1), [[2.0, 0.0, 0.0]], None, {
+            "v_final_b": [[0.5, 0.0, 0.0]],
+            "metrics": {**downward_metrics_off, "ics_beta": [[0.4472135901451111]], "ics_active_beam_count": [[1.0]], "ics_min_clearance": [[0.8999999761581421]], "ics_worst_margin": [[-1.1055728197097778]], "ics_emergency": [[0.0]], "ics_command_speed": [[2.0]], "ics_brake_speed": [[0.0]], "ics_final_speed": [[0.5]], "ics_clip_ratio": [[0.55901700258255]]},
+            "cache": {**downward_cache_off, "ics_active_mask": [[True]], "ics_approach_speed": [[2.0]], "ics_closing_speed": [[2.0]], "ics_range_rate_estimate": [[0.0]], "ics_safety_margin": [[-1.1055728197097778]], "ics_worst_beam_index": [0], "ics_effective_clearance": [[0.8999999761581421]]},
+        }),
+        "range_rate": ({**base, "use_range_rate_filter": True}, [[[0.9], [0.7]]], _rays(1), [[0.0, 1.0, 0.0]], 0.1, {
+            "v_final_b": [[0.0, 0.3162277936935425, 0.0]],
+            "metrics": {**downward_metrics_off, "ics_beta": [[0.3162277936935425]], "ics_active_beam_count": [[1.0]], "ics_min_clearance": [[0.699999988079071]], "ics_worst_margin": [[-1.367544412612915]], "ics_emergency": [[0.0]], "ics_command_speed": [[1.0]], "ics_brake_speed": [[0.0]], "ics_final_speed": [[0.3162277936935425]], "ics_clip_ratio": [[1.0]]},
+            "cache": {**downward_cache_off, "ics_active_mask": [[True]], "ics_approach_speed": [[0.0]], "ics_closing_speed": [[1.9999998807907104]], "ics_range_rate_estimate": [[-1.9999998807907104]], "ics_safety_margin": [[-1.367544412612915]], "ics_worst_beam_index": [0], "ics_effective_clearance": [[0.699999988079071]]},
+        }),
+    }
+    legacy_metric_keys = set(_load_ics().ICS_METRIC_KEYS) - {
+        "ics_residual_preemption_trigger", "ics_residual_preemption_range_rate_available",
+    }
+    for _, (cfg, range_values, rays, command, dt, expected) in cases.items():
+        _, ics = _attenuator(**cfg)
+        out = ics(*_history(range_values), rays, torch.tensor(command), dt=dt)
+        assert set(out.metrics) - {"ics_residual_preemption_trigger", "ics_residual_preemption_range_rate_available"} == legacy_metric_keys
+        assert set(out.cache) - {
+            "ics_residual_preemption_command_closing", "ics_residual_preemption_range_closing",
+            "ics_residual_preemption_range_rate_available", "ics_residual_preemption_source",
+            "ics_residual_preemption_required_stop", "ics_residual_preemption_residual",
+            "ics_residual_preemption_eligible", "ics_residual_preemption_beam_trigger",
+        } == set(expected["cache"])
+        torch.testing.assert_close(out.v_final_b, torch.as_tensor(expected["v_final_b"]), rtol=0, atol=0)
+        for group_name, actual in (("metrics", out.metrics), ("cache", out.cache)):
+            for key, expected_value in expected[group_name].items():
+                torch.testing.assert_close(actual[key], torch.as_tensor(expected_value), rtol=0, atol=0)
+        assert out.metrics["ics_residual_preemption_trigger"].item() == 0.0
+        assert out.metrics["ics_residual_preemption_range_rate_available"].item() == 0.0
+        for key in (
+            "ics_residual_preemption_command_closing", "ics_residual_preemption_range_closing",
+            "ics_residual_preemption_required_stop", "ics_residual_preemption_residual",
+        ):
+            assert torch.count_nonzero(out.cache[key]).item() == 0
+        for key in (
+            "ics_residual_preemption_range_rate_available", "ics_residual_preemption_source",
+            "ics_residual_preemption_eligible", "ics_residual_preemption_beam_trigger",
+        ):
+            assert torch.count_nonzero(out.cache[key]).item() == 0
+
+
+def test_residual_preemption_uses_per_beam_range_rate_without_relabeling_emergency():
+    _, legacy = _attenuator(
+        d_safe=0.8,
+        clearance_margin=0.15,
+        a_max=2.0,
+        residual_preemption_enabled=False,
+        collision_clearance_threshold=0.3,
+    )
+    _, enabled = _attenuator(
+        d_safe=0.8,
+        clearance_margin=0.15,
+        a_max=2.0,
+        residual_preemption_enabled=True,
+        residual_margin=0.0,
+        collision_clearance_threshold=0.3,
+    )
+    history = _history([[[1.2], [1.0]]])
+    command = torch.tensor([[0.1, 0.0, 0.0]])
+    legacy_out = legacy(*history, _rays(1), command, dt=0.1)
+    out = enabled(*history, _rays(1), command, dt=0.1)
+
+    assert legacy_out.metrics["ics_beta"].item() == 1.0
+    assert out.metrics["ics_beta"].item() == 0.0
+    assert out.metrics["ics_emergency"].item() == 0.0
+    assert out.metrics["ics_residual_preemption_trigger"].item() == 1.0
+    assert out.metrics["ics_residual_preemption_range_rate_available"].item() == 1.0
+    assert math.isclose(out.cache["ics_residual_preemption_command_closing"].item(), 0.1, rel_tol=1e-6)
+    assert math.isclose(out.cache["ics_residual_preemption_range_closing"].item(), 2.0, rel_tol=1e-6)
+    assert out.cache["ics_residual_preemption_source"].item() == 2
+    assert math.isclose(out.cache["ics_residual_preemption_required_stop"].item(), 1.0, rel_tol=1e-6)
+    assert math.isclose(out.cache["ics_residual_preemption_residual"].item(), -0.3, abs_tol=1e-6)
+    assert out.cache["ics_residual_preemption_eligible"].item()
+    assert out.cache["ics_residual_preemption_beam_trigger"].item()
+
+
+def test_residual_preemption_handles_zero_command_and_missing_or_invalid_rate_evidence():
+    _, ics = _attenuator(
+        d_safe=0.1,
+        emergency_clearance=0.05,
+        residual_preemption_enabled=True,
+        collision_clearance_threshold=0.3,
+    )
+    zero = torch.zeros(1, 3)
+    closing = _history([[[1.2], [1.0]]])
+    closing_out = ics(*closing, _rays(1), zero, dt=0.1)
+    assert closing_out.metrics["ics_residual_preemption_trigger"].item() == 1.0
+    assert closing_out.cache["ics_residual_preemption_source"].item() == 2
+    assert torch.allclose(closing_out.v_final_b, zero)
+
+    opening = _history([[[1.0], [1.2]]])
+    opening_out = ics(*opening, _rays(1), zero, dt=0.1)
+    assert opening_out.metrics["ics_residual_preemption_trigger"].item() == 0.0
+    assert opening_out.metrics["ics_residual_preemption_range_rate_available"].item() == 1.0
+    assert opening_out.cache["ics_residual_preemption_source"].item() == 0
+
+    one_frame = _history([[[1.0]]])
+    one_frame_out = ics(*one_frame, _rays(1), zero)
+    assert one_frame_out.metrics["ics_residual_preemption_range_rate_available"].item() == 0.0
+    assert one_frame_out.metrics["ics_residual_preemption_trigger"].item() == 0.0
+
+    for masks, weights in (
+        ([[[1.0], [0.0]]], None),
+        ([[[0.0], [1.0]]], None),
+        (None, [[[0.0], [1.0]]]),
+        (None, [[[1.0], [0.0]]]),
+    ):
+        ranges, mask_history, weight_history = _history([[[1.2], [1.0]]], masks, weights)
+        out = ics(ranges, mask_history, weight_history, _rays(1), zero, dt=0.1)
+        assert out.metrics["ics_residual_preemption_range_rate_available"].item() == 0.0
+        assert out.metrics["ics_residual_preemption_trigger"].item() == 0.0
+
+
+def test_residual_preemption_uses_command_evidence_when_rate_is_unavailable():
+    _, ics = _attenuator(
+        d_safe=0.1,
+        emergency_clearance=0.05,
+        residual_preemption_enabled=True,
+        collision_clearance_threshold=0.3,
+    )
+    ranges, masks, weights = _history([[[0.4], [0.4]]], masks=[[[0.0], [1.0]]])
+    out = ics(ranges, masks, weights, _rays(1), torch.tensor([[1.0, 0.0, 0.0]]), dt=0.1)
+    assert out.metrics["ics_residual_preemption_range_rate_available"].item() == 0.0
+    assert out.metrics["ics_residual_preemption_trigger"].item() == 1.0
+    assert out.cache["ics_residual_preemption_source"].item() == 1
+
+
+def test_residual_preemption_leaves_eligible_positive_residual_unchanged():
+    _, ics = _attenuator(
+        d_safe=0.1,
+        emergency_clearance=0.05,
+        residual_preemption_enabled=True,
+        collision_clearance_threshold=0.3,
+        residual_margin=0.0,
+    )
+    ranges, masks, weights = _history([[[3.0], [3.0]]])
+    out = ics(ranges, masks, weights, _rays(1), torch.tensor([[1.0, 0.0, 0.0]]))
+    assert out.cache["ics_residual_preemption_eligible"].item()
+    assert out.cache["ics_residual_preemption_residual"].item() > 0.0
+    assert out.metrics["ics_residual_preemption_trigger"].item() == 0.0
+    assert out.metrics["ics_beta"].item() == 1.0
+
+
+def test_residual_preemption_empty_active_set_and_equal_source():
+    _, ics = _attenuator(
+        d_safe=0.1,
+        emergency_clearance=0.05,
+        residual_preemption_enabled=True,
+        collision_clearance_threshold=0.3,
+    )
+    ranges, masks, weights = _history([[[2.0], [1.0]]])
+    out = ics(ranges, masks, weights, _rays(1), torch.tensor([[1.0, 0.0, 0.0]]), dt=1.0)
+    assert out.cache["ics_residual_preemption_source"].item() == 3
+
+    far, far_masks, far_weights = _history([[[2.0], [2.0]]])
+    empty = ics(far, far_masks, far_weights, _rays(1), torch.zeros(1, 3))
+    assert empty.metrics["ics_residual_preemption_trigger"].item() == 0.0
+    assert empty.cache["ics_residual_preemption_source"].item() == 0
 
 
 def test_command_clipping_uses_unclipped_beta_and_preserves_direction():
@@ -375,6 +612,18 @@ def test_source_level_safety_and_integration_contracts():
     assert '"state_vec": obs_hist["state_vec"]' in actor_block
     for token in ['"ics_', '"anchor_', '"observability_', '"map', '"odom', '"root_state', '"safety_filter']:
         assert token not in actor_block
+    for key in [
+        "ics_residual_preemption_trigger",
+        "ics_residual_preemption_range_rate_available",
+        "ics_residual_preemption_command_closing",
+        "ics_residual_preemption_range_closing",
+        "ics_residual_preemption_source",
+        "ics_residual_preemption_required_stop",
+        "ics_residual_preemption_residual",
+        "ics_residual_preemption_eligible",
+        "ics_residual_preemption_beam_trigger",
+    ]:
+        assert key not in actor_block
 
     train_source = open(TRAIN_PATH, encoding="utf-8").read()
     assert "v_final_body = ics_out.v_final_b" in train_source

@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-16
-> **Current Stage**: A2-R5J test-first default-off implementation and equivalence validation authorized
+> **Current Stage**: A2-R5J default-off closeout HOLD; CUDA-capable replay required
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,9 +10,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | A2-R5J braking-residual pre-emption: tests/default-off implementation/default-equivalence replay only |
+| **Current stage** | A2-R5J default-off implementation recorded; disabled equivalence replay is HOLD pending a CUDA-capable worker |
 | **Active ticket** | A2-R5J braking-residual mechanism |
-| **Next ticket** | Implement the guard default-off test-first, then replay only `r5g_downatten_z010` with the guard disabled |
+| **Next ticket** | On a CUDA-capable worker only, run the stored disabled `r5g_downatten_z010` wrapper and require exact comparison |
 | **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD until source/unit/audit/default-equivalence gates pass |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
@@ -26,7 +26,7 @@
 | **instinctRL-A2-R2** | SOURCE/UNIT COMPLETE; superseded by later failed sweep evidence |
 | **instinctRL-A2-R3** | SOURCE/UNIT COMPLETE; superseded by the R4/R5 investigation path |
 | **instinctRL-A2-R5** | SWEEPS STOPPED; no R5 candidate passed all 14 gates; Evidence-1/2/3 completed |
-| **instinctRL-A2-R5J** | PLAN COMPLETE; test-first default-off implementation and disabled equivalence replay authorized |
+| **instinctRL-A2-R5J** | HOLD; default-off source/tests complete, disabled replay blocked by NVIDIA-driver failure |
 | **train/eval semantic repair** | SOURCE/UNIT COMPLETE; corrected 16-frame GPU smoke passed |
 
 ---
@@ -48,7 +48,7 @@
 | instinctRL-A2-R2 | SOURCE/UNIT COMPLETE; superseded by A2-R3 | Decoder-level hard null prior, preservation band rewards, hard gate scorer, and dry-run-first sweep runner were implemented. The `20260711_111713` sweep failed all six candidates, so R2 is diagnostic evidence only. |
 | instinctRL-A2-R3 | SOURCE/UNIT COMPLETE; runtime sweep failed and was superseded | Soft null-command station correction was implemented, but the `20260711_144051` sweep produced no passing candidate; best was `r3_soft_null_min025` at `7/14`, `passed=false`, `safety_passed=false`. Later R4/R5 work supersedes it. |
 | instinctRL-A2-R5 | BLOCKED / STOP SWEEPS | R5G best was `r5g_downatten_z010` at `6/14`, `passed=false`, `safety_passed=false`. R5H/R5I and Evidence-1/2/3 closed parameter tuning and identified a braking-residual mechanism gap for bounded R5J planning only. |
-| instinctRL-A2-R5J | PLAN COMPLETE; bounded implementation validation authorized | Proceed only with tests, default-off actor-clean ICS implementation, and disabled replay equivalence. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
+| instinctRL-A2-R5J | HOLD; default-off source/tests complete | The wrapper recorded NVIDIA-driver failure before the only allowed disabled replay. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
 | instinctRL-G | GO for baseline/evaluation harness only | Reward integration passes. Do not claim learned-policy success without training logs. |
 
 ---
@@ -143,7 +143,13 @@
 - `instinctRL-A2-R2`: SOURCE/UNIT COMPLETE but superseded by failed `20260711_111713` sweep evidence
 - `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE; the `20260711_144051` runtime sweep failed all six candidates and was superseded by R4/R5
 - `instinctRL-A2-R5`: all R5 sweeps stopped; best R5G result was `6/14`, and no candidate is promotable
-- `instinctRL-A2-R5J`: braking-residual plan complete; tests, default-off implementation, and disabled default-equivalence replay are the only authorized next work
+- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete and the only remaining action is the recorded disabled wrapper replay on a CUDA-capable worker
 - Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD until R5J source/unit/audit/default-equivalence gates pass
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only
+
+### A2-R5J implementation update (2026-07-16)
+
+- Implemented the actor-clean, default-off per-beam residual pre-emption guard in `training/scripts/instinctRL/ics.py`; config defaults are off in both train/eval YAMLs and new scalar diagnostics are info-only.
+- Targeted ICS/actor/eval/comparator validation passes (`41 passed`). The full `test_instinctrl_*.py` collection was attempted and recorded `133 passed, 6 failed, 12 skipped`; the six pre-existing PPO-stability failures follow its broad unavailable-dependency import guard and are unrelated to R5J. The required disabled replay was not launched: its wrapper recorded `nvidia-smi` exit 9 (NVIDIA-driver communication failure) and `torch.cuda.is_available() == false`, so no JSON exists and `tests/artifacts/r5j_default_equivalence/20260714_234801/comparison.json` is `HOLD`.
+- `training/scripts/instinctRL/sweep.py` contains the R5G variants, but R5 sweeps are stopped. R5J enabled replay, dry-run, training, sweep, 1M, promotion, and main integration remain blocked until the disabled equivalence replay can run and pass exactly.

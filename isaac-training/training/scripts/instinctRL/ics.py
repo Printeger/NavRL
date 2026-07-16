@@ -35,6 +35,8 @@ ICS_METRIC_KEYS = (
     "ics_downward_post_z",
     "ics_downward_z_delta_abs",
     "ics_downward_attenuation_ratio",
+    "ics_residual_preemption_trigger",
+    "ics_residual_preemption_range_rate_available",
 )
 
 
@@ -60,6 +62,11 @@ class ICSConfig:
     downward_attenuation_enabled: bool = False
     downward_ray_min_z: float = 0.25
     downward_clearance_margin: float = 0.0
+    # R5J is deliberately opt-in: it can pre-empt a command from a per-beam
+    # braking residual, but does not change the legacy ICS path by default.
+    residual_preemption_enabled: bool = False
+    residual_margin: float = 0.0
+    collision_clearance_threshold: float = 0.3
     eps: float = 1e-6
     history_dt: float = 1.0
 
@@ -82,6 +89,8 @@ class ICSConfig:
             "empty_active_set_beta",
             "downward_ray_min_z",
             "downward_clearance_margin",
+            "residual_margin",
+            "collision_clearance_threshold",
             "eps",
             "history_dt",
         ):
@@ -117,6 +126,10 @@ class ICSConfig:
             raise ValueError("downward_ray_min_z must satisfy 0.0 <= value <= 1.0")
         if self.downward_clearance_margin < 0.0:
             raise ValueError("downward_clearance_margin must be >= 0")
+        if self.residual_margin < 0.0:
+            raise ValueError("residual_margin must be >= 0")
+        if self.collision_clearance_threshold < 0.0:
+            raise ValueError("collision_clearance_threshold must be >= 0")
         if self.eps <= 0.0:
             raise ValueError("eps must be > 0")
         if self.history_dt <= 0.0:
@@ -146,6 +159,13 @@ class ICSConfig:
             downward_ray_min_z=float(getattr(cfg, "downward_ray_min_z", 0.25)),
             downward_clearance_margin=float(
                 getattr(cfg, "downward_clearance_margin", 0.0)
+            ),
+            residual_preemption_enabled=bool(
+                getattr(cfg, "residual_preemption_enabled", False)
+            ),
+            residual_margin=float(getattr(cfg, "residual_margin", 0.0)),
+            collision_clearance_threshold=float(
+                getattr(cfg, "collision_clearance_threshold", 0.3)
             ),
         )
 
@@ -264,6 +284,23 @@ class RangeHistoryICSAttenuator:
         emergency_any = emergency.any(dim=1, keepdim=True)
         beta = torch.where(emergency_any, torch.zeros_like(beta), beta).clamp(0.0, 1.0)
 
+        residual_cache = self._residual_preemption_cache(
+            ranges,
+            masks,
+            weights,
+            latest_range,
+            latest_mask,
+            reliable,
+            rays,
+            command,
+            step_dt,
+        )
+        residual_trigger = residual_cache["ics_residual_preemption_beam_trigger"].any(
+            dim=1, keepdim=True
+        )
+        if self.cfg.residual_preemption_enabled:
+            beta = torch.where(residual_trigger, torch.zeros_like(beta), beta)
+
         brake = torch.zeros_like(command)
         v_att = beta * command + (1.0 - beta) * brake
         v_att, downward_cache = self._apply_downward_attenuator(
@@ -304,6 +341,10 @@ class RangeHistoryICSAttenuator:
             "ics_brake_speed": brake.norm(dim=-1, keepdim=True),
             "ics_final_speed": final_speed,
             "ics_clip_ratio": clip_ratio,
+            "ics_residual_preemption_trigger": residual_trigger.to(command.dtype),
+            "ics_residual_preemption_range_rate_available": residual_cache[
+                "ics_residual_preemption_range_rate_available"
+            ].any(dim=1, keepdim=True).to(command.dtype),
         }
         metrics.update({
             key: value
@@ -322,6 +363,7 @@ class RangeHistoryICSAttenuator:
             "ics_worst_beam_index": worst_beam_index,
             "ics_effective_clearance": effective_clearance,
         }
+        cache.update(residual_cache)
         cache.update(downward_cache)
         return ICSOutput(v_final_b=v_final.reshape(output_shape), metrics=metrics, cache=cache)
 
@@ -391,6 +433,82 @@ class RangeHistoryICSAttenuator:
         rate = (ranges[:, -1] - ranges[:, -2]) / step_dt
         valid_pair = latest_valid & previous_valid
         return torch.where(valid_pair, rate, torch.zeros_like(rate))
+
+    def _residual_preemption_cache(
+        self,
+        ranges: torch.Tensor,
+        masks: torch.Tensor,
+        weights: torch.Tensor,
+        latest_range: torch.Tensor,
+        latest_mask: torch.Tensor,
+        reliable: torch.Tensor,
+        rays: torch.Tensor,
+        command: torch.Tensor,
+        step_dt: float,
+    ) -> Dict[str, torch.Tensor]:
+        """Return R5J-only per-beam braking evidence in a neutral off state.
+
+        Unlike ``ics_range_rate_estimate``, availability is retained here so a
+        missing range-rate observation is never represented as zero closing
+        evidence.  Evidence-3's global-clearance/worst-velocity calculation is
+        intentionally not reused: every residual below is genuinely per beam.
+        """
+        N, L, R = ranges.shape
+        zeros = torch.zeros(N, R, dtype=ranges.dtype, device=self.device)
+        false = torch.zeros(N, R, dtype=torch.bool, device=self.device)
+        source = torch.zeros(N, R, dtype=torch.long, device=self.device)
+        if not self.cfg.residual_preemption_enabled:
+            return {
+                "ics_residual_preemption_command_closing": zeros,
+                "ics_residual_preemption_range_closing": zeros,
+                "ics_residual_preemption_range_rate_available": false,
+                "ics_residual_preemption_source": source,
+                "ics_residual_preemption_required_stop": zeros,
+                "ics_residual_preemption_residual": zeros,
+                "ics_residual_preemption_eligible": false,
+                "ics_residual_preemption_beam_trigger": false,
+            }
+
+        command_closing = torch.einsum("nd,nrd->nr", command, rays).clamp_min(0.0)
+        rate_available = false
+        range_closing = zeros
+        if L >= 2:
+            previous_mask = self._mask_to_bool(masks[:, -2])
+            previous_reliable = weights[:, -2].clamp(0.0, 1.0) >= self.cfg.min_reliability
+            rate_available = latest_mask & previous_mask & reliable & previous_reliable
+            rate = (ranges[:, -1] - ranges[:, -2]) / step_dt
+            range_closing = torch.where(rate_available, (-rate).clamp_min(0.0), zeros)
+
+        closing = torch.maximum(command_closing, range_closing)
+        positive_closing = closing > self.cfg.approach_eps
+        command_greater = command_closing > range_closing
+        rate_greater = range_closing > command_closing
+        positive_equal = positive_closing & ~(command_greater | rate_greater)
+        source = torch.where(command_greater, torch.ones_like(source), source)
+        source = torch.where(rate_greater, torch.full_like(source, 2), source)
+        source = torch.where(positive_equal, torch.full_like(source, 3), source)
+
+        required_stop = (
+            closing * self.cfg.latency_sec
+            + closing.square() / (2.0 * self.cfg.a_max)
+        )
+        residual = (
+            latest_range
+            - self.cfg.collision_clearance_threshold
+            - required_stop
+        )
+        eligible = latest_mask & reliable & positive_closing
+        beam_trigger = eligible & (residual <= self.cfg.residual_margin)
+        return {
+            "ics_residual_preemption_command_closing": command_closing,
+            "ics_residual_preemption_range_closing": range_closing,
+            "ics_residual_preemption_range_rate_available": rate_available,
+            "ics_residual_preemption_source": source,
+            "ics_residual_preemption_required_stop": required_stop,
+            "ics_residual_preemption_residual": residual,
+            "ics_residual_preemption_eligible": eligible,
+            "ics_residual_preemption_beam_trigger": beam_trigger,
+        }
 
     @staticmethod
     def _mask_to_bool(mask: torch.Tensor) -> torch.Tensor:

@@ -1793,3 +1793,11 @@ Hard boundary:
 
 - This does not authorize an enabled R5J behavior replay, dry-run execution, sweep, 1M confirmation, formal training, warm-start, promotion, hard-gate change, actor-observation change, TASLAB_UAV/Livox MID360 change, governor/controller method change, reward-default change, or privileged root-height safety filtering.
 - If the exit gate passes, only the design of one enabled single-variable R5J dry-run may be authorized next; execution requires a later decision.
+
+## A2-R5J implementation record — 2026-07-16 (HOLD)
+
+The authorized default-off implementation is complete on isolated branch `a2-r5j-default-off-residual`: per-beam command/range-rate closing, explicit rate availability/source, stopping distance, residual, eligibility, and trigger are internal ICS cache values; only trigger and rate-availability are public scalars. The guard leaves `ics_emergency` unchanged and defaults disabled in code/train/eval configurations. Actor input remains only `lidar_grid + state_vec`; no governor, controller, reward, gate, platform, or sweep change was made.
+
+The R5G-like synthetic non-redundant case (`d_safe=0.8`, clearance margin `0.15`, `a_max=2`, threshold `0.3`, ranges `[1.2,1.0]`, `dt=0.1`, command `[0.1,0,0]`) keeps legacy beta at `1`, while enabled R5J finds range closing `2 m/s`, residual about `-0.3m`, beta `0`, and `ics_emergency=0`.
+
+The R5G argv, strict comparator, and wrapper are stored in `docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/`. The wrapper changed only result path and appended explicit disable, confirmed unchanged legacy overrides, eval seed `0`, and checkpoint SHA-256 (`9b0ab9df5dda083b1121d722cd79ba4fd59fdbd10610a4db2467444ba2c44ac2`). It did not launch evaluation: `nvidia-smi` exited 9 because it could not communicate with the NVIDIA driver and `torch.cuda.is_available()` was false. `wrapper_record.json` and `comparison.json` therefore record actual `HOLD` provenance without inferring CUDA unavailability from a missing result. Sweeps remain stopped; do not merge main or evaluate enabled R5J until the exact replay/gate equality is available. Evidence remains limited by missing contact-body, surface-normal, and measured-deceleration telemetry.

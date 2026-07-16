@@ -1,27 +1,27 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-16 (A2-R5J implementation/equivalence authorization)
+> **Last Updated**: 2026-07-16 (A2-R5J default-off closeout HOLD)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
 
 ## instinctRL-A2-R5J: Braking-Residual Pre-emption
 
-**Current verdict**: Evidence-3 supports a test-first, default-off implementation followed by one disabled default-equivalence replay. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training remain forbidden.
+**Current verdict**: The default-off implementation, unit evidence, and wrapper provenance are complete. The one disabled default-equivalence replay is `HOLD` because the wrapper recorded NVIDIA-driver communication failure and `torch.cuda.is_available() == false`. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training remain forbidden.
 
 ### Required A2-R5J Tests
 
 | Test | Required evidence | Current status |
 |------|-------------------|----------------|
-| R5J.1 Default-off config | New residual pre-emption enable flag is false in code, train config, and eval config | Pending |
-| R5J.2 Disabled equivalence | Disabled guard preserves current `v_final_b`, existing public metrics, and existing cache behavior | Pending |
-| R5J.3 Non-redundant trigger | Synthetic eligible-beam case triggers residual pre-emption before current ICS would fully stop | Pending |
-| R5J.4 Unchanged safe cases | Positive residual, no closing evidence, unreliable/invalid beams, and empty active set do not pre-empt | Pending |
-| R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Pending |
-| R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Pending |
-| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Pending |
-| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | Pending |
+| R5J.1 Default-off config | New residual pre-emption enable flag is false in code, train config, and eval config | Passed |
+| R5J.2 Disabled equivalence | Disabled guard preserves current `v_final_b`, existing public metrics, and existing cache behavior | Passed by literal six-scenario golden matrix |
+| R5J.3 Non-redundant trigger | Synthetic eligible-beam case triggers residual pre-emption before current ICS would fully stop | Passed |
+| R5J.4 Unchanged safe cases | Positive residual, no closing evidence, unreliable/invalid beams, and empty active set do not pre-empt | Passed |
+| R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Passed |
+| R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Passed |
+| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | HOLD: py_compile + targeted `41 passed`; full suite attempted: `133 passed, 6 failed, 12 skipped` (pre-existing PPO-stability dependency-import failures) |
+| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: wrapper recorded NVIDIA-driver failure (nvidia-smi exit 9) and `torch.cuda.is_available() == false;` no replay JSON |
 
 ### Runtime Order and Exit Gate
 
@@ -565,3 +565,11 @@ No Isaac GPU runtime smoke was run for instinctRL-E in this environment. CUDA/NV
 - Latency logs
 - Safety logs
 - Bag replay audit
+
+## A2-R5J default-off residual pre-emption (2026-07-16)
+
+Contract: `command_closing_i=max(dot(v_gov_b, ray_i),0)`. A range-rate is available only when adjacent range/mask/weight frames are valid and reliable with finite positive `dt`; missing rate evidence is separately cached, never encoded as zero. `closing_i=max(command_closing_i, range_closing_i)`, `required_stop_i=closing_i*latency_sec+closing_i^2/(2*a_max)`, and `residual_i=latest_range_i-collision_clearance_threshold-required_stop_i`. A latest reliable beam is eligible only when `closing_i > approach_eps`; any eligible `residual_i <= residual_margin` pre-empts beta to zero. Evidence-3's global-clearance/worst-speed residual was conservative mixed evidence; R5J uses genuine per-beam residuals.
+
+Coverage includes disabled neutral diagnostics/cache, namespace/config defaults and invalid finite/nonnegative values, non-redundant R5G-like trigger, zero-command rate trigger, opening/single-frame/invalid masks or weights, command-only evidence, empty active set, and explicit rejection of every public/cache R5J key from actor input. `ics_emergency` remains legacy emergency-only.
+
+The exact R5G argv, CUDA preflight, wrapper record, zero-tolerance comparator, and `comparison.json` are under `tests/artifacts/r5j_default_equivalence/20260714_234801/`. The comparator accepts only top-level `result_path` plus explicitly expected direct/flattened R5J diagnostics, requires every present baseline or replay summary to have positive count/finite-count and finite exact-zero statistics, then requires exact legacy JSON and recomputed gates. The wrapper verifies checkpoint SHA-256 `9b0ab9df5dda083b1121d722cd79ba4fd59fdbd10610a4db2467444ba2c44ac2`, resolved eval seed `0`, and unchanged legacy overrides before any possible eval. Actual validation: py_compile passed; targeted ICS/actor/eval/comparator suite passed (`41 passed`); full `training/unit_test/test_instinctrl_*.py` was attempted with `133 passed, 6 failed, 12 skipped`, where the six failures are the pre-existing PPO-stability module's unavailable-dependency import-guard issue. `git diff --check` passed. The one allowed replay is `HOLD`: `nvidia-smi` exited 9 because it could not communicate with the NVIDIA driver and `torch.cuda.is_available()` is false, so no replay JSON exists. No first-party lint/type configuration applies under `training/`; py_compile and pytest are the applicable checks.
