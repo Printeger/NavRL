@@ -2,26 +2,26 @@
 
 > **Updated**: 2026-07-16
 >
-> **Current step**: A2-R5J provenance repair verification and clean-commit CUDA decision
+> **Current step**: A2-R5J clean-commit CUDA decision
 
 ## Task
 
-R5J default-off ICS behavior is already implemented. Do not modify it. Work only
-in this order:
+R5J default-off ICS behavior and provenance repair are already implemented.
+`8298a7d` is pushed to `origin/a2-r5j-default-off-residual`. Do not modify the
+implementation, wrapper, or comparator. Work only in this order:
 
-1. Repair the artifact-local disabled replay wrapper/comparator so any failed,
-   stale, missing, or unproven attempt is fail-closed `HOLD`.
-2. Run py_compile, the targeted R5J suite, and the full instinctRL suite in the
-   Isaac Sim Conda environment.
-3. Commit and push the repair as `Close R5J replay provenance gaps`, then
-   require empty `git status --porcelain`.
-4. Only then run raw CUDA checks. If CUDA is unavailable, stop: do not invoke
-   the wrapper or create a runtime attempt. If CUDA is available, invoke the
-   wrapper exactly once with the stored argv and only its unique `result_path`
-   plus `instinctRL.ics.residual_preemption_enabled=false`.
-4. Record `GO (design only)` only after strict disabled equivalence passes.
-   Never execute an enabled replay, dry-run, sweep, training, warm-start, or
-   promotion in this task.
+1. Synchronize the status documents and create/push a clean documentation commit.
+2. From its empty worktree, run raw `nvidia-smi` and NavRL Python
+   `torch.cuda.is_available()` checks and record their exact outputs and exits.
+3. Only when CUDA is ready, invoke the stored wrapper exactly once for the
+   disabled `r5g_downatten_z010` replay. It alone creates a unique result path
+   and appends `instinctRL.ics.residual_preemption_enabled=false`; do not modify
+   or reuse any JSON. When CUDA is not ready, do not invoke it or create an
+   attempts directory.
+4. Record final `GO (design only)` only after strict provenance, CUDA, eval,
+   freshness, eight exact-zero diagnostic, legacy-JSON, and gate-equality
+   checks pass; otherwise record `HOLD`. Never execute an enabled replay,
+   dry-run, sweep, training, warm-start, or promotion in this task.
 
 ## Required provenance contract
 
@@ -50,8 +50,8 @@ with the NVIDIA driver, and `torch.cuda.is_available()` was false. No replay
 JSON exists, so the record remains `HOLD`.
 
 The default-off core remains actor-clean. Evidence-3 still lacks exact
-contact-body identity, surface normals, and measured deceleration; it is not a
-final safety-fix proof.
+contact-body identity, surface normals, measured deceleration, and a final
+safety-fix proof.
 
 ## Boundaries and Git
 

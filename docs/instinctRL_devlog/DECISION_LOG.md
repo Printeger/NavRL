@@ -5,6 +5,38 @@
 
 ---
 
+## D-2026-07-16-004: R5J Provenance Commit Synchronization and CUDA Boundary
+
+**Decision**: Treat provenance repair
+`8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay provenance
+gaps`) as committed and pushed on `origin/a2-r5j-default-off-residual`.
+Commit and push this clean documentation synchronization before making a new
+raw CUDA decision. Direct push on this dedicated branch without a PR is the
+user's explicit workflow exemption; changing, pushing, or merging `main` is
+not authorized.
+
+**Evidence**: The pre-synchronization worktree was clean. In the activated
+NavRL/Isaac Sim Conda environment, py_compile exited `0`; the targeted
+`test_instinctrl_r5j_replay.py` suite passed `19` tests with `1` NVML warning;
+the complete `test_instinctrl_*.py` suite passed `163` tests with `13` warnings
+(one NVML and twelve LazyModule); and `git diff --check` exited `0`. Historical
+attempt `20260716T074648884514Z-0a6a2be` is permanently a dirty-worktree,
+preflight-only `HOLD`: `nvidia-smi` exited `9`, torch CUDA was false, eval did
+not run, and no replay JSON exists. It is not a runtime attempt and does not
+consume the one future clean CUDA disabled replay.
+
+**Consequence**: After this commit is pushed and porcelain is empty, run raw
+`nvidia-smi` and NavRL torch CUDA checks. A non-ready result is final `HOLD`
+for this turn and must not invoke the wrapper or create an attempts directory.
+Only a ready result authorizes exactly one wrapper invocation with a unique
+path and explicit `instinctRL.ics.residual_preemption_enabled=false`. A
+`GO (design only)` requires all provenance, CUDA, eval, freshness, eight
+exact-zero diagnostics, legacy JSON, and gate-equality checks; otherwise
+record `HOLD`. Evidence-3 remains limited by absent contact-body identity,
+surface normal, measured deceleration, and final safety-fix proof.
+
+---
+
 ## D-2026-07-16-003: R5J Disabled-Replay Provenance Hardening Closeout
 
 **Decision**: Keep R5J blocked. The disabled-equivalence wrapper and comparator

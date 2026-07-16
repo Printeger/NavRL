@@ -6,6 +6,24 @@
 
 ## 2026-07-16
 
+### A2-R5J provenance synchronization — CUDA decision pending
+
+- Confirmed `8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay
+  provenance gaps`) at the pre-synchronization `HEAD` and
+  `origin/a2-r5j-default-off-residual`; that worktree was clean. This branch
+  is directly pushed under the user's explicit no-PR
+  workflow exemption; `main` is neither changed nor merged.
+- Re-ran the accepted Isaac Sim Conda checks: py_compile exit `0`, targeted
+  replay suite `19 passed, 1 warning`, full `test_instinctrl_*.py` suite
+  `163 passed, 13 warnings` (one NVML and twelve LazyModule), and
+  `git diff --check` exit `0`.
+- Fixed the next-step sequence to commit/push this clean documentation state,
+  make a fresh raw CUDA check, then run at most one disabled replay only when
+  CUDA is ready. The historical
+  `20260716T074648884514Z-0a6a2be` item remains a dirty-worktree,
+  preflight-only `HOLD`: eval did not run and no replay JSON exists, so it did
+  not consume the future one-time clean replay.
+
 ### A2-R5J disabled replay provenance hardening — HOLD
 
 - Hardened the wrapper with a pre-attempt clean-worktree/verified-HEAD gate;
