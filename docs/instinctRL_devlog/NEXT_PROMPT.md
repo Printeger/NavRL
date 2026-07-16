@@ -13,13 +13,19 @@ exited `9`; NavRL Python exited `0` with `torch.cuda.is_available() = False`
 and device count `0`. The wrapper was not invoked, and no attempts directory
 or replay JSON was created. This turn is final `HOLD`.
 
-For a future separately authorized turn: start from a new clean, pushed
-documentation state; record raw CUDA output and exits; and only if CUDA is
-ready invoke the stored disabled wrapper exactly once. It alone creates a
-unique result path and appends `instinctRL.ics.residual_preemption_enabled=false`.
-Do not modify/reuse JSON. A non-ready CUDA result must again stop without a
-wrapper invocation. `GO (design only)` still requires strict provenance, CUDA,
-eval, freshness, eight exact-zero diagnostics, legacy JSON, and gate equality.
+For a future separately authorized turn, work only in this order:
+
+1. Synchronize the status documents and create/push a clean documentation commit.
+2. From its empty worktree, run raw `nvidia-smi` and NavRL Python
+   `torch.cuda.is_available()` checks and record their exact outputs and exits.
+3. Only when CUDA is ready, invoke the stored disabled wrapper exactly once for
+   `r5g_downatten_z010`. It alone creates a unique result path and appends
+   `instinctRL.ics.residual_preemption_enabled=false`; do not modify or reuse
+   JSON. A non-ready CUDA result must stop without a wrapper invocation.
+4. Record `GO (design only)` only after strict provenance, CUDA, eval,
+   freshness, eight exact-zero diagnostics, legacy JSON, and gate equality;
+   otherwise record `HOLD`. Never execute an enabled replay, dry-run, sweep,
+   training, warm-start, or promotion.
 
 ## Required provenance contract
 

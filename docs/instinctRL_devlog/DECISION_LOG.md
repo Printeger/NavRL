@@ -16,6 +16,23 @@ communicate with the NVIDIA driver. Activated NavRL Python exited `0` and
 reported `torch.cuda.is_available() = False` and `torch.cuda.device_count() =
 0`, with the expected NVML initialization warning.
 
+Raw command output (in execution order):
+
+```text
+$ nvidia-smi
+NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. Make sure that the latest NVIDIA driver is installed and running.
+NVIDIA_SMI_EXIT=9
+
+$ source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && python -c 'import torch; print("torch.cuda.is_available() =", torch.cuda.is_available()); print("torch.cuda.device_count() =", torch.cuda.device_count())'
+Setup Isaac Sim Conda environment.
+Isaac Sim path: /home/mint/rl_dev
+torch.cuda.is_available() = False
+torch.cuda.device_count() = 0
+/home/mint/rl_dev/extscache/omni.pip.torch-2_0_1-2.0.2+105.1.lx64/torch-2-0-1/torch/cuda/__init__.py:546: UserWarning: Can't initialize NVML
+  warnings.warn("Can't initialize NVML")
+TORCH_CUDA_CHECK_EXIT=0
+```
+
 **Consequence**: Do not invoke `replay_wrapper.py`, create an attempts
 directory, or create/reuse a replay JSON. The one future clean disabled replay
 remains unconsumed. No enabled replay, dry-run, sweep, training, warm-start,

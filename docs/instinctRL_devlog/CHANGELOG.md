@@ -13,7 +13,8 @@
   fresh raw CUDA checks.
 - `nvidia-smi` exited `9` with NVIDIA-driver communication failure. Activated
   NavRL Python exited `0` and reported `torch.cuda.is_available() = False` and
-  `torch.cuda.device_count() = 0` (with the expected NVML warning).
+  `torch.cuda.device_count() = 0` (with the expected NVML warning); the exact
+  transcript is preserved in `DECISION_LOG.md` D-2026-07-16-005.
 - Did not invoke `replay_wrapper.py`, create an attempts directory, or create
   a replay JSON. The one clean disabled `r5g_downatten_z010` replay remains
   unconsumed. Final verdict: `HOLD`.
