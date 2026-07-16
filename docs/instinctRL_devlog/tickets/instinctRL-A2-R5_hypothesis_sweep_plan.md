@@ -1722,3 +1722,54 @@ Validation:
 - `python -m py_compile training/scripts/instinctRL/ics.py training/scripts/instinctRL/task_metrics.py training/scripts/utils.py training/scripts/eval.py training/scripts/env.py`: passed.
 - `python -m pytest -q training/unit_test/test_instinctrl_actor_audit.py training/unit_test/test_instinctrl_eval_diagnostic.py training/unit_test/test_instinctrl_task_metrics.py`: passed, `33 passed`.
 - `python -m pytest -q training/unit_test/test_instinctrl_*.py`: passed, `136 passed, 12 warnings`.
+
+## A2-R5J Braking-Residual Mechanism Plan - 2026-07-16
+
+Planning authority and hard prohibitions:
+
+- R5J is plan-only under Evidence-3. It does not authorize a behavior patch, training, sweeps, 1M confirmation, warm-starting, promotion, hard-gate edits, actor-observation edits, TASLAB_UAV + Livox MID360 changes, governor/controller/ICS behavior changes, or privileged root-height safety filtering.
+- The only authorized planning scope is an actor-clean braking-residual mechanism that responds to residual-margin exhaustion before the existing collision threshold is exhausted.
+- Any implementation requires separate authorization after the tests below are specified and passed. No dry-run execution is authorized by this section.
+
+Evidence-3 mechanism hypothesis:
+
+- Downatten collision windows already had stopped final commands (`v_final_b` speed norm `0.0`) and `ics_beta=0.0`, but realized body speed stayed about `0.193-0.197 m/s`.
+- Conservative residual-to-collision p05 was negative in every downatten collision window, so some stopped pre-collision steps had already exhausted the residual distance to the existing `0.3m` collision threshold.
+- Worst-ICS-beam residual-to-collision support is strongest in `r5g_downatten_z010` 25-step windows and in `r5g_downatten_z005` 25/50-step windows, with collision-window worst-beam source availability `1.0`.
+- The failure hypothesis is late or insufficient residual margin, not actor command magnitude: the final command was already stopped, while realized vehicle motion continued into the threshold.
+- Contact-body telemetry, exact surface normals, and measured deceleration remain missing. Evidence-3 supports planning a braking-residual mechanism but does not prove the exact contact body, surface interaction, measured deceleration, or final fix.
+
+### Candidate Mechanism 1: ICS residual-margin pre-emption
+
+Recommendation: primary R5J mechanism.
+
+| Field | Plan |
+|---|---|
+| Mechanism | Plan a default-off ICS guard that pre-empts earlier when a per-beam stopping-distance residual to the existing `0.3m` collision threshold is exhausted or within a configured margin, instead of waiting for near-threshold emergency response. |
+| Actor-clean inputs | MID360 range/mask/weight history, body-frame ray directions, current governed body command, and existing ICS config constants only. No actor observation changes and no privileged root height. |
+| Evidence support | Collision windows show `v_final_b=0`, `ics_beta=0`, nonzero realized body speed, and negative residual p05, so the failure is late or insufficient residual margin rather than actor command magnitude. |
+| Expected effect | Trigger attenuation or emergency handling earlier, giving controller and vehicle inertia more clearance before collision-threshold exhaustion. |
+| Risk | Over-conservative braking may increase intervention rate and reduce tracking/preservation. Command-based residual may still under-model realized inertia. |
+| Required tests before implementation | Default-disabled output equals current ICS; synthetic per-beam residual cases trigger only when residual margin is exhausted; positive-residual cases remain unchanged; actor audit rejects new diagnostic keys; config validation rejects invalid margins. |
+| Later dry-run authorization | Only after a separately authorized default-off implementation passes unit/source tests and default-equivalence replay. Dry-run design may be documented later, but no dry-run is authorized here. |
+
+### Candidate Mechanism 2: downatten / ICS emergency-threshold coupling
+
+Recommendation: secondary fallback if the primary residual-margin guard is insufficient or too narrow.
+
+| Field | Plan |
+|---|---|
+| Mechanism | Plan a default-off coupling where MID360 downward-clearance evidence can raise an ICS emergency/pre-emption condition earlier when downward residual margin is exhausted, without using privileged root height. |
+| Actor-clean inputs | MID360 downward ray eligibility, latest reliable ranges, body-frame ray directions, current body command, and existing `emergency_clearance`, `d_safe`, `a_max`, and `latency` config. |
+| Evidence support | Downatten variants activated safety behavior but still collided near residual exhaustion. This suggests downward-specific attenuation may need to feed the broader emergency/pre-emption decision earlier. |
+| Expected effect | Avoid near-floor or downward-obstacle threshold exhaustion while preserving actor-clean sensing. |
+| Risk | May not help if collision geometry is not downward-dominant. Could worsen height/preservation behavior or over-stop all axes. |
+| Required tests before implementation | Disabled/default-equivalent output; no effect with no downward rays or non-downward commands; coupling triggers only from reliable downward MID360 evidence; no privileged height filter dependency; actor audit remains clean. |
+| Later dry-run authorization | Only after implementation tests and evidence-only replay show default equivalence and no actor/platform/gate changes. |
+
+R5J decision:
+
+- Recommended mechanism: ICS residual-margin pre-emption.
+- Secondary mechanism: downatten / ICS emergency-threshold coupling.
+- R5J remains plan-only. No patch, training, sweep, 1M confirmation, warm-start, promotion, hard-gate edit, actor-observation edit, platform/sensor edit, governor/controller/ICS behavior change, or privileged root-height safety-filter default is authorized by this plan.
+- The next authorized step, if separately approved, is a default-off implementation plan with the precondition tests above. Until then, training/sweep/1M remain forbidden.
