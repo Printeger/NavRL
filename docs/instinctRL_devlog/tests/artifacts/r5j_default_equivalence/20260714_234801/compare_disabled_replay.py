@@ -167,6 +167,13 @@ def validate_attempt_record(
         "fresh_result": record.get("freshness", {}).get("ready") is True,
         "branch": record.get("branch") == EXPECTED_BRANCH,
         "worktree": bool(record.get("worktree")),
+        "pre_attempt_worktree_status": record.get("pre_attempt_worktree_status") == "",
+        "worktree_clean": record.get("worktree_clean") is True,
+        "source_commit": (
+            bool(record.get("source_commit"))
+            and record.get("source_commit") == record.get("commit")
+            and record.get("source_commit") == expected_commit
+        ),
         "no_wrapper_failure": not record.get("failure"),
     }
     if expected_commit is not None:
@@ -283,9 +290,12 @@ def resolved_eval_seed(root: Path) -> Optional[int]:
 
 
 def git_value(root: Path, *args: str) -> Optional[str]:
-    completed = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, text=True, check=False
-    )
+    try:
+        completed = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=False
+        )
+    except OSError:
+        return None
     return completed.stdout.strip() if completed.returncode == 0 else None
 
 

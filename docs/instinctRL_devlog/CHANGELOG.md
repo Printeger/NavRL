@@ -8,16 +8,21 @@
 
 ### A2-R5J disabled replay provenance hardening — HOLD
 
-- Made the artifact wrapper/comparator fail closed for wrapper, preflight, eval,
-  stale-result, checkpoint, seed, argv, and freshness failures; each attempt
-  receives a unique result path and full branch/commit/worktree provenance.
-- Added stale-replay, failed-subprocess, pre-eval gate, missing-fresh-result,
-  and fresh-GO wrapper regressions. Targeted tests passed (`50 passed`); the
-  full Isaac Sim Conda suite passed (`160 passed, 12 warnings`).
-- Recorded one disabled-only attempt at
+- Hardened the wrapper with a pre-attempt clean-worktree/verified-HEAD gate;
+  it stores `pre_attempt_worktree_status`, `worktree_clean`, and
+  `source_commit`, and writes a provenance-only `HOLD` without creating a
+  runtime attempt when that gate fails.
+- Converted preflight, eval, malformed-result, comparator, and artifact-write
+  failures into best-effort parseable `HOLD` artifacts. Replaced the mocked
+  success test with a real temporary filesystem comparison and gate chain that
+  requires all eight disabled R5J summaries to be exact zero. Validation:
+  py_compile passed; targeted `19 passed, 1 warning`; full suite `163 passed,
+  13 warnings` (one NVML and twelve LazyModule).
+- The historical disabled-only artifact at
   `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/`.
-  CUDA preflight failed (`nvidia-smi` exit 9; torch CUDA false), so eval was not
-  started and the result remains `HOLD`. No enabled experiment or main change.
+  was created from a dirty worktree. CUDA preflight failed (`nvidia-smi` exit 9;
+  torch CUDA false), so eval was not started and the result remains historical
+  `HOLD`, not replay provenance. No enabled experiment or main change.
 
 ## 2026-07-16 (A2-R5J next-step decision)
 

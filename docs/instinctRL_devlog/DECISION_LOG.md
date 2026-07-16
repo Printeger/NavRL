@@ -11,23 +11,31 @@
 are fail-closed: no stale, partial, failed, or unproven replay can produce
 `GO (design only)`.
 
-**Evidence**: The wrapper now verifies the stored absolute checkpoint and its
-required SHA-256 before CUDA/eval, seed `0`, unchanged legacy argv, current
-branch/commit, cwd, a unique unused result path, CUDA readiness, subprocess
-exit code, and fresh result provenance. The comparator treats any wrapper,
-preflight, eval, or provenance failure as unconditional `HOLD`, even if a stale
-exact replay exists. From the activated NavRL/Isaac Sim Conda environment,
-targeted tests passed (`50 passed`) and `python -m pytest -q -p
-no:cacheprovider training/unit_test/test_instinctrl_*.py` passed (`160 passed,
-12 warnings`). Attempt
-`20260716T074648884514Z-0a6a2be` passed non-CUDA provenance checks but recorded
-`nvidia-smi` exit 9 and `torch.cuda.is_available() == false`; eval did not run
-and no replay JSON exists.
+**Evidence**: Before any attempt directory exists, the wrapper now records
+`pre_attempt_worktree_status`, `worktree_clean`, and `source_commit` from a
+porcelain-v1 status and verified `HEAD`; the comparator requires those values,
+the compatibility `commit`, and current `HEAD` to agree. It also persists a
+best-effort provenance-only `HOLD` for a dirty or unresolvable worktree. Every
+ordinary preflight, eval, freshness/JSON, comparator, or artifact-write
+exception is converted to a parseable `HOLD` artifact. The regression fixture
+uses the real filesystem comparator and gate evaluator with all eight required
+disabled diagnostic summaries. Validation passed: py_compile; targeted `19
+passed, 1 warning`; and full suite `163 passed, 13 warnings` (one NVML and
+twelve LazyModule).
 
-**Consequence**: Only a future CUDA-capable worker may run one explicit
-disabled wrapper attempt. Exact replay/gate equality may record `GO (design
-only)` and may not execute an enabled experiment. No enabled replay, dry-run,
-sweep, training, warm-start, promotion, or main merge is authorized.
+The historical `20260716T074648884514Z-0a6a2be` artifact was created from a
+dirty worktree, so it is a preflight-only CUDA `HOLD`, not an eligible disabled
+replay: `nvidia-smi` exited 9, `torch.cuda.is_available() == false`, eval did
+not run, and no replay JSON exists. It cannot be reused as provenance.
+
+**Consequence**: First commit and push this repair, then require an empty
+porcelain status. Only then may raw CUDA checks run. If CUDA is unavailable,
+do not invoke the wrapper or create another runtime attempt. If CUDA is ready,
+one clean-commit disabled wrapper attempt may run. Exact replay/gate equality
+may record `GO (design only)` and may not execute an enabled experiment. No
+enabled replay, dry-run, sweep, training, warm-start, promotion, or main merge
+is authorized. Evidence-3 still lacks contact-body identity, surface normal,
+measured deceleration, and final safety-fix proof.
 
 ## D-2026-07-16-002: R5J Test-First Implementation and Equivalence Boundary
 

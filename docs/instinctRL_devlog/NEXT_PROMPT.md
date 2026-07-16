@@ -2,7 +2,7 @@
 
 > **Updated**: 2026-07-16
 >
-> **Current step**: A2-R5J disabled-replay provenance hardening and HOLD closeout
+> **Current step**: A2-R5J provenance repair verification and clean-commit CUDA decision
 
 ## Task
 
@@ -13,9 +13,12 @@ in this order:
    stale, missing, or unproven attempt is fail-closed `HOLD`.
 2. Run py_compile, the targeted R5J suite, and the full instinctRL suite in the
    Isaac Sim Conda environment.
-3. Only if those pass, run `replay_wrapper.py` once. It must preflight CUDA and
-   run exactly one `r5g_downatten_z010` replay with
-   `instinctRL.ics.residual_preemption_enabled=false` only if CUDA is ready.
+3. Commit and push the repair as `Close R5J replay provenance gaps`, then
+   require empty `git status --porcelain`.
+4. Only then run raw CUDA checks. If CUDA is unavailable, stop: do not invoke
+   the wrapper or create a runtime attempt. If CUDA is available, invoke the
+   wrapper exactly once with the stored argv and only its unique `result_path`
+   plus `instinctRL.ics.residual_preemption_enabled=false`.
 4. Record `GO (design only)` only after strict disabled equivalence passes.
    Never execute an enabled replay, dry-run, sweep, training, warm-start, or
    promotion in this task.
@@ -24,9 +27,13 @@ in this order:
 
 - Verify the stored absolute checkpoint path and expected SHA-256 before eval;
   do not rewrite a worker-specific checkpoint path.
-- Verify seed `0`, unchanged stored legacy argv, current branch/commit, unique
-  unused attempt result path, CUDA readiness, subprocess exit code, and result
-  freshness before a result can be compared.
+- Before creating an attempt directory, require
+  `git status --porcelain=v1 --untracked-files=all` to be empty and verified
+  `HEAD` to resolve consistently as `source_commit` and `commit`. A dirty,
+  unresolved, or mismatched source is a provenance-only `HOLD`.
+- Verify seed `0`, unchanged stored legacy argv, unique unused attempt result
+  path, CUDA readiness, subprocess exit code, and result freshness before a
+  result can be compared.
 - A wrapper/preflight/eval/provenance failure is unconditional `HOLD`, even if
   an old exact replay JSON exists. Preserve the actual failure in the attempt
   record and comparison report.
@@ -35,12 +42,12 @@ in this order:
 
 ## Current evidence
 
-The current fail-closed attempt is
+The historical fail-closed artifact is
 `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/`.
-Checkpoint, seed, legacy argv, branch/commit, cwd, and unique result path
-validated. CUDA did not: `nvidia-smi` exited 9 because it could not communicate
-with the NVIDIA driver, and `torch.cuda.is_available()` was false. Eval was not
-started and no replay JSON exists, so the recorded decision is `HOLD`.
+It was made from a dirty worktree, so its provenance cannot satisfy the repair.
+CUDA did not run eval: `nvidia-smi` exited 9 because it could not communicate
+with the NVIDIA driver, and `torch.cuda.is_available()` was false. No replay
+JSON exists, so the record remains `HOLD`.
 
 The default-off core remains actor-clean. Evidence-3 still lacks exact
 contact-body identity, surface normals, and measured deceleration; it is not a

@@ -1,14 +1,14 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-16 (A2-R5J default-off closeout HOLD)
+> **Last Updated**: 2026-07-16 (A2-R5J provenance repair verification)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
 
 ## instinctRL-A2-R5J: Braking-Residual Pre-emption
 
-**Current verdict**: Default-off implementation and fail-closed provenance coverage pass. The one disabled default-equivalence replay is `HOLD` because its preflight recorded NVIDIA-driver communication failure and `torch.cuda.is_available() == false`; eval was not started. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training remain forbidden.
+**Current verdict**: Default-off implementation is complete and the provenance repair is under verification. The historical disabled artifact is `HOLD` because it was created from a dirty worktree and then recorded NVIDIA-driver communication failure with `torch.cuda.is_available() == false`; eval was not started. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training remain forbidden.
 
 ### Required A2-R5J Tests
 
@@ -20,16 +20,17 @@
 | R5J.4 Unchanged safe cases | Positive residual, no closing evidence, unreliable/invalid beams, and empty active set do not pre-empt | Passed |
 | R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Passed |
 | R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Passed |
-| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Passed: py_compile; targeted `50 passed`; full Isaac Sim Conda suite `160 passed, 12 warnings` |
-| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: one fail-closed unique attempt; checkpoint/seed/argv provenance passed, CUDA preflight failed (nvidia-smi exit 9; torch CUDA false), so eval was not started and no replay JSON exists |
+| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Passed: py_compile; targeted `19 passed, 1 warning`; full Isaac Sim Conda suite `163 passed, 13 warnings` (one NVML and twelve LazyModule) |
+| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: the historical CUDA artifact was dirty-worktree/preflight-only and cannot satisfy the repaired provenance contract |
 
 ### Completed Order and Future Exit Gate
 
 1. The test-first default-off implementation and actor audit are complete.
 2. Py-compile, targeted regression, and the full active-environment regression are complete.
-3. One unique disabled replay attempt completed its provenance checks and stopped at CUDA preflight; it is recorded as `HOLD`.
-4. Only on a future CUDA-capable worker, replay the stored `r5g_downatten_z010` checkpoint with the guard explicitly disabled. Change only `result_path` and the explicit false enable override.
-5. Record one exit decision:
+3. Commit and push the provenance repair, then require empty `git status --porcelain`.
+4. Run raw CUDA checks. If CUDA is unavailable, stop without invoking the wrapper or creating a runtime attempt.
+5. Only if CUDA is available, replay the stored `r5g_downatten_z010` checkpoint exactly once with the guard explicitly disabled. Change only `result_path` and the explicit false enable override.
+6. Record one exit decision:
    - `GO (design only)` only if the new replay, exact JSON comparison, disabled diagnostics, gate report, and provenance all pass. It permits later design, never execution, of an enabled single-variable R5J dry-run.
    - `HOLD` for any failed or missing condition. Do not retry a failed attempt by reusing a result path.
 
@@ -572,4 +573,4 @@ Contract: `command_closing_i=max(dot(v_gov_b, ray_i),0)`. A range-rate is availa
 
 Coverage includes disabled neutral diagnostics/cache, namespace/config defaults and invalid finite/nonnegative values, non-redundant R5G-like trigger, zero-command rate trigger, opening/single-frame/invalid masks or weights, command-only evidence, empty active set, and explicit rejection of every public/cache R5J key from actor input. `ics_emergency` remains legacy emergency-only.
 
-The exact R5G argv, CUDA preflight, wrapper record, zero-tolerance comparator, and attempt artifacts are under `tests/artifacts/r5j_default_equivalence/20260714_234801/`. Every attempt uses a unique result path and cannot overwrite/reuse stale JSON. The comparator requires a matching wrapper attempt record, treats any wrapper/preflight/eval/provenance failure as unconditional `HOLD`, requires every expected disabled diagnostic to be finite exact-zero, then requires exact legacy JSON and recomputed gates. The completed attempt `attempts/20260716T074648884514Z-0a6a2be/` validated SHA-256 `9b0ab9df5dda083b1121d722cd79ba4fd59fdbd10610a4db2467444ba2c44ac2`, seed `0`, unchanged legacy argv, branch/commit, cwd, and unused result path before CUDA failed. Actual validation used `source /home/mint/miniconda3/etc/profile.d/conda.sh && conda activate NavRL && cd /home/mint/rl_dev/NavRL/isaac-training`: py_compile passed; targeted suite `50 passed`; `PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -p no:cacheprovider training/unit_test/test_instinctrl_*.py` passed with `160 passed, 12 warnings`; `git diff --check` passed. The disabled replay remains `HOLD`: NVIDIA driver communication failed and torch CUDA is false, so eval did not start. No first-party lint/type configuration applies under `training/`; py_compile and pytest are the applicable checks.
+The exact R5G argv, CUDA preflight, wrapper record, zero-tolerance comparator, and attempt artifacts are under `tests/artifacts/r5j_default_equivalence/20260714_234801/`. Before an attempt directory is created, the wrapper requires empty `git status --porcelain=v1 --untracked-files=all`, resolved `source_commit`, and `source_commit == commit == current HEAD`; it writes a provenance-only `HOLD` best-effort if this fails. The comparator requires that provenance in addition to checkpoint SHA-256, seed, argv, cwd, CUDA, exit, freshness, all eight flattened/per-pass station/tracking R5J summaries as finite exact zero, exact remaining JSON, and exact recomputed gates. The old `attempts/20260716T074648884514Z-0a6a2be/` record contains a non-empty worktree status, so it is a historical dirty/preflight-only `HOLD`; CUDA reported driver failure and torch CUDA false, eval did not start, and no replay JSON exists. Repair verification used the activated NavRL/Isaac Sim Conda environment: py_compile passed; targeted replay coverage passed with `19 passed, 1 warning`; the full suite passed with `163 passed, 13 warnings` (one NVML warning and twelve LazyModule warnings); `git diff --check` passed. No first-party lint/type configuration applies under `training/`; py_compile and pytest are the applicable checks. Evidence-3 remains limited by missing contact-body identity, surface normal, measured deceleration, and final safety-fix proof.

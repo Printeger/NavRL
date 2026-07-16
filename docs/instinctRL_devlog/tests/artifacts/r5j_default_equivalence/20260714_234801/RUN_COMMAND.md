@@ -4,12 +4,15 @@ The command below is the stored `r5g_downatten_z010` eval command, with only
 `result_path` replaced and `instinctRL.ics.residual_preemption_enabled=false`
 appended. The resolved `eval.yaml` seed is `0`.
 
-`replay_wrapper.py` is the executable provenance record. On a CUDA-capable
-worker, run it from the repository root; it reconstructs this argv, runs the
-CUDA preflight, invokes eval with `shell=False`, captures stdout/stderr, and
-writes a unique `attempts/<attempt-id>/wrapper_record.json` plus
-`comparison.json`. It never reuses, overwrites, or deletes an existing replay
-result.
+`replay_wrapper.py` is the executable provenance record. Before it creates an
+attempt directory, it requires a clean porcelain-v1 worktree and a consistently
+verified `HEAD`; failed pre-attempt provenance produces a separate best-effort
+`HOLD` record and never reaches CUDA/eval. Only after this repair is committed
+and pushed and raw CUDA checks are available may it run from the repository
+root. It reconstructs this argv, invokes eval with `shell=False`, captures
+stdout/stderr, and writes a unique `attempts/<attempt-id>/wrapper_record.json`
+plus `comparison.json`. It never reuses, overwrites, or deletes an existing
+replay result.
 
 ```bash
 /home/mint/miniconda3/envs/NavRL/bin/python docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/replay_wrapper.py
