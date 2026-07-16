@@ -5,6 +5,26 @@
 
 ---
 
+## D-2026-07-16-005: R5J Fresh CUDA HOLD
+
+**Decision**: Record `HOLD` for this turn. After clean synchronization commit
+`c2e8367` was pushed and porcelain was empty, the fresh CUDA preflight was not
+ready.
+
+**Evidence**: `nvidia-smi` exited `9` and reported that it could not
+communicate with the NVIDIA driver. Activated NavRL Python exited `0` and
+reported `torch.cuda.is_available() = False` and `torch.cuda.device_count() =
+0`, with the expected NVML initialization warning.
+
+**Consequence**: Do not invoke `replay_wrapper.py`, create an attempts
+directory, or create/reuse a replay JSON. The one future clean disabled replay
+remains unconsumed. No enabled replay, dry-run, sweep, training, warm-start,
+promotion, main change, or main merge is authorized. A future authorized turn
+must make a fresh raw CUDA check from its own clean, pushed state before it can
+consider the one stored disabled replay.
+
+---
+
 ## D-2026-07-16-004: R5J Provenance Commit Synchronization and CUDA Boundary
 
 **Decision**: Treat provenance repair

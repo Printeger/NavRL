@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-16
-> **Current Stage**: A2-R5J provenance repair is committed and pushed; clean documentation synchronization precedes the CUDA decision
+> **Current Stage**: A2-R5J CUDA HOLD; disabled replay was not invoked
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,9 +10,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | `8298a7d` provenance repair is on `origin/a2-r5j-default-off-residual`; complete this clean documentation commit/push, then make a fresh CUDA decision from an empty worktree |
+| **Current stage** | `8298a7d` provenance repair and `c2e8367` synchronization are pushed; fresh CUDA was not ready, so this turn is `HOLD` without a replay attempt |
 | **Active ticket** | A2-R5J braking-residual mechanism |
-| **Next ticket** | After this documentation commit is pushed and porcelain is empty, check CUDA; run one stored disabled wrapper only if CUDA is available |
+| **Next ticket** | No runtime action in this turn. A future authorized turn must start with a fresh clean-worktree CUDA check before considering the single disabled wrapper |
 | **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD until source/unit/audit/default-equivalence gates pass |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
@@ -48,7 +48,7 @@
 | instinctRL-A2-R2 | SOURCE/UNIT COMPLETE; superseded by A2-R3 | Decoder-level hard null prior, preservation band rewards, hard gate scorer, and dry-run-first sweep runner were implemented. The `20260711_111713` sweep failed all six candidates, so R2 is diagnostic evidence only. |
 | instinctRL-A2-R3 | SOURCE/UNIT COMPLETE; runtime sweep failed and was superseded | Soft null-command station correction was implemented, but the `20260711_144051` sweep produced no passing candidate; best was `r3_soft_null_min025` at `7/14`, `passed=false`, `safety_passed=false`. Later R4/R5 work supersedes it. |
 | instinctRL-A2-R5 | BLOCKED / STOP SWEEPS | R5G best was `r5g_downatten_z010` at `6/14`, `passed=false`, `safety_passed=false`. R5H/R5I and Evidence-1/2/3 closed parameter tuning and identified a braking-residual mechanism gap for bounded R5J planning only. |
-| instinctRL-A2-R5J | HOLD; fresh CUDA decision pending | Provenance repair `8298a7d` is committed and pushed. The historical CUDA artifact came from a dirty worktree and cannot qualify as an equivalence replay. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
+| instinctRL-A2-R5J | HOLD; CUDA unavailable | Provenance repair `8298a7d` and synchronization `c2e8367` are pushed. Fresh `nvidia-smi` failed (exit `9`) and Torch reported CUDA unavailable, so no wrapper, attempt directory, or replay JSON was created. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
 | instinctRL-G | GO for baseline/evaluation harness only | Reward integration passes. Do not claim learned-policy success without training logs. |
 
 ---
@@ -143,7 +143,7 @@
 - `instinctRL-A2-R2`: SOURCE/UNIT COMPLETE but superseded by failed `20260711_111713` sweep evidence
 - `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE; the `20260711_144051` runtime sweep failed all six candidates and was superseded by R4/R5
 - `instinctRL-A2-R5`: all R5 sweeps stopped; best R5G result was `6/14`, and no candidate is promotable
-- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete and provenance repair `8298a7d` is pushed to `origin/a2-r5j-default-off-residual`; a fresh clean-worktree CUDA decision is pending
+- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete, provenance repair `8298a7d` and synchronization `c2e8367` are pushed to `origin/a2-r5j-default-off-residual`, but fresh CUDA was unavailable and no replay was invoked
 - Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD until R5J source/unit/audit/default-equivalence gates pass
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only
@@ -153,5 +153,6 @@
 - Implemented the actor-clean, default-off per-beam residual pre-emption guard in `training/scripts/instinctRL/ics.py`; config defaults are off in both train/eval YAMLs and new scalar diagnostics are info-only.
 - Provenance repair commit `8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay provenance gaps`) was confirmed at the pre-documentation-sync `HEAD` and `origin/a2-r5j-default-off-residual`; that worktree was clean.
 - Fresh repair verification in the Isaac Sim Conda environment passed: `python -m py_compile training/scripts/instinctRL/ics.py training/unit_test/test_instinctrl_r5j_replay.py ../docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/replay_wrapper.py ../docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/compare_disabled_replay.py` exited `0`; `test_instinctrl_r5j_replay.py` passed `19` tests with `1` NVML warning; `test_instinctrl_*.py` passed `163` tests with `13` warnings (one NVML and twelve LazyModule); `git diff --check` exited `0`.
+- Fresh clean-worktree CUDA decision: `nvidia-smi` exited `9` with NVIDIA-driver communication failure; activated NavRL Python exited `0` and printed `torch.cuda.is_available() = False` and `torch.cuda.device_count() = 0` (plus the expected NVML initialization warning). The wrapper was not invoked; no new attempts directory or replay JSON exists. Final verdict: `HOLD`.
 - The historical attempt `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/` is a dirty-worktree/preflight-only `HOLD`, not an eligible replay. Its CUDA check recorded `nvidia-smi` exit 9 and `torch.cuda.is_available() == false`; eval did not start and no replay JSON exists. The repaired wrapper now rejects that condition before a runtime attempt is made.
 - `training/scripts/instinctRL/sweep.py` contains the R5G variants, but R5 sweeps are stopped. R5J enabled replay, dry-run, training, sweep, 1M, promotion, and main integration remain blocked until the disabled equivalence replay can run and pass exactly.

@@ -6,6 +6,18 @@
 
 ## 2026-07-16
 
+### A2-R5J CUDA HOLD
+
+- Pushed clean documentation synchronization `c2e8367` to
+  `origin/a2-r5j-default-off-residual`, confirmed empty porcelain, then ran
+  fresh raw CUDA checks.
+- `nvidia-smi` exited `9` with NVIDIA-driver communication failure. Activated
+  NavRL Python exited `0` and reported `torch.cuda.is_available() = False` and
+  `torch.cuda.device_count() = 0` (with the expected NVML warning).
+- Did not invoke `replay_wrapper.py`, create an attempts directory, or create
+  a replay JSON. The one clean disabled `r5g_downatten_z010` replay remains
+  unconsumed. Final verdict: `HOLD`.
+
 ### A2-R5J provenance synchronization — CUDA decision pending
 
 - Confirmed `8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay

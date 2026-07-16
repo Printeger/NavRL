@@ -2,26 +2,24 @@
 
 > **Updated**: 2026-07-16
 >
-> **Current step**: A2-R5J clean-commit CUDA decision
+> **Current step**: A2-R5J CUDA HOLD; no runtime replay was created
 
 ## Task
 
 R5J default-off ICS behavior and provenance repair are already implemented.
-`8298a7d` is pushed to `origin/a2-r5j-default-off-residual`. Do not modify the
-implementation, wrapper, or comparator. Work only in this order:
+`8298a7d` and clean synchronization `c2e8367` are pushed to
+`origin/a2-r5j-default-off-residual`. Fresh CUDA is unavailable: `nvidia-smi`
+exited `9`; NavRL Python exited `0` with `torch.cuda.is_available() = False`
+and device count `0`. The wrapper was not invoked, and no attempts directory
+or replay JSON was created. This turn is final `HOLD`.
 
-1. Synchronize the status documents and create/push a clean documentation commit.
-2. From its empty worktree, run raw `nvidia-smi` and NavRL Python
-   `torch.cuda.is_available()` checks and record their exact outputs and exits.
-3. Only when CUDA is ready, invoke the stored wrapper exactly once for the
-   disabled `r5g_downatten_z010` replay. It alone creates a unique result path
-   and appends `instinctRL.ics.residual_preemption_enabled=false`; do not modify
-   or reuse any JSON. When CUDA is not ready, do not invoke it or create an
-   attempts directory.
-4. Record final `GO (design only)` only after strict provenance, CUDA, eval,
-   freshness, eight exact-zero diagnostic, legacy-JSON, and gate-equality
-   checks pass; otherwise record `HOLD`. Never execute an enabled replay,
-   dry-run, sweep, training, warm-start, or promotion in this task.
+For a future separately authorized turn: start from a new clean, pushed
+documentation state; record raw CUDA output and exits; and only if CUDA is
+ready invoke the stored disabled wrapper exactly once. It alone creates a
+unique result path and appends `instinctRL.ics.residual_preemption_enabled=false`.
+Do not modify/reuse JSON. A non-ready CUDA result must again stop without a
+wrapper invocation. `GO (design only)` still requires strict provenance, CUDA,
+eval, freshness, eight exact-zero diagnostics, legacy JSON, and gate equality.
 
 ## Required provenance contract
 
