@@ -53,3 +53,22 @@ docs/instinctRL_devlog/
 - [Full Audit Report](../instinctRL_0_platform_sensor_audit.md)
 - [Development Handbook](../instinctRL_Development_Handbook_v1_1_platform_locked.tex)
 - [Scientific Paper](../paper1_vel_ctrl.tex)
+
+## A2-R5J Current Execution Boundary
+
+`8298a7d256bec6a82dee49d9af41a87628135ed6` repaired disabled-replay
+provenance, and `927e166` is the current pushed baseline on
+`origin/a2-r5j-default-off-residual`. The historical
+`20260716T074648884514Z-0a6a2be` item remains a dirty-worktree,
+preflight-only `HOLD`: eval did not run and it created no replay JSON, so it
+did not consume the single clean disabled replay.
+
+CUDA is reported ready in the current environment (`nvidia-smi` exit `0`, and
+NavRL Torch reports CUDA available with one device), but that observation is
+not replay authorization. The current decision is pending the four ordered
+steps in `NEXT_PROMPT.md`: commit/push this documentation synchronization,
+run fresh raw CUDA gates from that clean commit, run exactly one stored
+disabled replay only if both gates pass, then record `GO (design only)` or
+`HOLD`. The prior `19 passed, 1 warning`, `163 passed, 13 warnings`, and
+Evidence-3 limitations (no contact-body identity, surface normals, measured
+deceleration, or final safety-fix proof) remain unchanged.

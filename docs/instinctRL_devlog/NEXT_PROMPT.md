@@ -1,28 +1,33 @@
 # instinctRL Next-Step Prompt
 
-> **Updated**: 2026-07-16
+> **Updated**: 2026-07-17
 >
-> **Current step**: A2-R5J CUDA HOLD; no runtime replay was created
+> **Current step**: A2-R5J CUDA-ready decision pending execution
 
 ## Task
 
 R5J default-off ICS behavior and provenance repair are already implemented.
-`8298a7d` and clean synchronization `c2e8367` are pushed to
-`origin/a2-r5j-default-off-residual`. Fresh CUDA is unavailable: `nvidia-smi`
-exited `9`; NavRL Python exited `0` with `torch.cuda.is_available() = False`
-and device count `0`. The wrapper was not invoked, and no attempts directory
-or replay JSON was created. This turn is final `HOLD`.
+`8298a7d256bec6a82dee49d9af41a87628135ed6` is the provenance repair;
+`927e166` is the current pushed baseline on
+`origin/a2-r5j-default-off-residual`. A prior environmental observation found
+`nvidia-smi` exit `0` and NavRL Torch CUDA available with one device. It is
+informative only: replay authorization requires a new raw gate after the
+documentation commit below.
 
-For a future separately authorized turn, work only in this order:
+Work only in this order:
 
-1. Synchronize the status documents and create/push a clean documentation commit.
-2. From its empty worktree, run raw `nvidia-smi` and NavRL Python
-   `torch.cuda.is_available()` checks and record their exact outputs and exits.
-3. Only when CUDA is ready, invoke the stored disabled wrapper exactly once for
-   `r5g_downatten_z010`. It alone creates a unique result path and appends
-   `instinctRL.ics.residual_preemption_enabled=false`; do not modify or reuse
-   JSON. A non-ready CUDA result must stop without a wrapper invocation.
-4. Record `GO (design only)` only after strict provenance, CUDA, eval,
+1. Run the specified py_compile and pytest verification, then commit and push
+   only the six R5J status documents. Confirm empty porcelain.
+2. From that clean pushed commit, record the literal output and exit code of
+   raw `nvidia-smi` and `/home/mint/miniconda3/envs/NavRL/bin/python -c
+   "import torch; print(torch.cuda.is_available())"`.
+3. Only if both raw CUDA gates pass, reconfirm empty porcelain and invoke the
+   stored `replay_wrapper.py` exactly once, without arguments or JSON edits.
+   It alone chooses the attempt ID/result path and appends
+   `instinctRL.ics.residual_preemption_enabled=false`. A failed CUDA gate stops
+   here: do not invoke the wrapper or create/reuse a replay JSON.
+4. Inspect the one wrapper record, fresh result, comparison, and stdout/stderr.
+   Record `GO (design only)` only after strict provenance, CUDA, eval,
    freshness, eight exact-zero diagnostics, legacy JSON, and gate equality;
    otherwise record `HOLD`. Never execute an enabled replay, dry-run, sweep,
    training, warm-start, or promotion.
@@ -49,9 +54,10 @@ For a future separately authorized turn, work only in this order:
 The historical fail-closed artifact is
 `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/`.
 It was made from a dirty worktree, so its provenance cannot satisfy the repair.
-CUDA did not run eval: `nvidia-smi` exited 9 because it could not communicate
-with the NVIDIA driver, and `torch.cuda.is_available()` was false. No replay
-JSON exists, so the record remains `HOLD`.
+At that time CUDA did not run eval: `nvidia-smi` exited 9 because it could not
+communicate with the NVIDIA driver, and `torch.cuda.is_available()` was false.
+No replay JSON exists, so that historical record remains `HOLD` and the single
+clean replay is unconsumed.
 
 The default-off core remains actor-clean. Evidence-3 still lacks exact
 contact-body identity, surface normals, measured deceleration, and a final

@@ -5,6 +5,42 @@
 
 ---
 
+## D-2026-07-17-006: R5J CUDA-Ready Decision Pending
+
+**Decision**: Continue from the pushed `927e166` baseline; do not roll back to
+`8298a7d`. A reported current CUDA observation (`nvidia-smi` exit `0`; NavRL
+Torch CUDA available with device count `1`) permits a new decision only after
+this documentation synchronization has been committed, pushed, and verified
+clean. It is not itself replay authorization.
+
+**Evidence**: `8298a7d256bec6a82dee49d9af41a87628135ed6` is the pushed
+provenance repair, while `927e166` is the current pushed baseline on the
+dedicated `origin/a2-r5j-default-off-residual` branch. The historical
+`20260716T074648884514Z-0a6a2be` artifact remains permanently ineligible:
+its worktree was dirty, CUDA then failed (`nvidia-smi` exit `9`, Torch CUDA
+false), eval did not start, and no replay JSON exists. It did not consume the
+one clean disabled replay. Existing source verification remains `19 passed, 1
+warning` targeted and `163 passed, 13 warnings` full, with Evidence-3 still
+limited by absent contact-body identity, surface normals, measured deceleration,
+and a final safety-fix proof.
+
+Fresh synchronization verification in the NavRL Conda environment exited `0`
+for py_compile; targeted replay coverage reported `19 passed`; the complete
+`test_instinctrl_*.py` suite reported `163 passed, 12 warnings` (LazyModule);
+and repository-root `git diff --check` exited `0`. These current results add
+to rather than rewrite the prior warning-bearing evidence.
+
+**Consequence**: First commit and direct-push only the six status documents on
+the dedicated branch under the existing no-PR exemption, then verify empty
+porcelain. Run raw `nvidia-smi` and the specified NavRL Torch command and
+record literal output and exits. Only two passing gates authorize exactly one
+argument-free stored disabled wrapper invocation. Inspect its record, result,
+comparison, and logs before recording `GO (design only)`; every other outcome
+is `HOLD` and must not be retried. No main change/merge, enabled replay,
+dry-run, sweep, training, warm-start, or promotion is authorized.
+
+---
+
 ## D-2026-07-16-005: R5J Fresh CUDA HOLD
 
 **Decision**: Record `HOLD` for this turn. After clean synchronization commit

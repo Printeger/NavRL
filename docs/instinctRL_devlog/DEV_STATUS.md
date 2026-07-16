@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
-> **Last Updated**: 2026-07-16
-> **Current Stage**: A2-R5J CUDA HOLD; disabled replay was not invoked
+> **Last Updated**: 2026-07-17
+> **Current Stage**: A2-R5J CUDA-ready decision pending; disabled replay remains uninvoked
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,9 +10,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | `8298a7d` provenance repair and `c2e8367` synchronization are pushed; fresh CUDA was not ready, so this turn is `HOLD` without a replay attempt |
+| **Current stage** | `8298a7d` provenance repair and current pushed baseline `927e166` are recorded; CUDA is reported ready, pending formal raw gates after this documentation commit |
 | **Active ticket** | A2-R5J braking-residual mechanism |
-| **Next ticket** | No runtime action in this turn. A future authorized turn must start with a fresh clean-worktree CUDA check before considering the single disabled wrapper |
+| **Next ticket** | Commit/push the six status documents, run fresh clean-worktree raw CUDA gates, then consider the single disabled wrapper only if both pass |
 | **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD until source/unit/audit/default-equivalence gates pass |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
@@ -26,7 +26,7 @@
 | **instinctRL-A2-R2** | SOURCE/UNIT COMPLETE; superseded by later failed sweep evidence |
 | **instinctRL-A2-R3** | SOURCE/UNIT COMPLETE; superseded by the R4/R5 investigation path |
 | **instinctRL-A2-R5** | SWEEPS STOPPED; no R5 candidate passed all 14 gates; Evidence-1/2/3 completed |
-| **instinctRL-A2-R5J** | HOLD; default-off source/tests complete, disabled replay blocked by NVIDIA-driver failure |
+| **instinctRL-A2-R5J** | CUDA-ready decision pending; default-off source/tests complete and the one clean disabled replay remains unconsumed |
 | **train/eval semantic repair** | SOURCE/UNIT COMPLETE; corrected 16-frame GPU smoke passed |
 
 ---
@@ -48,7 +48,7 @@
 | instinctRL-A2-R2 | SOURCE/UNIT COMPLETE; superseded by A2-R3 | Decoder-level hard null prior, preservation band rewards, hard gate scorer, and dry-run-first sweep runner were implemented. The `20260711_111713` sweep failed all six candidates, so R2 is diagnostic evidence only. |
 | instinctRL-A2-R3 | SOURCE/UNIT COMPLETE; runtime sweep failed and was superseded | Soft null-command station correction was implemented, but the `20260711_144051` sweep produced no passing candidate; best was `r3_soft_null_min025` at `7/14`, `passed=false`, `safety_passed=false`. Later R4/R5 work supersedes it. |
 | instinctRL-A2-R5 | BLOCKED / STOP SWEEPS | R5G best was `r5g_downatten_z010` at `6/14`, `passed=false`, `safety_passed=false`. R5H/R5I and Evidence-1/2/3 closed parameter tuning and identified a braking-residual mechanism gap for bounded R5J planning only. |
-| instinctRL-A2-R5J | HOLD; CUDA unavailable | Provenance repair `8298a7d` and synchronization `c2e8367` are pushed. Fresh `nvidia-smi` failed (exit `9`) and Torch reported CUDA unavailable, so no wrapper, attempt directory, or replay JSON was created. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
+| instinctRL-A2-R5J | CUDA-ready decision pending | Provenance repair `8298a7d` and current baseline `927e166` are pushed. A current observation reports `nvidia-smi` exit `0` and Torch CUDA available with one device; a fresh raw gate from this clean documentation commit remains mandatory. The historical dirty-worktree CUDA HOLD created neither eval nor replay JSON and remains unconsumed. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
 | instinctRL-G | GO for baseline/evaluation harness only | Reward integration passes. Do not claim learned-policy success without training logs. |
 
 ---
@@ -143,16 +143,17 @@
 - `instinctRL-A2-R2`: SOURCE/UNIT COMPLETE but superseded by failed `20260711_111713` sweep evidence
 - `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE; the `20260711_144051` runtime sweep failed all six candidates and was superseded by R4/R5
 - `instinctRL-A2-R5`: all R5 sweeps stopped; best R5G result was `6/14`, and no candidate is promotable
-- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete, provenance repair `8298a7d` and synchronization `c2e8367` are pushed to `origin/a2-r5j-default-off-residual`, but fresh CUDA was unavailable and no replay was invoked
+- `instinctRL-A2-R5J`: CUDA-ready decision pending; default-off source/tests are complete, provenance repair `8298a7d` and current pushed baseline `927e166` are on `origin/a2-r5j-default-off-residual`, and the one clean disabled replay remains unconsumed
 - Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD until R5J source/unit/audit/default-equivalence gates pass
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only
 
-### A2-R5J implementation update (2026-07-16)
+### A2-R5J implementation update (2026-07-17)
 
 - Implemented the actor-clean, default-off per-beam residual pre-emption guard in `training/scripts/instinctRL/ics.py`; config defaults are off in both train/eval YAMLs and new scalar diagnostics are info-only.
-- Provenance repair commit `8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay provenance gaps`) was confirmed at the pre-documentation-sync `HEAD` and `origin/a2-r5j-default-off-residual`; that worktree was clean.
+- Provenance repair commit `8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay provenance gaps`) remains pushed; `927e166` is the current pushed baseline on `origin/a2-r5j-default-off-residual`.
 - Fresh repair verification in the Isaac Sim Conda environment passed: `python -m py_compile training/scripts/instinctRL/ics.py training/unit_test/test_instinctrl_r5j_replay.py ../docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/replay_wrapper.py ../docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/compare_disabled_replay.py` exited `0`; `test_instinctrl_r5j_replay.py` passed `19` tests with `1` NVML warning; `test_instinctrl_*.py` passed `163` tests with `13` warnings (one NVML and twelve LazyModule); `git diff --check` exited `0`.
-- Fresh clean-worktree CUDA decision: `nvidia-smi` exited `9` with NVIDIA-driver communication failure; activated NavRL Python exited `0` and printed `torch.cuda.is_available() = False` and `torch.cuda.device_count() = 0` (plus the expected NVML initialization warning). The wrapper was not invoked; no new attempts directory or replay JSON exists. Final verdict: `HOLD`.
+- Fresh CUDA-ready synchronization verification also passed in the NavRL Conda environment: the same py_compile command exited `0`; targeted replay coverage reported `19 passed`; the full suite reported `163 passed, 12 warnings` (LazyModule); and repository-root `git diff --check` exited `0`. The earlier warning-bearing evidence above remains historical evidence.
+- The historical clean-worktree CUDA decision remains `HOLD`: `nvidia-smi` exited `9` with NVIDIA-driver communication failure; activated NavRL Python printed CUDA unavailable with device count `0`. The wrapper was not invoked; no new attempts directory or replay JSON exists. A later current observation reports `nvidia-smi` exit `0` and Torch CUDA available with one device, but the formal decision is pending fresh raw gates after this documentation commit.
 - The historical attempt `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/` is a dirty-worktree/preflight-only `HOLD`, not an eligible replay. Its CUDA check recorded `nvidia-smi` exit 9 and `torch.cuda.is_available() == false`; eval did not start and no replay JSON exists. The repaired wrapper now rejects that condition before a runtime attempt is made.
 - `training/scripts/instinctRL/sweep.py` contains the R5G variants, but R5 sweeps are stopped. R5J enabled replay, dry-run, training, sweep, 1M, promotion, and main integration remain blocked until the disabled equivalence replay can run and pass exactly.

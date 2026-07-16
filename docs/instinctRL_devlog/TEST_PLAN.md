@@ -1,14 +1,21 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-16 (A2-R5J provenance synchronization)
+> **Last Updated**: 2026-07-17 (A2-R5J CUDA-ready decision pending)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
 
 ## instinctRL-A2-R5J: Braking-Residual Pre-emption
 
-**Current verdict**: Default-off implementation is complete; provenance repair `8298a7d` and synchronization `c2e8367` are pushed to `origin/a2-r5j-default-off-residual`. Fresh raw CUDA is unavailable: `nvidia-smi` exited `9`, while NavRL Torch reported `torch.cuda.is_available() = False` and device count `0`. The wrapper was not invoked and no new attempts directory or replay JSON exists. The final verdict for this turn is `HOLD`. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training remain forbidden.
+**Current verdict**: Default-off implementation is complete; provenance repair
+`8298a7d` and current pushed baseline `927e166` are on
+`origin/a2-r5j-default-off-residual`. CUDA is currently reported ready
+(`nvidia-smi` exit `0`; NavRL Torch CUDA available with device count `1`), but
+the formal raw gate has not yet been made from this documentation commit. The
+disabled wrapper remains uninvoked in this decision and its one clean replay is
+unconsumed. Enabled behavior evaluation, sweeps, 1M, warm-starting, promotion,
+and formal training remain forbidden.
 
 ### Required A2-R5J Tests
 
@@ -20,17 +27,18 @@
 | R5J.4 Unchanged safe cases | Positive residual, no closing evidence, unreliable/invalid beams, and empty active set do not pre-empt | Passed |
 | R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Passed |
 | R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Passed |
-| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Passed this synchronization: py_compile exit `0`; targeted `19 passed, 1 warning`; full Isaac Sim Conda suite `163 passed, 13 warnings` (one NVML and twelve LazyModule); `git diff --check` exit `0` |
-| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: fresh `nvidia-smi` exit `9` and Torch CUDA false stopped the task before wrapper invocation; no attempt directory or replay JSON was created. The historical dirty-worktree item remains ineligible and unconsumed. |
+| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Passed this synchronization: py_compile exit `0`; targeted `19 passed`; full Isaac Sim Conda suite `163 passed, 12 warnings` (LazyModule); `git diff --check` exit `0`. Historical evidence remains `19 passed, 1 warning` and `163 passed, 13 warnings` (one NVML and twelve LazyModule). |
+| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | Pending the fresh raw CUDA gate from the clean pushed documentation commit. The historical dirty-worktree item remains ineligible and unconsumed. |
 
 ### Completed Order and Future Exit Gate
 
 1. The test-first default-off implementation and actor audit are complete.
 2. Py-compile, targeted regression, and the full active-environment regression are complete.
-3. Committed and pushed clean documentation synchronization `c2e8367`; porcelain was empty.
-4. Raw CUDA checks returned `nvidia-smi` exit `9`, `torch.cuda.is_available() = False`, and device count `0`; stopped without invoking the wrapper or creating a runtime attempt.
-5. Not authorized or run because CUDA was unavailable; the future one-time disabled replay remains unconsumed.
-6. Final exit decision: `HOLD`.
+3. `8298a7d` provenance repair and `927e166` current baseline are pushed; the historical clean synchronization and its CUDA `HOLD` remain recorded evidence.
+4. Commit/push this six-document synchronization and verify empty porcelain.
+5. Make fresh raw CUDA checks; both must pass before the one-time disabled replay.
+6. Run the stored wrapper once only when authorized, then inspect all artifacts.
+7. Final exit decision: `GO (design only)` or `HOLD`.
    - `GO (design only)` only if the new replay, exact JSON comparison, disabled diagnostics, gate report, and provenance all pass. It permits later design, never execution, of an enabled single-variable R5J dry-run.
    - `HOLD` for any failed or missing condition. Do not retry a failed attempt by reusing a result path.
 

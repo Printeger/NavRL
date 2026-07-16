@@ -4,6 +4,28 @@
 
 ---
 
+## 2026-07-17
+
+### A2-R5J CUDA-ready decision pending
+
+- Continued from the pushed `927e166` baseline (not a rollback to `8298a7d`)
+  on `origin/a2-r5j-default-off-residual`.
+- Preserved the historical dirty-worktree/preflight-only `HOLD`: it had no
+  eval and no replay JSON, so it did not consume the sole clean disabled
+  replay. Preserved the prior `19 passed, 1 warning`, `163 passed, 13
+  warnings`, and Evidence-3 limitations.
+- A current CUDA observation reports `nvidia-smi` exit `0` and NavRL Torch CUDA
+  available with one device. The actual decision remains pending a freshly
+  committed/pushed clean documentation state, raw CUDA gates, conditional
+  single wrapper invocation, and strict `GO (design only)`/`HOLD` artifact
+  review. The dedicated-branch direct-push/no-PR exemption remains in force;
+  `main` must not change or merge.
+- Fresh synchronization verification passed: py_compile exit `0`; targeted
+  replay tests `19 passed`; and the full suite `163 passed, 12 warnings`
+  (LazyModule). These results are additional to, not replacements for, the
+  prior historical `19 passed, 1 warning` and `163 passed, 13 warnings`
+  evidence.
+
 ## 2026-07-16
 
 ### A2-R5J CUDA HOLD
