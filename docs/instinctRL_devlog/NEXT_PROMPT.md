@@ -2,7 +2,7 @@
 
 > **Updated**: 2026-07-17
 >
-> **Current step**: A2-R5J disabled default-equivalence replay passed — GO (design only)
+> **Current step**: A2-R5J final HOLD after the sole disabled replay's fatal shutdown stderr
 
 ## Task
 
@@ -23,10 +23,11 @@ exact zero. It returned `GO (design only)`.
 
 Do not rerun, reuse, or modify this replay or JSON. The artifact's stderr
 contains the captured Isaac/W&B shutdown segfault trace even though its eval
-subprocess returned `0` and the wrapper/comparator returned `GO (design only)`;
-preserve that evidence. This conclusion authorizes only later design work. Do
-not execute an enabled replay, dry-run, sweep, training, warm-start, or
-promotion without separate authorization.
+subprocess returned `0` and the wrapper/comparator returned `GO (design only)`.
+Treat that fatal stderr as an eval failure under the fail-closed final rule:
+the final decision is `HOLD`. Preserve the evidence; do not rerun, reuse, or
+modify it. Do not execute an enabled replay, dry-run, sweep, training,
+warm-start, or promotion without separate authorization.
 
 ## Required provenance contract
 
@@ -52,8 +53,9 @@ The historical fail-closed artifact is
 It was made from a dirty worktree, so its provenance cannot satisfy the repair.
 At that time CUDA did not run eval: `nvidia-smi` exited 9 because it could not
 communicate with the NVIDIA driver, and `torch.cuda.is_available()` was false.
-No replay JSON exists, so that historical record remains `HOLD` and the single
-clean replay is unconsumed.
+No replay JSON exists, so that historical record remains `HOLD`; this sentence
+describes only that dated preflight attempt. The later clean replay is consumed
+and separately recorded above.
 
 The default-off core remains actor-clean. Evidence-3 still lacks exact
 contact-body identity, surface normals, measured deceleration, and a final

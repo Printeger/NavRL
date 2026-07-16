@@ -1,7 +1,7 @@
 # instinctRL Test Plan
 
 > **Created**: 2026-07-04 (instinctRL-A)  
-> **Last Updated**: 2026-07-17 (A2-R5J disabled replay GO — design only)
+> **Last Updated**: 2026-07-17 (A2-R5J fail-closed shutdown HOLD)
 > **Purpose**: Define verification procedures for each instinctRL stage.
 
 ---
@@ -9,12 +9,14 @@
 ## instinctRL-A2-R5J: Braking-Residual Pre-emption
 
 **Current verdict**: Default-off implementation is complete and the single
-clean disabled replay passed `GO (design only)`. From pushed clean commit
+clean disabled replay passed the wrapper/comparator's `GO (design only)`
+checks. From pushed clean commit
 `5c9ab7a`, raw `nvidia-smi` exited `0` and the specified NavRL Torch command
 printed `True` with exit `0`; exactly one wrapper attempt then passed strict
-provenance/eval/freshness/comparison checks. The replay is consumed. Enabled
-behavior evaluation, sweeps, 1M, warm-starting, promotion, and formal training
-remain forbidden.
+provenance/eval/freshness/comparison checks. Its stderr has a fatal Python
+segmentation-fault trace during shutdown, so the final fail-closed verdict is
+`HOLD`. The replay is consumed. Enabled behavior evaluation, sweeps, 1M,
+warm-starting, promotion, and formal training remain forbidden.
 
 ### Required A2-R5J Tests
 
@@ -27,7 +29,7 @@ remain forbidden.
 | R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Passed |
 | R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Passed |
 | R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Passed this synchronization: py_compile exit `0`; targeted `19 passed`; full Isaac Sim Conda suite `163 passed, 12 warnings` (LazyModule); `git diff --check` exit `0`. Historical evidence remains `19 passed, 1 warning` and `163 passed, 13 warnings` (one NVML and twelve LazyModule). |
-| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | Passed: one clean attempt `20260716T161710730878Z-5c9ab7a` records CUDA ready, eval exit `0`, fresh matching result, and comparator `GO (design only)` with exact legacy JSON/gates and eight exact-zero diagnostics. |
+| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: one clean attempt `20260716T161710730878Z-5c9ab7a` has CUDA ready, eval exit `0`, fresh matching result, and comparator `GO (design only)` with exact legacy JSON/gates and eight exact-zero diagnostics, but captured stderr has a fatal shutdown segmentation-fault trace. No retry. |
 
 ### Completed Order and Future Exit Gate
 
@@ -37,8 +39,8 @@ remain forbidden.
 4. Pushed six-document synchronization `5c9ab7a`, then confirmed empty porcelain.
 5. Raw CUDA checks passed: `nvidia-smi` exit `0`; specified NavRL Torch command output `True` with exit `0`.
 6. Ran exactly one stored wrapper; its source commit, checkpoint, seed, argv, CUDA, eval exit `0`, and fresh result all passed.
-7. Comparator recorded exact legacy JSON/gates plus eight exact-zero diagnostics: `GO (design only)`.
-   - `GO (design only)` only if the new replay, exact JSON comparison, disabled diagnostics, gate report, and provenance all pass. It permits later design, never execution, of an enabled single-variable R5J dry-run.
+7. Comparator recorded exact legacy JSON/gates plus eight exact-zero diagnostics: `GO (design only)`; captured stderr then showed a fatal shutdown segmentation-fault trace, so the final fail-closed exit decision is `HOLD`.
+   - `GO (design only)` only if the new replay, exact JSON comparison, disabled diagnostics, gate report, provenance, and captured runtime logs all pass. It permits later design, never execution, of an enabled single-variable R5J dry-run.
    - `HOLD` for any failed or missing condition. Do not retry a failed attempt by reusing a result path.
 
 The exact execution prompt is stored in [`NEXT_PROMPT.md`](./NEXT_PROMPT.md).
@@ -580,4 +582,4 @@ Contract: `command_closing_i=max(dot(v_gov_b, ray_i),0)`. A range-rate is availa
 
 Coverage includes disabled neutral diagnostics/cache, namespace/config defaults and invalid finite/nonnegative values, non-redundant R5G-like trigger, zero-command rate trigger, opening/single-frame/invalid masks or weights, command-only evidence, empty active set, and explicit rejection of every public/cache R5J key from actor input. `ics_emergency` remains legacy emergency-only.
 
-The exact R5G argv, CUDA preflight, wrapper record, zero-tolerance comparator, and attempt artifacts are under `tests/artifacts/r5j_default_equivalence/20260714_234801/`. Before an attempt directory is created, the wrapper requires empty `git status --porcelain=v1 --untracked-files=all`, resolved `source_commit`, and `source_commit == commit == current HEAD`; it writes a provenance-only `HOLD` best-effort if this fails. The comparator requires that provenance in addition to checkpoint SHA-256, seed, argv, cwd, CUDA, exit, freshness, all eight flattened/per-pass station/tracking R5J summaries as finite exact zero, exact remaining JSON, and exact recomputed gates. The old `attempts/20260716T074648884514Z-0a6a2be/` record contains a non-empty worktree status, so it is a historical dirty-worktree/preflight-only `HOLD`; CUDA reported driver failure and torch CUDA false, eval did not start, and no replay JSON exists. It did not consume the future single clean CUDA disabled replay. After clean synchronization `c2e8367` was pushed, this turn's raw CUDA check again found `nvidia-smi` exit `9`, `torch.cuda.is_available() = False`, and device count `0`; the wrapper was not invoked and no new attempts directory or replay JSON was created. Final verdict is `HOLD`. Repair verification used the activated NavRL/Isaac Sim Conda environment and passed py_compile (exit `0`), targeted replay coverage (`19 passed, 1 warning`), the full suite (`163 passed, 13 warnings`: one NVML and twelve LazyModule), and `git diff --check` (exit `0`). No first-party lint/type configuration applies under `training/`; py_compile and pytest are the applicable checks. Evidence-3 remains limited by missing contact-body identity, surface normal, measured deceleration, and final safety-fix proof.
+Historical 2026-07-16 context: the exact R5G argv, CUDA preflight, wrapper record, zero-tolerance comparator, and attempt artifacts are under `tests/artifacts/r5j_default_equivalence/20260714_234801/`. Before an attempt directory is created, the wrapper requires empty `git status --porcelain=v1 --untracked-files=all`, resolved `source_commit`, and `source_commit == commit == current HEAD`; it writes a provenance-only `HOLD` best-effort if this fails. The comparator requires that provenance in addition to checkpoint SHA-256, seed, argv, cwd, CUDA, exit, freshness, all eight flattened/per-pass station/tracking R5J summaries as finite exact zero, exact remaining JSON, and exact recomputed gates. The old `attempts/20260716T074648884514Z-0a6a2be/` record contains a non-empty worktree status, so it is a historical dirty-worktree/preflight-only `HOLD`; CUDA reported driver failure and torch CUDA false, eval did not start, and no replay JSON exists. It did not consume the then-future single clean CUDA disabled replay. After clean synchronization `c2e8367` was pushed, that historical turn's raw CUDA check again found `nvidia-smi` exit `9`, `torch.cuda.is_available() = False`, and device count `0`; the wrapper was not invoked and no new attempts directory or replay JSON was created. The historical-turn verdict is `HOLD`. Repair verification used the activated NavRL/Isaac Sim Conda environment and passed py_compile (exit `0`), targeted replay coverage (`19 passed, 1 warning`), the full suite (`163 passed, 13 warnings`: one NVML and twelve LazyModule), and `git diff --check` (exit `0`). No first-party lint/type configuration applies under `training/`; py_compile and pytest are the applicable checks. Evidence-3 remains limited by missing contact-body identity, surface normal, measured deceleration, and final safety-fix proof.

@@ -6,6 +6,15 @@
 
 ## 2026-07-17
 
+### A2-R5J final fail-closed HOLD
+
+- The sole clean replay's strict wrapper/comparator outcome remains
+  `GO (design only)`, but its captured stderr contains `Fatal Python error:
+  Segmentation fault` during Isaac/W&B shutdown.
+- Because the final gate requires stdout/stderr inspection and is fail-closed,
+  the final human verdict is `HOLD`. The attempt is consumed and must not be
+  rerun, reused, or edited; no enabled action is authorized.
+
 ### A2-R5J disabled default-equivalence replay — GO (design only)
 
 - From clean pushed commit `5c9ab7a`, raw `nvidia-smi` exited `0` and the

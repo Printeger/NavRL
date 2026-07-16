@@ -69,10 +69,11 @@ disabled replay then ran at
 `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T161710730878Z-5c9ab7a/`.
 Its source commit, checkpoint SHA-256, seed `0`, argv, freshness, CUDA
 preflight, eval exit `0`, legacy JSON, gates, and eight exact-zero diagnostics
-all passed; the recorded result is `GO (design only)`. The captured stderr
-also contains the Isaac/W&B shutdown segfault trace; it is retained verbatim
-in the artifact, while the subprocess exit and strict comparator result remain
-`0` and `GO (design only)`, respectively. This authorizes design only, not an
-enabled execution. The prior `19 passed, 1 warning`, `163 passed, 13 warnings`,
+all passed; the wrapper/comparator result is `GO (design only)`. The captured
+stderr also contains the Isaac/W&B shutdown segfault trace. Under the
+fail-closed final decision rule, that fatal runtime evidence makes the final
+verdict `HOLD`, even though the subprocess exit and strict comparator result
+remain `0` and `GO (design only)`, respectively. The unique replay is consumed
+and must not be rerun. The prior `19 passed, 1 warning`, `163 passed, 13 warnings`,
 and Evidence-3 limitations (no contact-body identity, surface normals,
 measured deceleration, or final safety-fix proof) remain unchanged.

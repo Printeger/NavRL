@@ -1,7 +1,7 @@
 # instinctRL Development Status
 
 > **Last Updated**: 2026-07-17
-> **Current Stage**: A2-R5J disabled default-equivalence replay passed — GO (design only)
+> **Current Stage**: A2-R5J fail-closed HOLD; sole disabled replay consumed
 > **Authority order**: code facts > handbook acceptance criteria > devlog records.
 
 ---
@@ -10,9 +10,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | `8298a7d` provenance repair, `927e166` baseline, and clean pushed decision commit `5c9ab7a` are recorded; the single disabled replay passed `GO (design only)` |
+| **Current stage** | `8298a7d` provenance repair, `927e166` baseline, and clean pushed decision commit `5c9ab7a` are recorded; the single replay's wrapper/comparator passed but fatal shutdown stderr makes the final verdict `HOLD` |
 | **Active ticket** | A2-R5J braking-residual mechanism |
-| **Next ticket** | Design work only; the disabled replay is consumed and no enabled runtime action is authorized |
+| **Next ticket** | No runtime action; the disabled replay is consumed and no enabled work is authorized |
 | **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD until source/unit/audit/default-equivalence gates pass |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
@@ -26,7 +26,7 @@
 | **instinctRL-A2-R2** | SOURCE/UNIT COMPLETE; superseded by later failed sweep evidence |
 | **instinctRL-A2-R3** | SOURCE/UNIT COMPLETE; superseded by the R4/R5 investigation path |
 | **instinctRL-A2-R5** | SWEEPS STOPPED; no R5 candidate passed all 14 gates; Evidence-1/2/3 completed |
-| **instinctRL-A2-R5J** | GO (design only); default-off source/tests and the one clean disabled replay passed |
+| **instinctRL-A2-R5J** | HOLD; default-off source/tests passed but the sole clean replay has fatal shutdown stderr |
 | **train/eval semantic repair** | SOURCE/UNIT COMPLETE; corrected 16-frame GPU smoke passed |
 
 ---
@@ -48,7 +48,7 @@
 | instinctRL-A2-R2 | SOURCE/UNIT COMPLETE; superseded by A2-R3 | Decoder-level hard null prior, preservation band rewards, hard gate scorer, and dry-run-first sweep runner were implemented. The `20260711_111713` sweep failed all six candidates, so R2 is diagnostic evidence only. |
 | instinctRL-A2-R3 | SOURCE/UNIT COMPLETE; runtime sweep failed and was superseded | Soft null-command station correction was implemented, but the `20260711_144051` sweep produced no passing candidate; best was `r3_soft_null_min025` at `7/14`, `passed=false`, `safety_passed=false`. Later R4/R5 work supersedes it. |
 | instinctRL-A2-R5 | BLOCKED / STOP SWEEPS | R5G best was `r5g_downatten_z010` at `6/14`, `passed=false`, `safety_passed=false`. R5H/R5I and Evidence-1/2/3 closed parameter tuning and identified a braking-residual mechanism gap for bounded R5J planning only. |
-| instinctRL-A2-R5J | GO (design only) | From clean pushed commit `5c9ab7a`, raw `nvidia-smi` exited `0`, specified NavRL Torch printed `True`, and one disabled wrapper attempt passed provenance, eval exit `0`, freshness, exact JSON/gates, and eight exact-zero diagnostics. The stderr shutdown segfault trace is retained in the attempt. No enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
+| instinctRL-A2-R5J | HOLD | From clean pushed commit `5c9ab7a`, raw `nvidia-smi` exited `0`, specified NavRL Torch printed `True`, and one disabled wrapper attempt passed provenance, eval exit `0`, freshness, exact JSON/gates, and eight exact-zero diagnostics. Its stderr has a fatal shutdown segfault trace, so final fail-closed verdict is HOLD. No retry or enabled behavior run, sweep, 1M, warm-start, promotion, or formal training. |
 | instinctRL-G | GO for baseline/evaluation harness only | Reward integration passes. Do not claim learned-policy success without training logs. |
 
 ---
@@ -143,7 +143,7 @@
 - `instinctRL-A2-R2`: SOURCE/UNIT COMPLETE but superseded by failed `20260711_111713` sweep evidence
 - `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE; the `20260711_144051` runtime sweep failed all six candidates and was superseded by R4/R5
 - `instinctRL-A2-R5`: all R5 sweeps stopped; best R5G result was `6/14`, and no candidate is promotable
-- `instinctRL-A2-R5J`: GO (design only); default-off source/tests are complete, provenance repair `8298a7d`, baseline `927e166`, and decision commit `5c9ab7a` are on `origin/a2-r5j-default-off-residual`; the one clean disabled replay is consumed
+- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete, provenance repair `8298a7d`, baseline `927e166`, and decision commit `5c9ab7a` are on `origin/a2-r5j-default-off-residual`; the one clean disabled replay is consumed after fatal shutdown stderr
 - Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD until R5J source/unit/audit/default-equivalence gates pass
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only
@@ -156,5 +156,5 @@
 - Fresh CUDA-ready synchronization verification also passed in the NavRL Conda environment: the same py_compile command exited `0`; targeted replay coverage reported `19 passed`; the full suite reported `163 passed, 12 warnings` (LazyModule); and repository-root `git diff --check` exited `0`. The earlier warning-bearing evidence above remains historical evidence.
 - The historical clean-worktree CUDA decision remains `HOLD`: `nvidia-smi` exited `9` with NVIDIA-driver communication failure; activated NavRL Python printed CUDA unavailable with device count `0`. It remains historical only. The fresh decision from pushed `5c9ab7a` passed raw `nvidia-smi` (exit `0`) and specified NavRL Torch (`True`, exit `0`), then produced the sole successful wrapper attempt `20260716T161710730878Z-5c9ab7a`.
 - The historical attempt `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/` is a dirty-worktree/preflight-only `HOLD`, not an eligible replay. Its CUDA check recorded `nvidia-smi` exit 9 and `torch.cuda.is_available() == false`; eval did not start and no replay JSON exists. The repaired wrapper now rejects that condition before a runtime attempt is made.
-- The sole clean attempt records matching source/compatibility `5c9ab7a`, clean porcelain, verified checkpoint SHA, seed `0`, unchanged legacy argv, CUDA ready, eval exit `0`, fresh matching JSON, and comparator `GO (design only)` with all 27 checks and eight exact-zero diagnostics true. Its captured stderr has an Isaac/W&B shutdown segmentation-fault trace despite the zero eval exit; preserve this result and do not rerun it.
+- The sole clean attempt records matching source/compatibility `5c9ab7a`, clean porcelain, verified checkpoint SHA, seed `0`, unchanged legacy argv, CUDA ready, eval exit `0`, fresh matching JSON, and comparator `GO (design only)` with all 27 checks and eight exact-zero diagnostics true. Its captured stderr has an Isaac/W&B shutdown segmentation-fault trace despite the zero eval exit; final fail-closed verdict is `HOLD`. Preserve this result and do not rerun it.
 - `training/scripts/instinctRL/sweep.py` contains the R5G variants, but R5 sweeps are stopped. R5J enabled replay, dry-run, training, sweep, 1M, promotion, and main integration remain blocked until the disabled equivalence replay can run and pass exactly.

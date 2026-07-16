@@ -5,11 +5,33 @@
 
 ---
 
+## D-2026-07-17-008: R5J Fail-Closed Shutdown HOLD
+
+**Decision**: Supersede the final human decision in D-2026-07-17-007 with
+`HOLD`. The wrapper/comparator artifact remains `GO (design only)`, but the
+sole eval's captured stderr contains `Fatal Python error: Segmentation fault`
+during Isaac/W&B shutdown. A fatal runtime trace fails the required stdout/
+stderr inspection even when the subprocess return code is `0`.
+
+**Evidence**: Attempt
+`20260716T161710730878Z-5c9ab7a` has matching clean provenance, CUDA-ready
+preflight, fresh result, eval exit `0`, and all strict comparator checks true.
+Its `replay.stderr.log` nevertheless contains the fatal interpreter trace.
+The wrapper generated `GO (design only)` because it uses the subprocess exit
+and comparison contract; this fail-closed decision adds the explicit log
+inspection required by the execution boundary.
+
+**Consequence**: The one clean disabled replay remains consumed and must not
+be rerun, reused, or edited. No design GO, enabled replay, dry-run, sweep,
+training, warm-start, promotion, main change, or main merge is authorized.
+
+---
+
 ## D-2026-07-17-007: R5J Disabled Replay GO (Design Only)
 
-**Decision**: Record `GO (design only)` for the one clean disabled
-default-equivalence replay. This is not authorization to execute an enabled
-R5J experiment.
+**Decision**: Historical wrapper/comparator outcome: `GO (design only)` for
+the one clean disabled default-equivalence replay. D-2026-07-17-008 supersedes
+the final human decision with `HOLD` because of the captured fatal stderr.
 
 **Evidence**: Documentation synchronization
 `5c9ab7a71365fb3899d586b09ba6ea8e231aa80e` was pushed to the dedicated
