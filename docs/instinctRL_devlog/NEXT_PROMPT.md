@@ -19,15 +19,18 @@ source/compatibility commit, empty pre-attempt porcelain, verified checkpoint
 SHA-256, seed `0`, unchanged legacy argv, CUDA ready, eval exit `0`, and a
 fresh matching result. `comparison.json` records exact legacy JSON and gate
 equality plus all eight required disabled R5J diagnostic summaries as finite
-exact zero. It returned `GO (design only)`.
+exact zero. That immutable artifact is data-equivalence evidence, not a final
+runtime-integrity pass.
 
 Do not rerun, reuse, or modify this replay or JSON. The artifact's stderr
 contains the captured Isaac/W&B shutdown segfault trace even though its eval
-subprocess returned `0` and the wrapper/comparator returned `GO (design only)`.
-Treat that fatal stderr as an eval failure under the fail-closed final rule:
-the final decision is `HOLD`. Preserve the evidence; do not rerun, reuse, or
-modify it. Do not execute an enabled replay, dry-run, sweep, training,
-warm-start, or promotion without separate authorization.
+subprocess returned `0` and its historical wrapper/comparator returned
+`GO (design only)`. The repaired wrapper now scans both captured streams for
+explicit fatal lifecycle markers, writes structured `fatal_runtime_markers`,
+and forces the comparison artifact to `HOLD`. Treat the fatal stderr as an
+eval failure: the final decision is `HOLD`. Preserve the evidence; do not
+rerun, reuse, or modify it. Do not execute an enabled replay, dry-run, sweep,
+training, warm-start, or promotion without separate authorization.
 
 ## Required provenance contract
 
@@ -43,6 +46,10 @@ warm-start, or promotion without separate authorization.
 - A wrapper/preflight/eval/provenance failure is unconditional `HOLD`, even if
   an old exact replay JSON exists. Preserve the actual failure in the attempt
   record and comparison report.
+- `Fatal Python error`, segmentation fault, core-dump, and explicit
+  signal-termination markers in captured eval stdout/stderr are eval failures.
+  Do not treat bare `signal`, `termination`, ordinary Isaac/W&B warnings, or
+  handbook `termination_*` metrics as fatal markers.
 - Require exact legacy JSON and gates plus finite exact-zero disabled R5J
   diagnostics. A pass is only `GO (design only)`.
 
@@ -60,6 +67,30 @@ and separately recorded above.
 The default-off core remains actor-clean. Evidence-3 still lacks exact
 contact-body identity, surface normals, measured deceleration, and a final
 safety-fix proof.
+
+## Only proposed next runtime command — separate authorization required
+
+Do not run this command as part of this task. It is the sole proposed next
+runtime action: it uses no checkpoint and performs no R5J performance eval,
+replay, training, or sweep. It starts a headless `SimulationApp`, creates an
+offline W&B run, finishes it, closes the app, and records stdout, stderr, and
+the shell exit status.
+
+```bash
+mkdir -p /tmp/r5j-shutdown-smoke && (
+  python - <<'PY' > /tmp/r5j-shutdown-smoke/stdout.log 2> /tmp/r5j-shutdown-smoke/stderr.log
+from omni.isaac.kit import SimulationApp
+app = SimulationApp({"headless": True})
+import wandb
+wandb.init(project="navrl-shutdown-smoke", mode="offline")
+wandb.finish()
+app.close()
+PY
+  status=$?
+  printf '%s\n' "$status" > /tmp/r5j-shutdown-smoke/exit-status.txt
+  exit "$status"
+)
+```
 
 ## Boundaries and Git
 

@@ -320,6 +320,94 @@ def test_wrapper_holds_nonzero_eval_even_if_it_writes_an_exact_looking_result(tm
     assert compare_calls[0]["wrapper_failure"] == "eval subprocess failed with exit 1"
 
 
+def test_wrapper_holds_fresh_zero_exit_when_eval_stderr_has_fatal_runtime_marker(tmp_path, monkeypatch):
+    wrapper = _load_wrapper()
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    _patch_wrapper_provenance(monkeypatch, wrapper, checkpoint)
+    monkeypatch.setattr(wrapper, "EXPECTED_CHECKPOINT_SHA256", hashlib.sha256(checkpoint.read_bytes()).hexdigest())
+
+    def fatal_eval(argv, **_kwargs):
+        result = Path(next(item.split("=", 1)[1] for item in argv if item.startswith("result_path=")))
+        result.write_text(json.dumps({"result_path": str(result), "legacy": "valid"}), encoding="utf-8")
+        return SimpleNamespace(
+            returncode=0,
+            stdout="evaluation result written\n",
+            stderr="Fatal Python error: Segmentation fault\n",
+        )
+
+    record = wrapper.run_attempt(
+        root=tmp_path,
+        artifact_dir=tmp_path / "artifact",
+        attempt_id="fatal-zero-exit",
+        preflight_fn=_ready_preflight,
+        eval_runner=fatal_eval,
+        compare_fn=lambda *_args, **_kwargs: {"status": "GO (design only)"},
+    )
+
+    assert record["status"] == "HOLD"
+    assert record["freshness"]["ready"] is True
+    assert record["failure"] == (
+        "fatal runtime markers detected: stderr:fatal_python_error, stderr:segmentation_fault"
+    )
+    assert record["fatal_runtime_markers"] == [
+        {"stream": "stderr", "code": "fatal_python_error", "text": "Fatal Python error"},
+        {"stream": "stderr", "code": "segmentation_fault", "text": "Segmentation fault"},
+    ]
+    assert json.loads(Path(record["comparison_path"]).read_text(encoding="utf-8"))["status"] == "HOLD"
+
+
+def test_wrapper_keeps_go_for_normal_warnings_and_termination_metrics(tmp_path, monkeypatch):
+    wrapper = _load_wrapper()
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    _patch_wrapper_provenance(monkeypatch, wrapper, checkpoint)
+    monkeypatch.setattr(wrapper, "EXPECTED_CHECKPOINT_SHA256", hashlib.sha256(checkpoint.read_bytes()).hexdigest())
+
+    def warning_eval(argv, **_kwargs):
+        result = Path(next(item.split("=", 1)[1] for item in argv if item.startswith("result_path=")))
+        result.write_text(json.dumps({"result_path": str(result), "legacy": "valid"}), encoding="utf-8")
+        return SimpleNamespace(
+            returncode=0,
+            stdout="wandb: run finished\n",
+            stderr="Isaac warning: termination_collision=0; signal quality is nominal\n",
+        )
+
+    record = wrapper.run_attempt(
+        root=tmp_path,
+        artifact_dir=tmp_path / "artifact",
+        attempt_id="normal-warnings",
+        preflight_fn=_ready_preflight,
+        eval_runner=warning_eval,
+        compare_fn=lambda *_args, **_kwargs: {"status": "GO (design only)"},
+    )
+
+    assert record["status"] == "GO (design only)"
+    assert record["failure"] is None
+    assert record["fatal_runtime_markers"] == []
+
+
+def test_wrapper_failure_converts_unexpected_comparator_go_to_hold(tmp_path, monkeypatch):
+    wrapper = _load_wrapper()
+    checkpoint = tmp_path / "checkpoint.pt"
+    checkpoint.write_bytes(b"checkpoint")
+    _patch_wrapper_provenance(monkeypatch, wrapper, checkpoint)
+    monkeypatch.setattr(wrapper, "EXPECTED_CHECKPOINT_SHA256", hashlib.sha256(checkpoint.read_bytes()).hexdigest())
+
+    record = wrapper.run_attempt(
+        root=tmp_path,
+        artifact_dir=tmp_path / "artifact",
+        attempt_id="unexpected-comparator-go",
+        preflight_fn=_ready_preflight,
+        eval_runner=lambda *_args, **_kwargs: SimpleNamespace(returncode=1, stdout="", stderr="failed"),
+        compare_fn=lambda *_args, **_kwargs: {"status": "GO"},
+    )
+
+    assert record["status"] == "HOLD"
+    assert record["failure"] == "eval subprocess failed with exit 1"
+    assert json.loads(Path(record["comparison_path"]).read_text(encoding="utf-8"))["status"] == "HOLD"
+
+
 def _gate_metrics():
     return {
         "eval/station/handbook.station_keeping_drift_mean": 0.0,
@@ -414,6 +502,20 @@ def test_real_comparison_chain_requires_all_provenance_diagnostics_and_gates(tmp
     assert report["status"] == "GO (design only)"
     assert report["checks"]["attempt.worktree_clean"]
     assert report["checks"]["gate_report_exact"]
+
+    fatal_report = comparator.compare_files(
+        tmp_path,
+        baseline,
+        replay,
+        checkpoint,
+        wrapper_failure="fatal runtime markers detected: stderr:fatal_python_error, stderr:segmentation_fault",
+        attempt_record=record,
+    )
+    assert fatal_report["status"] == "HOLD"
+    assert fatal_report["checks"]["wrapper_failure"]
+    assert fatal_report["hold_reason"] == (
+        "fatal runtime markers detected: stderr:fatal_python_error, stderr:segmentation_fault"
+    )
 
     replay_document["legacy"]["value"] = 2
     replay.write_text(json.dumps(replay_document), encoding="utf-8")

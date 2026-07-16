@@ -5,6 +5,37 @@
 
 ---
 
+## D-2026-07-17-009: R5J Shutdown-Integrity Fail-Closed Repair
+
+**Decision**: Make shutdown-integrity evidence part of the wrapper verdict,
+not a later human-only override. Captured eval stdout/stderr are scanned for
+explicit fatal runtime markers; a marker produces a structured record and
+unconditional `HOLD`, including when the subprocess exits `0`, the replay JSON
+is fresh, and exact comparison would otherwise return `GO (design only)`.
+
+**Evidence**: The immutable sole attempt's stderr records `Fatal Python error:
+Segmentation fault`; its main-thread traceback reaches
+`SimulationApp.close()` from `eval.py`, while another traceback reaches W&B's
+`asyncio_manager._main`. Those facts establish shutdown failure evidence, not
+its root cause. The minimal no-GPU feedback loop now proves fatal stderr
+overrides a fresh valid result and comparator `GO`, ordinary Isaac/W&B warnings
+and `termination_*` metrics do not false-positive, and real comparator failure
+propagation remains `HOLD`.
+
+**Validation**: `python -m py_compile` passed for the wrapper, comparator, and
+replay test; targeted replay tests passed `22`; the full
+`test_instinctrl_*.py` suite passed `166` with `12` warnings; and
+`git diff --check` passed. No GPU command or attempt artifact was run.
+
+**Consequence**: Do not modify `eval.py` or copy the train-only
+`os._exit(0)` workaround without separately authorized lifecycle evidence. The
+sole replay is consumed and immutable; R5J.8 remains `HOLD`. The only proposed
+next runtime action is a separately authorized, checkpoint-free headless
+`SimulationApp` + offline W&B `finish()`/`close()` smoke that captures both
+streams and shell exit.
+
+---
+
 ## D-2026-07-17-008: R5J Fail-Closed Shutdown HOLD
 
 **Decision**: Supersede the final human decision in D-2026-07-17-007 with

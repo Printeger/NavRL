@@ -10,10 +10,10 @@
 
 | Field | Value |
 |-------|-------|
-| **Current stage** | `8298a7d` provenance repair, `927e166` baseline, and clean pushed decision commit `5c9ab7a` are recorded; the single replay's wrapper/comparator passed but fatal shutdown stderr makes the final verdict `HOLD` |
+| **Current stage** | `8298a7d` provenance repair, `927e166` baseline, and clean pushed decision commit `5c9ab7a` are recorded; the immutable replay has data-equivalence `GO` evidence but shutdown-integrity failure, so R5J.8 is `HOLD` |
 | **Active ticket** | A2-R5J braking-residual mechanism |
-| **Next ticket** | No runtime action; the disabled replay is consumed and no enabled work is authorized |
-| **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD until source/unit/audit/default-equivalence gates pass |
+| **Next ticket** | No runtime action without separate authority; only a checkpoint-free GPU shutdown-lifecycle smoke is proposed |
+| **Final go/no-go** | Enabled R5J behavior evaluation and all training remain HOLD; data equivalence passed, but shutdown integrity failed and needs separate lifecycle evidence |
 | **instinctRL-A** | PASS |
 | **instinctRL-B** | COMPLETE |
 | **instinctRL-C** | COMPLETE |
@@ -143,8 +143,8 @@
 - `instinctRL-A2-R2`: SOURCE/UNIT COMPLETE but superseded by failed `20260711_111713` sweep evidence
 - `instinctRL-A2-R3`: SOURCE/UNIT COMPLETE; the `20260711_144051` runtime sweep failed all six candidates and was superseded by R4/R5
 - `instinctRL-A2-R5`: all R5 sweeps stopped; best R5G result was `6/14`, and no candidate is promotable
-- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete, provenance repair `8298a7d`, baseline `927e166`, and decision commit `5c9ab7a` are on `origin/a2-r5j-default-off-residual`; the one clean disabled replay is consumed after fatal shutdown stderr
-- Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD until R5J source/unit/audit/default-equivalence gates pass
+- `instinctRL-A2-R5J`: HOLD; default-off source/tests are complete, provenance repair `8298a7d`, baseline `927e166`, and decision commit `5c9ab7a` are on `origin/a2-r5j-default-off-residual`; the one clean disabled replay is consumed after fatal shutdown stderr, and future wrapper runs now fail closed on that evidence
+- Enabled R5J behavior evaluation, 128k/1M/formal training, warm-start, and promotion: HOLD pending separately authorized real GPU shutdown-lifecycle evidence
 - Training convergence: NOT PROVEN
 - `instinctRL-G`: GO for baseline/evaluation harness only
 
@@ -152,9 +152,9 @@
 
 - Implemented the actor-clean, default-off per-beam residual pre-emption guard in `training/scripts/instinctRL/ics.py`; config defaults are off in both train/eval YAMLs and new scalar diagnostics are info-only.
 - Provenance repair commit `8298a7d256bec6a82dee49d9af41a87628135ed6` (`Close R5J replay provenance gaps`) remains pushed; `927e166` is the current pushed baseline on `origin/a2-r5j-default-off-residual`.
-- Fresh repair verification in the Isaac Sim Conda environment passed: `python -m py_compile training/scripts/instinctRL/ics.py training/unit_test/test_instinctrl_r5j_replay.py ../docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/replay_wrapper.py ../docs/instinctRL_devlog/tests/artifacts/r5j_default_equivalence/20260714_234801/compare_disabled_replay.py` exited `0`; `test_instinctrl_r5j_replay.py` passed `19` tests with `1` NVML warning; `test_instinctrl_*.py` passed `163` tests with `13` warnings (one NVML and twelve LazyModule); `git diff --check` exited `0`.
+- Historical repair verification passed before the shutdown-integrity change: pycompile exit `0`; targeted replay coverage `19 passed, 1 warning`; full suite `163 passed, 13 warnings`; and `git diff --check` exit `0`. Current shutdown-integrity validation passed pycompile, targeted replay coverage `22 passed`, full `test_instinctrl_*.py` coverage `166 passed, 12 warnings`, and `git diff --check`; no GPU command ran.
 - Fresh CUDA-ready synchronization verification also passed in the NavRL Conda environment: the same py_compile command exited `0`; targeted replay coverage reported `19 passed`; the full suite reported `163 passed, 12 warnings` (LazyModule); and repository-root `git diff --check` exited `0`. The earlier warning-bearing evidence above remains historical evidence.
 - The historical clean-worktree CUDA decision remains `HOLD`: `nvidia-smi` exited `9` with NVIDIA-driver communication failure; activated NavRL Python printed CUDA unavailable with device count `0`. It remains historical only. The fresh decision from pushed `5c9ab7a` passed raw `nvidia-smi` (exit `0`) and specified NavRL Torch (`True`, exit `0`), then produced the sole successful wrapper attempt `20260716T161710730878Z-5c9ab7a`.
 - The historical attempt `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/` is a dirty-worktree/preflight-only `HOLD`, not an eligible replay. Its CUDA check recorded `nvidia-smi` exit 9 and `torch.cuda.is_available() == false`; eval did not start and no replay JSON exists. The repaired wrapper now rejects that condition before a runtime attempt is made.
-- The sole clean attempt records matching source/compatibility `5c9ab7a`, clean porcelain, verified checkpoint SHA, seed `0`, unchanged legacy argv, CUDA ready, eval exit `0`, fresh matching JSON, and comparator `GO (design only)` with all 27 checks and eight exact-zero diagnostics true. Its captured stderr has an Isaac/W&B shutdown segmentation-fault trace despite the zero eval exit; final fail-closed verdict is `HOLD`. Preserve this result and do not rerun it.
-- `training/scripts/instinctRL/sweep.py` contains the R5G variants, but R5 sweeps are stopped. R5J enabled replay, dry-run, training, sweep, 1M, promotion, and main integration remain blocked until the disabled equivalence replay can run and pass exactly.
+- The sole clean attempt records matching source/compatibility `5c9ab7a`, clean porcelain, verified checkpoint SHA, seed `0`, unchanged legacy argv, CUDA ready, eval exit `0`, fresh matching JSON, and comparator `GO (design only)` with all 27 checks and eight exact-zero diagnostics true. Its captured stderr has an Isaac/W&B shutdown segmentation-fault trace despite the zero eval exit; final fail-closed verdict is `HOLD`. The repaired wrapper records `fatal_runtime_markers` and forces `HOLD` for the same future evidence. Preserve this result and do not rerun it.
+- `training/scripts/instinctRL/sweep.py` contains the R5G variants, but R5 sweeps are stopped. R5J enabled replay, dry-run, training, sweep, 1M, promotion, and main integration remain blocked; the remaining R5J.8 condition is separately authorized real GPU shutdown-lifecycle validation, not another equivalence replay.

@@ -6,6 +6,26 @@
 
 ## 2026-07-17
 
+### A2-R5J shutdown-integrity fail-closed repair
+
+- Updated the disabled-replay wrapper to scan captured eval stdout and stderr
+  for explicit fatal lifecycle markers (`Fatal Python error`, segmentation
+  fault, core dump, and signal-termination forms). It stores structured
+  stream/code/matched-text evidence and turns any marker into a deterministic
+  wrapper failure and parseable `HOLD` comparison, even after exit `0`, a
+  fresh JSON, and an otherwise-`GO` comparator report.
+- Normal Isaac/W&B warnings and handbook `termination_*` metrics remain
+  non-fatal; generic `signal`/`termination` text is not matched. No attempt
+  artifact, replay, eval, or GPU workload was touched.
+- The historical sole replay remains immutable and consumed. Its evidence
+  shows `SimulationApp.close()` on the main thread and W&B's asyncio manager
+  on another thread, but does not establish root cause. `eval.py` therefore
+  remains unchanged; the separate next authorization, if granted, is a
+  checkpoint-free GPU shutdown-lifecycle smoke only.
+- Validation without GPU execution: wrapper target tests `22 passed`, full
+  `test_instinctrl_*.py` `166 passed, 12 warnings`; changed Python files
+  compiled and `git diff --check` passed.
+
 ### A2-R5J final fail-closed HOLD
 
 - The sole clean replay's strict wrapper/comparator outcome remains
@@ -105,7 +125,7 @@
 
 **Historical status**: This was the authorization record for the now-completed
 default-off implementation. It is superseded by the provenance-hardening HOLD
-entry above; only the recorded disabled replay may run on a future CUDA worker.
+entry above; the recorded disabled replay later ran once and is now consumed.
 
 - Reviewed the R5G/R5H/R5I and Evidence-1/2/3 chain against the platform-locked handbook.
 - Confirmed that the latest evidence does not support another parameter sweep or any 1M/formal learned-governor training.

@@ -5,11 +5,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional, Pattern, Tuple
 
 from compare_disabled_replay import (
     EXPECTED_BRANCH,
@@ -27,6 +28,19 @@ BASELINE = ROOT / "docs/instinctRL_devlog/tests/artifacts/r5e3_braking_residual/
 ATTEMPTS_DIR = ARTIFACT_DIR / "attempts"
 
 
+# These phrases identify a failed native/Python process lifecycle.  Generic
+# "signal" and "termination" text is intentionally excluded because normal
+# Isaac and handbook output uses those words for non-fatal diagnostics.
+FATAL_RUNTIME_PATTERNS: Tuple[Tuple[str, Pattern[str]], ...] = (
+    ("fatal_python_error", re.compile(r"\bfatal python error\b", re.IGNORECASE)),
+    ("segmentation_fault", re.compile(r"\bsegmentation fault\b", re.IGNORECASE)),
+    ("core_dumped", re.compile(r"\bcore dumped\b", re.IGNORECASE)),
+    ("killed_by_signal", re.compile(r"\bkilled by signal\b", re.IGNORECASE)),
+    ("terminated_by_signal", re.compile(r"\bterminated by signal\b", re.IGNORECASE)),
+    ("signal_exit", re.compile(r"\bsignal\s+(?:\d+|SIG[A-Z0-9]+)\b", re.IGNORECASE)),
+)
+
+
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -35,6 +49,22 @@ def _attempt_id(root: Path) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     commit = git_value(root, "rev-parse", "--short", "HEAD") or "unknown"
     return f"{stamp}-{commit}"
+
+
+def fatal_runtime_markers(stdout: str, stderr: str) -> List[Dict[str, str]]:
+    """Return explicit fatal lifecycle evidence without rewriting either stream."""
+    markers = []
+    for stream, contents in (("stdout", stdout), ("stderr", stderr)):
+        for code, pattern in FATAL_RUNTIME_PATTERNS:
+            for match in pattern.finditer(contents or ""):
+                markers.append({"stream": stream, "code": code, "text": match.group(0)})
+    return markers
+
+
+def _fatal_runtime_failure(markers: List[Dict[str, str]]) -> str:
+    return "fatal runtime markers detected: " + ", ".join(
+        f"{marker['stream']}:{marker['code']}" for marker in markers
+    )
 
 
 def _run(command):
@@ -179,6 +209,7 @@ def _new_record(
         "comparison_path": str(comparison_path),
         "exit_code": None,
         "failure": None,
+        "fatal_runtime_markers": [],
         "freshness": {"ready": False},
     }
 
@@ -349,6 +380,11 @@ def run_attempt(
         except Exception as error:
             record["failure"] = _exception_failure("freshness", error)
 
+    if record.get("exit_code") is not None:
+        record["fatal_runtime_markers"] = fatal_runtime_markers(stdout, stderr)
+        if record["fatal_runtime_markers"]:
+            _append_failure(record, _fatal_runtime_failure(record["fatal_runtime_markers"]))
+
     checkpoint_for_compare = Path(record.get("checkpoint_path", root / "missing-checkpoint"))
     try:
         report = compare_fn(
@@ -363,6 +399,8 @@ def run_attempt(
             record["failure"] = "comparator returned HOLD"
     except Exception as error:
         record["failure"] = _exception_failure("comparator", error)
+        report = _hold_report(record["failure"])
+    if record.get("failure") and report.get("status") != "HOLD":
         report = _hold_report(record["failure"])
     record["comparator_outcome"] = report.get("status", "HOLD")
     record["status"] = "HOLD" if record.get("failure") else report.get("status", "HOLD")

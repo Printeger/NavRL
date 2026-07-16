@@ -28,8 +28,9 @@ warm-starting, promotion, and formal training remain forbidden.
 | R5J.4 Unchanged safe cases | Positive residual, no closing evidence, unreliable/invalid beams, and empty active set do not pre-empt | Passed |
 | R5J.5 Config validation | Non-finite/negative residual margin or collision threshold is rejected | Passed |
 | R5J.6 Actor-clean boundary | New R5J keys are rejected as actor input; actor remains exactly `lidar_grid + state_vec` | Passed |
-| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Passed this synchronization: py_compile exit `0`; targeted `19 passed`; full Isaac Sim Conda suite `163 passed, 12 warnings` (LazyModule); `git diff --check` exit `0`. Historical evidence remains `19 passed, 1 warning` and `163 passed, 13 warnings` (one NVML and twelve LazyModule). |
-| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: one clean attempt `20260716T161710730878Z-5c9ab7a` has CUDA ready, eval exit `0`, fresh matching result, and comparator `GO (design only)` with exact legacy JSON/gates and eight exact-zero diagnostics, but captured stderr has a fatal shutdown segmentation-fault trace. No retry. |
+| R5J.7 Source/regression | `py_compile`, targeted tests, and full `test_instinctrl_*.py` suite pass | Current shutdown-integrity repair: pycompile passed; targeted replay coverage `22 passed`; full `test_instinctrl_*.py` coverage `166 passed, 12 warnings`; `git diff --check` passed. No GPU command ran. |
+| R5J.8 Default-equivalence replay | Existing `r5g_downatten_z010` checkpoint is replayed with R5J explicitly disabled and compared with stored baseline evidence | HOLD: immutable clean attempt `20260716T161710730878Z-5c9ab7a` has data-equivalence `GO` evidence (CUDA ready, exit `0`, fresh matching result, exact legacy JSON/gates, eight exact-zero diagnostics) but captured stderr has a fatal shutdown segmentation-fault trace. The single replay is consumed; no retry. |
+| R5J.9 Shutdown-integrity wrapper | Explicit fatal lifecycle evidence in captured eval stdout/stderr overrides data equivalence and produces structured parseable HOLD artifacts | Passed by temporary-directory/no-GPU tests: fatal zero-exit fresh-result case holds; normal Isaac/W&B warnings and handbook termination metrics do not match; real comparator failure propagation holds. |
 
 ### Completed Order and Future Exit Gate
 
@@ -39,8 +40,8 @@ warm-starting, promotion, and formal training remain forbidden.
 4. Pushed six-document synchronization `5c9ab7a`, then confirmed empty porcelain.
 5. Raw CUDA checks passed: `nvidia-smi` exit `0`; specified NavRL Torch command output `True` with exit `0`.
 6. Ran exactly one stored wrapper; its source commit, checkpoint, seed, argv, CUDA, eval exit `0`, and fresh result all passed.
-7. Comparator recorded exact legacy JSON/gates plus eight exact-zero diagnostics: `GO (design only)`; captured stderr then showed a fatal shutdown segmentation-fault trace, so the final fail-closed exit decision is `HOLD`.
-   - `GO (design only)` only if the new replay, exact JSON comparison, disabled diagnostics, gate report, provenance, and captured runtime logs all pass. It permits later design, never execution, of an enabled single-variable R5J dry-run.
+7. Comparator recorded exact legacy JSON/gates plus eight exact-zero diagnostics: `GO (design only)`; captured stderr then showed a fatal shutdown segmentation-fault trace, so the final fail-closed exit decision is `HOLD`. The replay is consumed, rather than awaiting or permitting another replay.
+   - `GO (design only)` would require the recorded replay's exact JSON comparison, disabled diagnostics, gate report, provenance, and captured runtime logs all to pass. It permits later design, never execution, of an enabled single-variable R5J dry-run.
    - `HOLD` for any failed or missing condition. Do not retry a failed attempt by reusing a result path.
 
 The exact execution prompt is stored in [`NEXT_PROMPT.md`](./NEXT_PROMPT.md).
