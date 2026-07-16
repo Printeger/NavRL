@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Strict, importable R5J-default-off replay comparison."""
+"""Fail-closed, importable R5J-default-off replay comparison."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
@@ -19,6 +20,7 @@ R5J_DIAGNOSTIC_FIELDS = (
 ALLOWED_TOP_LEVEL_KEYS = {"result_path"}
 EXPECTED_CHECKPOINT_SHA256 = "9b0ab9df5dda083b1121d722cd79ba4fd59fdbd10610a4db2467444ba2c44ac2"
 SOURCE_VARIANT = "r5g_downatten_z010"
+EXPECTED_BRANCH = "a2-r5j-default-off-residual"
 
 
 def _load(path: Path) -> Dict[str, Any]:
@@ -61,10 +63,9 @@ def collect_r5j_summaries(value: Any, *, path: Tuple[str, ...] = ()) -> Dict[str
             child_path = path + (key,)
             if _is_diagnostic_key(key):
                 found[_path_label(child_path)] = child
-                continue
-            found.update(collect_r5j_summaries(child, path=child_path))
-        return found
-    if isinstance(value, list):
+            else:
+                found.update(collect_r5j_summaries(child, path=child_path))
+    elif isinstance(value, list):
         for index, child in enumerate(value):
             found.update(collect_r5j_summaries(child, path=path + (str(index),)))
     return found
@@ -76,21 +77,18 @@ def remove_allowed_fields(
     allowed_diagnostic_paths: Iterable[str],
     path: Tuple[str, ...] = (),
 ) -> Any:
-    """Remove only explicitly allowed top-level or short-suite diagnostic deltas."""
+    """Remove only explicitly permitted replay deltas."""
     allowed = set(allowed_diagnostic_paths)
     if isinstance(value, dict):
         cleaned = {}
         for key, child in value.items():
             child_path = path + (key,)
-            label = _path_label(child_path)
             if not path and key in ALLOWED_TOP_LEVEL_KEYS:
                 continue
-            if label in allowed:
+            if _path_label(child_path) in allowed:
                 continue
             cleaned[key] = remove_allowed_fields(
-                child,
-                allowed_diagnostic_paths=allowed,
-                path=child_path,
+                child, allowed_diagnostic_paths=allowed, path=child_path
             )
         return cleaned
     if isinstance(value, list):
@@ -114,7 +112,12 @@ def validate_disabled_summary(summary: Any) -> Tuple[bool, str]:
             return False, f"missing {key}"
     for key in ("count", "finite_count"):
         value = summary[key]
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value <= 0
+        ):
             return False, f"{key} must be finite and positive"
     for key, value in summary.items():
         if key in {"count", "finite_count"}:
@@ -140,38 +143,82 @@ def expected_short_diagnostic_keys() -> Tuple[str, ...]:
     return flattened + per_pass
 
 
+def validate_attempt_record(
+    record: Optional[Dict[str, Any]],
+    *,
+    replay_path: Path,
+    checkpoint_path: Path,
+    checkpoint_sha256: Optional[str],
+    expected_commit: Optional[str] = None,
+) -> Tuple[Dict[str, bool], Optional[str]]:
+    """Validate wrapper provenance before a replay can be considered for GO."""
+    if not isinstance(record, dict):
+        return {"wrapper_record_present": False}, "wrapper record is required for a GO decision"
+    checks = {
+        "wrapper_record_present": True,
+        "attempt_id": bool(record.get("attempt_id")),
+        "result_path": record.get("result_path") == str(replay_path),
+        "checkpoint_path": record.get("checkpoint_path") == str(checkpoint_path),
+        "checkpoint_sha256": record.get("checkpoint_sha256") == checkpoint_sha256 == EXPECTED_CHECKPOINT_SHA256,
+        "resolved_seed": record.get("resolved_seed") == 0 and record.get("seed_verified") is True,
+        "legacy_overrides_unchanged": record.get("legacy_overrides_unchanged") is True,
+        "cuda_ready": record.get("cuda_preflight", {}).get("ready") is True,
+        "eval_exit_code": record.get("exit_code") == 0,
+        "fresh_result": record.get("freshness", {}).get("ready") is True,
+        "branch": record.get("branch") == EXPECTED_BRANCH,
+        "worktree": bool(record.get("worktree")),
+        "no_wrapper_failure": not record.get("failure"),
+    }
+    if expected_commit is not None:
+        checks["commit"] = record.get("commit") == expected_commit
+    if record.get("status") not in {"RUNNING", "GO (design only)"}:
+        checks["wrapper_status"] = False
+    else:
+        checks["wrapper_status"] = True
+    if all(checks.values()):
+        return checks, None
+    failed = ", ".join(key for key, value in checks.items() if not value)
+    return checks, f"wrapper provenance failed: {failed}"
+
+
 def compare_documents(
     baseline: Dict[str, Any],
     replay: Optional[Dict[str, Any]],
     *,
-    checkpoint_sha256: str,
+    checkpoint_sha256: Optional[str],
     checkpoint_path_matches: bool,
     resolved_seed_is_zero: bool,
     legacy_overrides_unchanged: bool,
     gate_evaluator: Callable[[Dict[str, Any]], Dict[str, Any]],
     expected_diagnostic_keys: Iterable[str] = (),
     wrapper_failure: Optional[str] = None,
+    attempt_checks: Optional[Dict[str, bool]] = None,
+    attempt_failure: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Return a serialisable exact-equivalence report without filesystem I/O."""
+    """Return a fail-closed exact-equivalence report without filesystem I/O."""
     common_checks = {
         "checkpoint_sha256": checkpoint_sha256 == EXPECTED_CHECKPOINT_SHA256,
         "resolved_seed": bool(resolved_seed_is_zero),
         "stored_overrides_unchanged": bool(legacy_overrides_unchanged),
     }
-    if replay is None:
-        checks = {
-            **common_checks,
-            "replay_exists": False,
-            "wrapper_recorded_failure": bool(wrapper_failure),
-        }
+    if attempt_checks:
+        common_checks.update({f"attempt.{key}": value for key, value in attempt_checks.items()})
+    failure = wrapper_failure or attempt_failure
+    if failure:
         return {
             "status": "HOLD",
             "allowed_differences": sorted(ALLOWED_TOP_LEVEL_KEYS | set(R5J_DIAGNOSTIC_FIELDS)),
-            "checks": checks,
-            "hold_reason": wrapper_failure or "Replay JSON is missing and no wrapper failure was recorded.",
+            "checks": {**common_checks, "replay_exists": replay is not None, "wrapper_failure": True},
+            "hold_reason": failure,
+        }
+    if replay is None:
+        return {
+            "status": "HOLD",
+            "allowed_differences": sorted(ALLOWED_TOP_LEVEL_KEYS | set(R5J_DIAGNOSTIC_FIELDS)),
+            "checks": {**common_checks, "replay_exists": False, "wrapper_failure": False},
+            "hold_reason": "Replay JSON is missing after a wrapper attempt.",
         }
 
-    # Validate every present diagnostic before removing only the approved paths.
     baseline_diagnostics = collect_r5j_summaries(baseline)
     replay_diagnostics = collect_r5j_summaries(replay)
     expected = tuple(expected_diagnostic_keys)
@@ -235,6 +282,13 @@ def resolved_eval_seed(root: Path) -> Optional[int]:
     return int(match.group(1)) if match else None
 
 
+def git_value(root: Path, *args: str) -> Optional[str]:
+    completed = subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, text=True, check=False
+    )
+    return completed.stdout.strip() if completed.returncode == 0 else None
+
+
 def _gate_evaluator(root: Path) -> Callable[[Dict[str, Any]], Dict[str, Any]]:
     import sys
 
@@ -251,9 +305,21 @@ def compare_files(
     checkpoint_path: Path,
     *,
     wrapper_failure: Optional[str] = None,
+    attempt_record: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     stored, replay_argv, overrides_unchanged, stored_checkpoint = stored_and_replay_argv(root, replay_path)
-    sha256 = hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+    sha256 = (
+        hashlib.sha256(checkpoint_path.read_bytes()).hexdigest()
+        if checkpoint_path.is_file()
+        else None
+    )
+    attempt_checks, attempt_failure = validate_attempt_record(
+        attempt_record,
+        replay_path=replay_path,
+        checkpoint_path=checkpoint_path,
+        checkpoint_sha256=sha256,
+        expected_commit=git_value(root, "rev-parse", "HEAD"),
+    )
     replay = _load(replay_path) if replay_path.exists() else None
     report = compare_documents(
         _load(baseline_path),
@@ -265,6 +331,8 @@ def compare_files(
         gate_evaluator=_gate_evaluator(root),
         expected_diagnostic_keys=expected_short_diagnostic_keys(),
         wrapper_failure=wrapper_failure,
+        attempt_checks=attempt_checks,
+        attempt_failure=attempt_failure,
     )
     report.update({
         "baseline": str(baseline_path),
@@ -282,14 +350,19 @@ def main() -> int:
     parser.add_argument("replay", type=Path)
     parser.add_argument("checkpoint", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--wrapper-record", type=Path)
+    parser.add_argument("--wrapper-record", type=Path, required=True)
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[6]
-    wrapper_failure = None
-    if args.wrapper_record and args.wrapper_record.exists():
-        wrapper_failure = _load(args.wrapper_record).get("failure")
-    report = compare_files(root, args.baseline, args.replay, args.checkpoint, wrapper_failure=wrapper_failure)
+    record = _load(args.wrapper_record) if args.wrapper_record.exists() else None
+    report = compare_files(
+        root,
+        args.baseline,
+        args.replay,
+        args.checkpoint,
+        wrapper_failure=record.get("failure") if record else "wrapper record is missing",
+        attempt_record=record,
+    )
     args.output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(report["status"])
     return 0 if report["status"] == "GO (design only)" else 1

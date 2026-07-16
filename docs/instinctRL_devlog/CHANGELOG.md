@@ -4,11 +4,28 @@
 
 ---
 
+## 2026-07-16
+
+### A2-R5J disabled replay provenance hardening — HOLD
+
+- Made the artifact wrapper/comparator fail closed for wrapper, preflight, eval,
+  stale-result, checkpoint, seed, argv, and freshness failures; each attempt
+  receives a unique result path and full branch/commit/worktree provenance.
+- Added stale-replay, failed-subprocess, pre-eval gate, missing-fresh-result,
+  and fresh-GO wrapper regressions. Targeted tests passed (`50 passed`); the
+  full Isaac Sim Conda suite passed (`160 passed, 12 warnings`).
+- Recorded one disabled-only attempt at
+  `tests/artifacts/r5j_default_equivalence/20260714_234801/attempts/20260716T074648884514Z-0a6a2be/`.
+  CUDA preflight failed (`nvidia-smi` exit 9; torch CUDA false), so eval was not
+  started and the result remains `HOLD`. No enabled experiment or main change.
+
 ## 2026-07-16 (A2-R5J next-step decision)
 
 ### instinctRL-A2-R5J: Default-Off Implementation Validation Authorized
 
-**Status**: R5J mechanism plan complete; tests, default-off implementation, and disabled default-equivalence replay are the only authorized next work.
+**Historical status**: This was the authorization record for the now-completed
+default-off implementation. It is superseded by the provenance-hardening HOLD
+entry above; only the recorded disabled replay may run on a future CUDA worker.
 
 - Reviewed the R5G/R5H/R5I and Evidence-1/2/3 chain against the platform-locked handbook.
 - Confirmed that the latest evidence does not support another parameter sweep or any 1M/formal learned-governor training.
@@ -690,11 +707,3 @@ This entry supersedes earlier 2026-07-04 entries that described instinctRL-B as 
 - Change 1
 - Change 2
 ```
-
-## 2026-07-16
-
-### A2-R5J default-off residual pre-emption — HOLD recorded
-
-- Added default-off R5J per-beam residual guard, config validation/defaults, neutral disabled diagnostics, internal evidence cache, and scalar info specs.
-- Added full six-case `6f6dee3` legacy golden coverage, R5J eval summaries, pure comparator tests, and an artifact-local replay wrapper under `tests/artifacts/r5j_default_equivalence/20260714_234801/`.
-- The wrapper recorded `nvidia-smi` exit 9 (driver communication failure) and `torch.cuda.is_available() == false`; it did not launch eval or produce replay JSON. `comparison.json` records that actual wrapper failure as `HOLD`. No enabled replay, sweep, training, or main merge occurred.

@@ -5,6 +5,30 @@
 
 ---
 
+## D-2026-07-16-003: R5J Disabled-Replay Provenance Hardening Closeout
+
+**Decision**: Keep R5J blocked. The disabled-equivalence wrapper and comparator
+are fail-closed: no stale, partial, failed, or unproven replay can produce
+`GO (design only)`.
+
+**Evidence**: The wrapper now verifies the stored absolute checkpoint and its
+required SHA-256 before CUDA/eval, seed `0`, unchanged legacy argv, current
+branch/commit, cwd, a unique unused result path, CUDA readiness, subprocess
+exit code, and fresh result provenance. The comparator treats any wrapper,
+preflight, eval, or provenance failure as unconditional `HOLD`, even if a stale
+exact replay exists. From the activated NavRL/Isaac Sim Conda environment,
+targeted tests passed (`50 passed`) and `python -m pytest -q -p
+no:cacheprovider training/unit_test/test_instinctrl_*.py` passed (`160 passed,
+12 warnings`). Attempt
+`20260716T074648884514Z-0a6a2be` passed non-CUDA provenance checks but recorded
+`nvidia-smi` exit 9 and `torch.cuda.is_available() == false`; eval did not run
+and no replay JSON exists.
+
+**Consequence**: Only a future CUDA-capable worker may run one explicit
+disabled wrapper attempt. Exact replay/gate equality may record `GO (design
+only)` and may not execute an enabled experiment. No enabled replay, dry-run,
+sweep, training, warm-start, promotion, or main merge is authorized.
+
 ## D-2026-07-16-002: R5J Test-First Implementation and Equivalence Boundary
 
 **Decision**: Evidence-3 and the completed R5J plan are sufficient to authorize only a test-first, default-off actor-clean ICS residual-margin pre-emption implementation and one disabled default-equivalence replay of the existing `r5g_downatten_z010` checkpoint.
@@ -26,6 +50,16 @@
 **Consequence**: No enabled R5J behavior replay, dry-run variant execution, sweep, 1M confirmation, formal training, warm-start, promotion, hard-gate edit, actor-observation edit, platform/sensor edit, governor/controller method edit, reward-default edit, or privileged safety-filter default is authorized. If every required gate passes, the next turn may design one enabled single-variable R5J dry-run but may not execute it without another decision.
 
 **Execution prompt**: `docs/instinctRL_devlog/NEXT_PROMPT.md`.
+
+---
+
+## D-2026-07-16-001: R5J Braking-Residual Planning Boundary
+
+**Decision**: R5J planning is allowed only for actor-clean braking-residual mechanisms. The recommended plan is a default-off ICS residual-margin pre-emption guard that can react when per-beam stopping-distance residual to the existing `0.3m` collision threshold is exhausted or within a configured margin. A secondary plan may couple MID360 downward-clearance residual exhaustion into ICS emergency/pre-emption without privileged root height.
+
+**Evidence**: Evidence-3 downatten collision windows had stopped final commands (`v_final_b` speed norm `0.0`) and `ics_beta=0.0`, while realized body speed remained about `0.193-0.197 m/s`. Conservative residual-to-collision p05 was negative in every downatten collision window, and worst-ICS-beam residual support was strongest in `r5g_downatten_z010` 25-step windows and `r5g_downatten_z005` 25/50-step windows.
+
+**Consequence**: This decision authorizes planning only. Implementation requires separate authorization and tests first: default-disabled equivalence to current ICS, synthetic residual-margin trigger coverage, positive-residual unchanged coverage, actor-audit rejection of new diagnostic keys, config validation for invalid margins, and default-equivalence replay before any dry-run design. It does not authorize a behavior patch, training, sweeps, 1M confirmation, warm-starting, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, governor/controller/ICS behavior changes, or privileged root-height safety filtering. Contact-body telemetry, exact surface normals, and measured deceleration remain missing, so Evidence-3 does not prove a final fix.
 
 ---
 
@@ -684,19 +718,3 @@
 **Evidence**: Replays of the existing R5G `r5g_downatten_z010`, `r5g_downatten_z005`, and `r5g_smooth040` checkpoints live under `docs/instinctRL_devlog/tests/artifacts/r5e3_braking_residual/20260714_234801/`. They changed only `result_path` from the stored eval commands. Downatten collision windows show stopped final commands (`v_final_b` speed norm `0.0`) while realized body speed remains about `0.193-0.197 m/s`. Conservative residual-to-collision p05 is negative in every downatten collision window. Worst-ICS-beam residual-to-collision p05 is negative for `r5g_downatten_z010` 25-step windows and for both `r5g_downatten_z005` 25/50-step windows, with collision-window worst-beam source availability `1.0`.
 
 **Consequence**: Drafting an R5J plan is allowed only for an actor-clean braking-residual mechanism with tests and explicit exactness caveats. Contact-body telemetry, exact surface normals, and measured deceleration remain missing, so Evidence-3 is not an exact contact-body/deceleration proof and does not itself authorize implementation.
-
-## D-2026-07-16-001: R5J Braking-Residual Planning Boundary
-
-**Decision**: R5J planning is allowed only for actor-clean braking-residual mechanisms. The recommended plan is a default-off ICS residual-margin pre-emption guard that can react when per-beam stopping-distance residual to the existing `0.3m` collision threshold is exhausted or within a configured margin. A secondary plan may couple MID360 downward-clearance residual exhaustion into ICS emergency/pre-emption without privileged root height.
-
-**Evidence**: Evidence-3 downatten collision windows had stopped final commands (`v_final_b` speed norm `0.0`) and `ics_beta=0.0`, while realized body speed remained about `0.193-0.197 m/s`. Conservative residual-to-collision p05 was negative in every downatten collision window, and worst-ICS-beam residual support was strongest in `r5g_downatten_z010` 25-step windows and `r5g_downatten_z005` 25/50-step windows.
-
-**Consequence**: This decision authorizes planning only. Implementation requires separate authorization and tests first: default-disabled equivalence to current ICS, synthetic residual-margin trigger coverage, positive-residual unchanged coverage, actor-audit rejection of new diagnostic keys, config validation for invalid margins, and default-equivalence replay before any dry-run design. It does not authorize a behavior patch, training, sweeps, 1M confirmation, warm-starting, promotion, hard-gate edits, actor-observation edits, platform/sensor edits, governor/controller/ICS behavior changes, or privileged root-height safety filtering. Contact-body telemetry, exact surface normals, and measured deceleration remain missing, so Evidence-3 does not prove a final fix.
-
-## D-2026-07-16-002: R5J default-off implementation is source/unit ready, replay HOLD
-
-**Decision**: Keep R5J blocked. The bounded default-off implementation and source/unit safeguards are complete, but no enabled behavior may be evaluated because the sole authorized disabled equivalence replay cannot run in this environment.
-
-**Evidence**: The guard uses only range/mask/weight history, body rays, governed body command, and existing braking constants. It defaults off, retains legacy outputs when off, keeps `ics_emergency` legacy-only, and leaves actor input exactly `lidar_grid + state_vec`. The literal `6f6dee3` six-case legacy snapshots, targeted ICS/actor/eval/comparator tests (`41 passed`), and py_compile pass. The artifact-local wrapper rebuilt the stored R5G argv with only `result_path` replacement and `instinctRL.ics.residual_preemption_enabled=false`, verified the resolved seed is `0`, unchanged legacy overrides, and the required checkpoint SHA-256. It then recorded `nvidia-smi` exit 9: `NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver`, plus `torch.cuda.is_available() == false`; no eval subprocess or replay JSON was produced. The comparator recorded that wrapper failure as `HOLD` rather than inferring CUDA availability.
-
-**Consequence**: Do not merge/push main, do not run enabled R5J replay/dry-run/training/sweep. Re-run only the documented disabled replay on a CUDA-capable worker, then require exact legacy JSON and gate-report equality before considering a design-only enabled experiment. Contact-body, surface-normal, and measured-deceleration caveats remain unresolved.
